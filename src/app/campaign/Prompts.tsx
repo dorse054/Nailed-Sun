@@ -407,7 +407,7 @@ function Summary({ session }: { session: CampaignSession }) {
 function Reports({ session, p }: { session: CampaignSession; p: Extract<Prompt, { kind: 'reports' }> }) {
   // Signal-aware components skip parent re-renders; subscribe to campaign changes.
   void session.version.value;
-  const close = () => (session.prompt.value = null);
+  const close = () => session.closeReports();
   return (
     <div class="modal-veil" onClick={close}>
       <div class="panel modal" role="dialog" onClick={(e) => e.stopPropagation()}>

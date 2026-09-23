@@ -640,6 +640,11 @@ class AudioEngine {
     }
   }
 
+  /** Who fights on each side, for war cries and rallies, without the opening sound. */
+  setFactions(factions: [FactionId, FactionId]): void {
+    this.factions = factions;
+  }
+
   battleStart(f: FactionId, factions?: [FactionId, FactionId]): void {
     this.factions = factions ?? null;
     if (!this.ctx) return;

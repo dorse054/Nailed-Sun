@@ -124,7 +124,10 @@ export class BattleSession {
     this.attachControllers();
     if (this.phase === 'deploy' && !req.tutorial && req.mode !== 'replay' && req.mode !== 'demo') this.consultGeneral();
     // Battles that skip deployment are already under way: the drums start with them.
-    if (this.phase === 'battle') audio.drums(this.battle.sides[this.side].faction);
+    if (this.phase === 'battle') {
+      audio.setFactions([this.battle.sides[0].faction, this.battle.sides[1].faction]);
+      audio.drums(this.battle.sides[this.side].faction);
+    }
     this.resize();
     this.frameCamera();
     if (this.phase === 'deploy') this.overlay.deployZone = this.battle.terrain.deployZone(this.side);
@@ -343,7 +346,7 @@ export class BattleSession {
     void askGeneralMid(b, s, why, stance, abort.signal, opening).then((plan) => {
       clearTimeout(timer);
       m.busy = false;
-      if (!plan || this.disposed || b !== this.battle || b.over || this.phase !== 'battle') return;
+      if (!plan || this.disposed || b !== this.battle || b.over || this.phase !== 'battle' || b.sides[s].generalDead) return;
       // Pressing on as before needs no order; a new order to hold starts its patience afresh.
       if (plan.stance === stance && stance === 'attack' && !plan.speech) return;
       this.battle.issue(s, { type: 'plan', ...plan });
@@ -391,8 +394,8 @@ export class BattleSession {
           this.renderer.effects.consume(ev, (id) => b.units[id]?.def.name ?? '', this.side);
           audio.events(ev, this.renderer.camera, this.side, (id) => b.units[id]);
           for (const e of ev) if (e.t === 'plan' && e.speech) this.heard(e.side, e.stance, e.speech);
-          this.momentLog.consume(ev);
         }
+        this.momentLog.consume(ev);
         this.acc -= DT;
         n++;
         if (b.over) break;
@@ -416,6 +419,8 @@ export class BattleSession {
         this.hud.value++;
       }
     }
+    // The drums fall quiet while the battle waits.
+    if (this.paused || this.phase !== 'battle') audio.setHeat(0);
     this.panCamera(dt);
     const alpha = this.phase === 'battle' && !this.paused ? Math.min(1, this.acc / DT) : 1;
     // A still scene (paused, deploying, over) with no input and no camera
@@ -531,6 +536,18 @@ export class BattleSession {
    * battle in the corner. The interface is drawn apart, so it isn't in it.
    */
   async savePicture(): Promise<void> {
+    if (this.saving) return;
+    this.saving = true;
+    try {
+      await this.makePicture();
+    } finally {
+      this.saving = false;
+    }
+  }
+
+  private saving = false;
+
+  private async makePicture(): Promise<void> {
     const src = this.canvas;
     const c = document.createElement('canvas');
     c.width = src.width;
@@ -974,6 +991,7 @@ export class BattleSession {
       case 'NumpadEnter':
         // Deployed: to battle (unless Enter is pressing a focused button).
         if (e.target instanceof HTMLElement && e.target.closest('button, a, textarea')) break;
+        if (e.repeat || this.menuOpen.value) break;
         if (this.phase === 'deploy' && !this.req.tutorial) this.startBattle();
         break;
       case 'KeyR':
@@ -990,7 +1008,7 @@ export class BattleSession {
         this.toggleMelee();
         break;
       case 'KeyP':
-        void this.savePicture();
+        if (!e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) void this.savePicture();
         break;
       case 'Equal':
       case 'NumpadAdd':

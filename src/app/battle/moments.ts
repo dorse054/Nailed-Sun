@@ -70,9 +70,14 @@ export class MomentLog {
           break;
         }
         case 'charge': {
+          // A unit's charge is told once: its first telling one (a charge stopped on braced pikes isn't).
           const u = b.units[e.unit];
-          if (!u || !this.once(`charge:${u.id}`)) break;
-          if (big(u) || (u.def.category === 'cavalry' && e.power >= 20 && this.charges[u.side]++ < 2)) this.add(`${unitName(u)} charged home.`, u.side);
+          if (!u || this.told.has(`charge:${u.id}`)) break;
+          const telling = big(u) || (u.def.category === 'cavalry' && e.power >= 20 && this.charges[u.side] < 2);
+          if (!telling) break;
+          this.once(`charge:${u.id}`);
+          if (!big(u)) this.charges[u.side]++;
+          this.add(`${unitName(u)} charged home.`, u.side);
           break;
         }
         case 'ability': {

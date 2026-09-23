@@ -401,7 +401,7 @@ export class CampaignSession {
         mode: 'campaign',
         title: `Battle of ${place}`,
         onDone: (result: BattleResult, _log, setup, moments) => {
-          this.fieldNotes.set(`${this.s.turn}:${p.pb.region}`, { setup, moments, result });
+          this.fieldNotes.set(p.pb.id, { setup, moments, result });
           // Only the latest battles can still be told: forget the rest.
           for (const k of [...this.fieldNotes.keys()].slice(0, -8)) this.fieldNotes.delete(k);
           p.resolve({ prep, result, fought: true, driftChoice });
@@ -415,7 +415,7 @@ export class CampaignSession {
   private fieldNotes = new Map<string, FieldNotes>();
 
   notesOf(r: BattleReport): FieldNotes | null {
-    return this.fieldNotes.get(`${r.turn}:${r.region}`) ?? null;
+    return (r.fought && this.fieldNotes.get(r.id)) || null;
   }
 
   /** Keep a battle's tale: on its report, in the chronicle, and in the annals the saga is told from. */
@@ -457,6 +457,7 @@ export class CampaignSession {
     audio.toll();
     // The AI factions take Claude's counsel when the player has switched it on.
     this.s.options.jev = settings.value.claudeAI;
+    const known = new Set(this.s.reports.map((r) => r.id));
     try {
       await endTurn(this.s, this.hooks(false), scriptedAI);
       heroesNewToll(this.s);
@@ -467,7 +468,23 @@ export class CampaignSession {
     this.save();
     this.bump();
     if (this.s.winner || !this.s.factions[this.player].alive) this.prompt.value = { kind: 'end' };
-    else if (playerEvents(this.s, this.s.turn - 1).length || playerEvents(this.s).length) this.prompt.value = { kind: 'summary', turn: this.s.turn };
+    else {
+      const summary: Prompt | null = playerEvents(this.s, this.s.turn - 1).length || playerEvents(this.s).length ? { kind: 'summary', turn: this.s.turn } : null;
+      // Battles the player fought on the field while the world turned: their reports first.
+      const fought = this.s.reports.filter((r) => !known.has(r.id) && r.fought && (r.attacker === this.player || r.defender === this.player));
+      if (fought.length) {
+        this.prompt.value = { kind: 'reports', reports: fought };
+        this.afterReports = summary;
+      } else this.prompt.value = summary;
+    }
+  }
+
+  /** What to show once the battle reports are closed (the Toll's summary). */
+  afterReports: Prompt | null = null;
+
+  closeReports(): void {
+    this.prompt.value = this.afterReports;
+    this.afterReports = null;
   }
 
   save(): boolean {

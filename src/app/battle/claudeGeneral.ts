@@ -218,7 +218,8 @@ export async function askAdvice(b: Battle, side: Side, signal?: AbortSignal): Pr
     'Reply with only JSON: {"tips": ["<order>", "<order>"]}',
   ].join('\n');
   try {
-    const j = await askClaudeJson<{ tips?: unknown } | null>(prompt, { modelTier: 'default', signal });
+    // "Ask again" means a fresh look, even at a paused battle that hasn't changed.
+    const j = await askClaudeJson<{ tips?: unknown } | null>(prompt, { modelTier: 'default', signal, cache: false });
     const tips = Array.isArray(j?.tips) ? j!.tips.filter((t): t is string => typeof t === 'string' && t.trim().length > 8).map((t) => t.trim().slice(0, 260)) : [];
     return tips.length ? tips.slice(0, 3) : null;
   } catch {
@@ -316,7 +317,8 @@ export async function askGeneralMid(b: Battle, side: Side, why: string, stance: 
     'Reply with only JSON: {"plan": "press" | "hold", "speech": "<the order>"}',
   ].join('\n');
   try {
-    const j = await askClaudeJson<{ plan?: unknown; speech?: unknown } | null>(prompt, { modelTier: 'quick', signal });
+    // Each battle and each moment is its own: never a cached answer to a prompt seen before.
+    const j = await askClaudeJson<{ plan?: unknown; speech?: unknown } | null>(prompt, { modelTier: 'quick', signal, cache: false });
     const choice = j?.plan === 'press' ? 'attack' : j?.plan === 'hold' ? 'defend' : null;
     if (!choice) return null;
     const speech = typeof j?.speech === 'string' ? j.speech.trim().replace(/\s+/g, ' ').replace(/^"|"$/g, '').slice(0, 160) : '';
@@ -350,7 +352,8 @@ export async function askGeneral(b: Battle, side: Side, signal?: AbortSignal): P
     'Reply with only JSON: {"plan": "attack" | "hold" | "ambush", "speech": "<what the general says>"}',
   ].join('\n');
   try {
-    const j = await askClaudeJson<{ plan?: unknown; speech?: unknown } | null>(prompt, { modelTier: 'quick', signal });
+    // Each battle and each moment is its own: never a cached answer to a prompt seen before.
+    const j = await askClaudeJson<{ plan?: unknown; speech?: unknown } | null>(prompt, { modelTier: 'quick', signal, cache: false });
     const choice = j?.plan === 'attack' || j?.plan === 'hold' || j?.plan === 'ambush' ? j.plan : null;
     if (!choice) return null;
     const speech = typeof j?.speech === 'string' ? j.speech.trim().replace(/\s+/g, ' ').replace(/^"|"$/g, '').slice(0, 220) : '';

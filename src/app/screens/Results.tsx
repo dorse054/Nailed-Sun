@@ -81,7 +81,7 @@ export function Results({ req, result, log, setup, moments = [] }: { req: Battle
           </div>
           {legend && (
             <div class="legend-medal">
-              <b>{legend.title}</b>: <MedalChip medal={medalFor(legend, result, me)} /> <span class="muted">Best: {book.value.legends?.[legend.id] ? MEDAL_WORDS[book.value.legends[legend.id]!] : 'none yet'}.</span>
+              <b>{legend.title}</b>: {medalFor(legend, result, me) ? <MedalChip medal={medalFor(legend, result, me)} /> : <span class="medal none">No medal this time</span>} <span class="muted">Best: {book.value.legends?.[legend.id] ? MEDAL_WORDS[book.value.legends[legend.id]!] : 'none yet'}.</span>
               <div class="muted">{legend.lesson}</div>
             </div>
           )}
@@ -117,7 +117,8 @@ export function Results({ req, result, log, setup, moments = [] }: { req: Battle
         </div>
         {(moments.length > 0 || null) && (
           <div class="panel results-story">
-            <TaleOf key={String(setup.seed)} setup={setup} result={result} moments={moments} player={me} title={req.title} />
+            {/* A replay's tale was the battle's to tell, from its own report. */}
+            {req.mode !== 'replay' && <TaleOf key={String(setup.seed)} setup={setup} result={result} moments={moments} player={me} title={req.title} />}
             <Moments moments={moments} />
           </div>
         )}
