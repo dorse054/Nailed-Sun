@@ -11,6 +11,7 @@ import type { Unit } from '../../sim/types';
 import { moraleState } from '../../sim/morale';
 import { hasMechanic } from '../../sim/mechanics';
 import { activePassives, tollActive } from '../../sim/stats';
+import { tollInterval } from '../../sim/toll';
 import { modsText, zoneName } from '../codex/format';
 import { signal } from '@preact/signals';
 import { formationSize } from '../../sim/army';
@@ -203,9 +204,10 @@ function DeployPanel({ s }: { s: BattleSession }) {
   const tips: string[] = [];
   const glareBand = t.light === 2 || t.light === 3;
   if (glareBand) {
-    if (rel < Math.PI / 4) tips.push(`Your line faces the sun: units facing it suffer glare (${L.glareAccuracyPct}% accuracy${L.glareMa ? `, ${L.glareMa} melee attack` : ''}).`);
+    if (rel < Math.PI / 4)
+      tips.push(me === 'choir' ? 'Your line faces the sun. The Choir never suffer glare, but with the sun at their backs the enemy is not blinded either.' : `Your line faces the sun: units facing it suffer glare (${L.glareAccuracyPct}% accuracy${L.glareMa ? `, ${L.glareMa} melee attack` : ''}).`);
     else if (rel > (Math.PI * 3) / 4) tips.push(`The sun is at your back: the enemy fights into the glare.`);
-    else tips.push('The sun is on your flank: turn to attack from the side and neither line is blinded.');
+    else tips.push(me === 'choir' ? 'The sun is on your flank: turn to put it at your back and the enemy fights into the glare.' : 'The sun is on your flank: turn to attack from the side and neither line is blinded.');
   } else if (t.light === 4) tips.push('The sun stands overhead: no glare, but non-Choir units tire 50% faster.');
   else tips.push(`${LIGHT_NAMES[t.light]}: spotting ${Math.round((L.spotMult - 1) * 100)}%, beams at ${Math.round(L.beamMult * 100)}%.`);
   if (t.wind > 0) {
@@ -265,7 +267,8 @@ function HourPicker({ s }: { s: BattleSession }) {
   const b = s.battle;
   const st = b.sides[s.side];
   const fac = factionDef(st.faction);
-  const iv = st.tollInterval;
+  // Before the first tick the side's interval is not set yet: work it out.
+  const iv = b.tick === 0 ? tollInterval(b, s.side) : st.tollInterval;
   const left = Number.isFinite(iv) ? Math.max(0, iv - st.tollTimer) : null;
   const active = b.time - st.lastToll < 6;
   return (
