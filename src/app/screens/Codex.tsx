@@ -1,6 +1,6 @@
 /**
- * The Codex: an encyclopedia of the world, the battlefield rules, the four
- * factions and every unit. Pages: 'world', 'battlefield', a faction id
+ * The Codex: how to play, an encyclopedia of the world, the battlefield rules,
+ * the four factions and every unit. Pages: 'howto', 'world', 'battlefield', a faction id
  * ('choir') or a unit id ('choir.nailbearer'), passed as screen.page.
  */
 import { useEffect, useLayoutEffect, useRef } from 'preact/hooks';
@@ -12,11 +12,13 @@ import { go } from '../store';
 import { factionVars } from '../codex/format';
 import { FactionDot, type Nav } from '../codex/ui';
 import { WorldPage } from '../codex/world';
+import { HowToPage } from '../codex/howto';
 import { BattlefieldPage } from '../codex/battlefield';
 import { FactionPage } from '../codex/faction';
 import { UnitPage } from '../codex/unit';
 
 type Page =
+  | { kind: 'howto'; id: 'howto' }
   | { kind: 'world'; id: 'world' }
   | { kind: 'battlefield'; id: 'battlefield' }
   | { kind: 'faction'; id: FactionId; faction: FactionDef }
@@ -24,6 +26,7 @@ type Page =
 
 function resolve(page: string | undefined): Page {
   if (page === 'battlefield') return { kind: 'battlefield', id: 'battlefield' };
+  if (page === 'howto') return { kind: 'howto', id: 'howto' };
   if (page && (FACTION_IDS as readonly string[]).includes(page)) {
     const id = page as FactionId;
     return { kind: 'faction', id, faction: FACTIONS[id] };
@@ -39,6 +42,7 @@ function resolve(page: string | undefined): Page {
 const scrollMemory = new Map<string, number>();
 
 const TOP = [
+  { id: 'howto', label: 'How to play', hint: 'Controls, battles, the campaign' },
   { id: 'world', label: 'World', hint: 'Myth, the Tilt, the bands' },
   { id: 'battlefield', label: 'Battlefield', hint: 'Light, wind, combat rules' },
 ];
@@ -146,6 +150,7 @@ export function Codex({ page }: { page?: string }) {
           class={`cx-page ${cur.kind === 'faction' || cur.kind === 'unit' ? 'cx-f' : ''}`}
           style={cur.kind === 'faction' || cur.kind === 'unit' ? factionVars(cur.faction) : undefined}
         >
+          {cur.kind === 'howto' && <HowToPage nav={nav} />}
           {cur.kind === 'world' && <WorldPage nav={nav} />}
           {cur.kind === 'battlefield' && <BattlefieldPage nav={nav} />}
           {cur.kind === 'faction' && <FactionPage f={cur.faction} nav={nav} />}
