@@ -269,7 +269,11 @@ function Summary({ session }: { session: CampaignSession }) {
             <p>
               <b>Your victory: {fd.victory.name}.</b> {fd.victory.desc}
             </p>
-            <p class="muted small">Click an army, then click a region to march. Right-click also marches. Enter ends the Toll; Tab cycles your armies.</p>
+            <p class="muted small">
+              {matchMedia('(pointer: coarse)').matches
+                ? 'Tap an army, then tap a region to march. Drag to pan and pinch to zoom.'
+                : 'Click an army, then click a region to march. Right-click also marches. Enter ends the Toll; Tab cycles your armies.'}
+            </p>
           </div>
         )}
         {!first && (

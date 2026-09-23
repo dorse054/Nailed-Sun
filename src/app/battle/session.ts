@@ -47,8 +47,15 @@ export class BattleSession {
     wy: number;
     moved: boolean;
     onOwn: boolean;
+    /** A touch in Select mode: taps add or remove units, a drag draws a box. */
+    touchSelect?: boolean;
     startPositions?: Map<number, { x: number; y: number }>;
   } | null = null;
+  /**
+   * What one finger does on a touch screen, which has no Shift key or right
+   * button: pan the view, select several units, or lay out a line.
+   */
+  touchMode: 'pan' | 'select' | 'line' = 'pan';
   private touches = new Map<number, { x: number; y: number }>();
   private pinch: { d: number; zoom: number; cx: number; cy: number; camX: number; camY: number } | null = null;
   private lastClick = { t: 0, unit: -1 };
@@ -349,10 +356,17 @@ export class BattleSession {
         return;
       }
     }
-    this.canvas.setPointerCapture?.(e.pointerId);
+    try {
+      this.canvas.setPointerCapture?.(e.pointerId);
+    } catch {
+      // The pointer can already be gone (a very quick tap); nothing to capture.
+    }
     const w = this.renderer.camera.toWorld(p.x, p.y);
     const own = this.renderer.pick(p.x, p.y, (u) => u.side === this.side);
-    this.drag = { button: e.pointerType === 'touch' ? 0 : e.button, sx: p.x, sy: p.y, wx: w.x, wy: w.y, moved: false, onOwn: !!own && this.overlay.selected.has(own.id) };
+    const touch = e.pointerType === 'touch';
+    // In Line mode a finger acts as the right button.
+    const button = touch ? (this.touchMode === 'line' ? 2 : 0) : e.button;
+    this.drag = { button, sx: p.x, sy: p.y, wx: w.x, wy: w.y, moved: false, onOwn: !!own && this.overlay.selected.has(own.id), touchSelect: touch && this.touchMode === 'select' };
     if (this.phase === 'deploy' && this.drag.button === 0 && own) {
       if (!this.overlay.selected.has(own.id)) this.select([own.id], e.shiftKey);
       this.drag.onOwn = true;
@@ -389,8 +403,9 @@ export class BattleSession {
     if (!d) return;
     if (Math.hypot(p.x - d.sx, p.y - d.sy) > 6) d.moved = true;
     if (!d.moved) return;
-    const pan = d.button === 1 || (e.pointerType === 'touch' && !d.onOwn && !(this.phase === 'deploy'));
-    if (pan || (d.button === 0 && e.pointerType === 'touch' && !d.onOwn)) {
+    // A finger on the ground pans, unless Select mode turns it into a selection box.
+    const pan = d.button === 1 || (e.pointerType === 'touch' && d.button === 0 && !d.onOwn && !d.touchSelect);
+    if (pan) {
       cam.x -= e.movementX / cam.zoom || 0;
       cam.y -= e.movementY / cam.zoom || 0;
       if (e.pointerType === 'touch') {
@@ -448,7 +463,7 @@ export class BattleSession {
           const s = cam.toScreen(c.x, c.y);
           if (s.x >= x0 && s.x <= x1 && s.y >= y0 && s.y <= y1) ids.push(u.id);
         }
-        this.select(ids, e.shiftKey);
+        this.select(ids, e.shiftKey || !!d.touchSelect);
         return;
       }
       if (d.moved) return;
@@ -458,8 +473,9 @@ export class BattleSession {
       }
       const u = this.renderer.pick(p.x, p.y);
       if (e.pointerType === 'touch') {
-        // Touch: tap own unit to select; tap ground or enemy to order the selection.
-        if (u && u.side === this.side) this.clickSelect(u, e.shiftKey);
+        // Touch: tap own unit to select (Select mode adds or removes it);
+        // tap ground or enemy to order the selection.
+        if (u && u.side === this.side) this.clickSelect(u, e.shiftKey || !!d.touchSelect);
         else if (this.overlay.selected.size) this.orderAt(w.x, w.y, u);
         else this.select([]);
         return;

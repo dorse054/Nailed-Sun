@@ -1977,3 +1977,11 @@ button {
     justify-self: start;
   }
 }
+
+/* Touch: what one finger does (pan, select, line), plus select-all. */
+.touch-modes {
+  align-self: flex-end;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+}

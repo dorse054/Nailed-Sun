@@ -54,6 +54,7 @@ function Hud({ s }: { s: BattleSession }) {
       <div class="hud-bottom">
         {sel.length === 1 && <UnitPanel s={s} u={sel[0]!} />}
         {sel.length > 1 && <GroupPanel s={s} units={sel} />}
+        {TOUCH && s.req.mode !== 'replay' && s.req.mode !== 'demo' && <TouchModes s={s} />}
         <UnitCards s={s} />
       </div>
       {s.message.value && (
@@ -64,12 +65,47 @@ function Hud({ s }: { s: BattleSession }) {
       {s.paused && s.phase === 'battle' && !menu && (
         <div class="center-banner">
           <h2 style={{ fontSize: '34px', color: 'var(--gold)', textShadow: '0 2px 12px #000' }}>Paused</h2>
-          <div class="muted" style={{ textShadow: '0 1px 4px #000' }}>Space to resume. You can still give orders.</div>
+          <div class="muted" style={{ textShadow: '0 1px 4px #000' }}>{TOUCH ? 'Tap ▶ to resume.' : 'Space to resume.'} You can still give orders.</div>
         </div>
       )}
       {menu && <PauseMenu s={s} onClose={() => setMenu(false)} />}
       {s.phase === 'over' && <EndOverlay s={s} />}
     </>
+  );
+}
+
+/** Touch screens: no hover, no Shift key, no right button. */
+const TOUCH = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+
+const TOUCH_MODES = [
+  { id: 'pan', label: 'Pan', title: 'Drag moves the view. Tap a unit to select it, then tap the ground or an enemy to order it.' },
+  { id: 'select', label: 'Select', title: 'Taps add or remove units; drag on the ground to box-select.' },
+  { id: 'line', label: 'Line', title: 'Drag on the ground to lay the selection out along a line; tap to move or attack.' },
+] as const;
+
+/** One finger's job on a touch screen is a mode. */
+function TouchModes({ s }: { s: BattleSession }) {
+  return (
+    <div class="panel touch-modes" role="radiogroup" aria-label="What a finger does">
+      {TOUCH_MODES.map((m) => (
+        <button
+          key={m.id}
+          role="radio"
+          aria-checked={s.touchMode === m.id}
+          class={`btn small ${s.touchMode === m.id ? 'on' : ''}`}
+          title={m.title}
+          onClick={() => {
+            s.touchMode = m.id;
+            s.hud.value++;
+          }}
+        >
+          {m.label}
+        </button>
+      ))}
+      <button class="btn small" title="Select every unit that can take orders" onClick={() => s.select(s.own().filter((u) => u.alive > 0 && (u.state === 'ready' || u.state === 'embarked')).map((u) => u.id))}>
+        All
+      </button>
+    </div>
   );
 }
 
@@ -200,7 +236,7 @@ function DeployPanel({ s }: { s: BattleSession }) {
           {note && <div class="muted" style={{ fontSize: '13px' }}>{note}</div>}
           <div class="muted" style={{ fontSize: '12.5px' }}>
             {touch
-              ? 'Drag your units to place them. Tap a unit to select it, then tap the ground to send it there. Pinch to zoom.'
+              ? 'Drag your units to place them. Tap a unit to select it, then tap the ground to send it there; Line mode lays a selection out along a drag. Pinch to zoom.'
               : 'Drag your units to move them. Select units and right-drag to set a line and its facing. Right-click to move a selection.'}
           </div>
         </div>
@@ -272,7 +308,13 @@ function UnitCards({ s }: { s: BattleSession }) {
             title={`${u.def.name} · ${u.def.roleLabel}`}
             onClick={(e) => {
               if (gone) return;
-              s.select([u.id], (e as MouseEvent).shiftKey);
+              // Select mode (touch) toggles cards in and out of the selection.
+              if (s.touchMode === 'select' && s.overlay.selected.has(u.id)) {
+                s.overlay.selected.delete(u.id);
+                s.hud.value++;
+                return;
+              }
+              s.select([u.id], (e as MouseEvent).shiftKey || s.touchMode === 'select');
             }}
             onDblClick={() => {
               const c = s.renderer.unitCenter(u, 1);
@@ -513,7 +555,7 @@ function GroupPanel({ s, units }: { s: BattleSession; units: Unit[] }) {
         </button>
       </div>
       <div class="muted" style={{ fontSize: '12.5px' }}>
-        Right-drag to lay the group out along a line. Units keep their left-to-right order.
+        {TOUCH ? 'Switch to Line and drag to lay the group out along a line.' : 'Right-drag to lay the group out along a line.'} Units keep their left-to-right order.
       </div>
     </div>
   );
@@ -532,7 +574,9 @@ function PauseMenu({ s, onClose }: { s: BattleSession; onClose: () => void }) {
       <div class="panel modal" onClick={(e) => e.stopPropagation()}>
         <h2>Battle</h2>
         <div class="muted">
-          Mouse: left-click selects, drag a box to select many, right-click moves or attacks, right-drag lays out a line. Wheel zooms, WASD or arrows pan. Keys: Space pause, R run, F fire at will, H halt, M melee, 1-3 abilities, +/- speed.
+          {TOUCH
+            ? 'Touch: tap a unit to select it, then tap the ground or an enemy to order it. Drag to pan, pinch to zoom. The Select button makes taps add units and a drag draw a box; Line makes a drag lay the selection out along a line. All selects every unit.'
+            : 'Mouse: left-click selects, drag a box to select many, right-click moves or attacks, right-drag lays out a line. Wheel zooms, WASD or arrows pan. Keys: Space pause, R run, F fire at will, H halt, M melee, 1-3 abilities, +/- speed.'}
         </div>
         <div class="row">
           <button class="btn primary" onClick={onClose}>
