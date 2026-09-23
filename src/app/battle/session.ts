@@ -29,6 +29,23 @@ export type Phase = 'deploy' | 'battle' | 'over';
 const MID_GAP = 30;
 const MID_ASKS = 4;
 
+/**
+ * How much of the field is fighting, for the war drums: 0 a lull, 1 when a
+ * fifth of both armies is locked in melee. Shooting counts for half.
+ */
+function fightingShare(b: Battle): number {
+  let fighting = 0;
+  let alive = 0;
+  for (const u of b.units) {
+    if (u.state !== 'ready' || u.alive <= 0) continue;
+    alive += u.alive;
+    fighting += Math.min(u.alive, u.engaged);
+    if (u.engaged === 0 && b.time - u.lastFireTime < 2) fighting += u.alive * 0.5;
+  }
+  // Measured over AI battles: a fifth of the field fighting is about as hot as battles get.
+  return alive ? Math.min(1, fighting / (alive * 0.22)) : 0;
+}
+
 /** What one AI general has seen and said during the battle, when Claude plays it. */
 interface MidState {
   asks: number;
@@ -103,6 +120,8 @@ export class BattleSession {
     if (req.mode === 'replay' || req.mode === 'demo') this.renderer.showAll = req.mode === 'demo';
     this.attachControllers();
     if (this.phase === 'deploy' && !req.tutorial && req.mode !== 'replay' && req.mode !== 'demo') this.consultGeneral();
+    // Battles that skip deployment are already under way: the drums start with them.
+    if (this.phase === 'battle') audio.drums(this.battle.sides[this.side].faction);
     this.resize();
     this.frameCamera();
     if (this.phase === 'deploy') this.overlay.deployZone = this.battle.terrain.deployZone(this.side);
@@ -156,6 +175,7 @@ export class BattleSession {
 
   dispose(): void {
     this.disposed = true;
+    audio.drums(null);
     this.general.abort?.abort();
     this.counsel.abort?.abort();
     this.advice.abort?.abort();
@@ -228,6 +248,9 @@ export class BattleSession {
       this.hud.value++;
     });
   }
+
+  /** When the war drums last heard how hot the fighting is. */
+  private heatTick = 0;
 
   /** The battle's turning points, as they happen. */
   private momentLog: MomentLog | null = null;
@@ -369,8 +392,13 @@ export class BattleSession {
       }
       if (n >= 16) this.acc = 0;
       this.watchGeneral();
+      if (b.tick - this.heatTick >= 10) {
+        this.heatTick = b.tick;
+        audio.setHeat(fightingShare(b));
+      }
       if (b.over) {
         this.phase = 'over';
+        audio.drums(null);
         audio.battleEnd(b.result!.winner === this.side);
         if (this.req.mode === 'custom' || this.req.mode === 'campaign') noteBattle(b.sides[this.side].faction, b.result!.winner === this.side);
         this.hud.value++;
@@ -535,6 +563,7 @@ export class BattleSession {
     this.overlay.deployZone = null;
     this.overlay.preview = [];
     audio.battleStart(this.battle.sides[this.side].faction, [this.battle.sides[0].faction, this.battle.sides[1].faction]);
+    audio.drums(this.battle.sides[this.side].faction);
     this.hud.value++;
   }
 

@@ -71,9 +71,10 @@ class AudioEngine {
   }
 
   /** A bell: inharmonic partials with long decays. */
-  bell(freq: number, gain: number, decay: number, when = 0): void {
+  bell(freq: number, gain: number, decay: number, when = 0, out?: AudioNode): void {
     const ctx = this.ctx;
-    if (!ctx || !this.sfx) return;
+    const dest = out ?? this.sfx;
+    if (!ctx || !dest) return;
     const t0 = ctx.currentTime + when;
     const partials = [0.5, 1, 1.19, 1.56, 2, 2.51, 2.66, 3.01, 4.1];
     const amps = [0.6, 1, 0.4, 0.5, 0.35, 0.25, 0.2, 0.15, 0.1];
@@ -84,7 +85,7 @@ class AudioEngine {
       g.gain.setValueAtTime(0, t0);
       g.gain.linearRampToValueAtTime(gain * amps[i]!, t0 + 0.005);
       g.gain.exponentialRampToValueAtTime(0.0001, t0 + decay * (1.2 - i * 0.08));
-      o.connect(g).connect(this.sfx!);
+      o.connect(g).connect(dest);
       o.start(t0);
       o.stop(t0 + decay * 1.3);
     });
@@ -535,6 +536,108 @@ class AudioEngine {
     if (clashes > 0.2 && this.ok('clash', 0.07)) this.burst(2600 + Math.random() * 1400, 6, Math.min(0.18, 0.02 + clashes * 0.012), 0.12);
     if (shots > 0.3 && this.ok('volley', 0.35)) this.burst(3000, 0.7, Math.min(0.12, 0.02 + shots * 0.01), 0.5, 900);
     if (fire > 0 && this.ok('fire', 0.8)) this.burst(250, 0.5, 0.05, 1.2);
+  }
+
+  // ------------------------------------------------------------ war drums
+
+  /** How fierce the fighting is (0 a lull .. 1 every line locked), and where it is heading. */
+  private heat = 0;
+  private heatTarget = 0;
+  private drumTimer = 0;
+  private drumN = 0;
+  private drumFaction: FactionId | null = null;
+
+  /** The battle reports how much of it is fighting; the war drums follow, a few seconds behind. */
+  setHeat(h: number): void {
+    this.heatTarget = Math.max(0, Math.min(1, h));
+  }
+
+  /**
+   * The battle's war drums, in the voice of the player's faction, or null to
+   * stop them. Silent in the lulls; they gather as the lines lock.
+   */
+  drums(f: FactionId | null): void {
+    clearInterval(this.drumTimer);
+    this.drumTimer = 0;
+    this.drumFaction = f;
+    this.heat = 0;
+    this.heatTarget = 0;
+    this.drumN = 0;
+    // A sixteenth every 150 ms: a quarter note at 100 beats a minute.
+    if (f && this.ctx) this.drumTimer = window.setInterval(() => this.drumStep(), 150);
+  }
+
+  /** A low skin drum. */
+  private drum(gain: number, freq: number, out: AudioNode, decay = 0.45): void {
+    const ctx = this.ctx!;
+    const t0 = ctx.currentTime;
+    const o = ctx.createOscillator();
+    o.frequency.setValueAtTime(freq * 1.8, t0);
+    o.frequency.exponentialRampToValueAtTime(freq, t0 + 0.06);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(gain, t0);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + decay);
+    o.connect(g).connect(out);
+    o.start(t0);
+    o.stop(t0 + decay + 0.05);
+  }
+
+  /** A dry rim or frame-drum slap: a short burst of filtered noise. */
+  private slap(gain: number, freq: number, out: AudioNode): void {
+    const ctx = this.ctx!;
+    if (!this.noise) return;
+    const t0 = ctx.currentTime;
+    const src = ctx.createBufferSource();
+    src.buffer = this.noise;
+    const f = ctx.createBiquadFilter();
+    f.type = 'bandpass';
+    f.frequency.value = freq;
+    f.Q.value = 1.2;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(gain, t0);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.12);
+    src.connect(f).connect(g).connect(out);
+    src.start(t0, Math.random() * 1.5);
+    src.stop(t0 + 0.15);
+  }
+
+  private drumStep(): void {
+    const ctx = this.ctx;
+    const out = this.ambience;
+    const f = this.drumFaction;
+    if (!ctx || !out || !f) return;
+    this.heat += (this.heatTarget - this.heat) * 0.06;
+    const step = this.drumN % 16;
+    const bar = Math.floor(this.drumN / 16);
+    this.drumN++;
+    const h = this.heat;
+    if (!settings.value.music || h < 0.12 || ctx.state !== 'running') return;
+    const g = 0.05 + h * 0.09;
+    switch (f) {
+      case 'vesperate':
+        // Bells and drums, in strict time: the Toll is always heard.
+        if (step === 0 || step === 8) this.drum(g, 62, out);
+        if (step === 4 || step === 12) this.slap(g * 0.6, 1800, out);
+        if (h > 0.5 && (step === 14 || step === 15)) this.slap(g * 0.4, 2000, out);
+        if (h > 0.55 && step === 0 && bar % 4 === 0) this.bell(110, g * 0.9, 3.5, 0, out);
+        break;
+      case 'choir':
+        // A slow processional beat under a chord that swells as the fight does.
+        if (step === 0 || step === 10) this.drum(g * 0.9, 55, out, 0.6);
+        if (h > 0.4 && step === 0 && bar % 2 === 0) this.voices(h > 0.7 ? [196, 261.6, 329.6] : [196, 261.6], g * 0.5, 2.4, [700, 1100], out);
+        break;
+      case 'hush':
+        // Near silence: a heartbeat, quickening only when the killing is close.
+        if (step === 0 || step === 3) this.drum(g * 0.7, 45, out, 0.35);
+        if (h > 0.6 && (step === 8 || step === 11)) this.drum(g * 0.55, 45, out, 0.3);
+        break;
+      case 'drift':
+        // A galloping frame drum, and a throat drone when the whole host is in it.
+        if (step === 0 || step === 6 || step === 8 || step === 14) this.drum(g * 0.8, 80, out, 0.3);
+        if (step === 3 || step === 11) this.slap(g * 0.5, 900, out);
+        if (h > 0.6 && step === 0 && bar % 4 === 0) this.throat(87.3, g * 0.6, 4, out);
+        break;
+    }
   }
 
   battleStart(f: FactionId, factions?: [FactionId, FactionId]): void {
