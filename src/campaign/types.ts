@@ -259,8 +259,8 @@ export interface CampaignState {
   annals?: { turn: number; kind: EventKind; text: string }[];
   /** The campaign's story, written at its end when Claude is on. */
   saga?: { title: string; text: string };
-  /** The first-steps guide: what the player started with, and whether they put it away. */
-  guide?: { units: number; buildings: number; hidden?: boolean };
+  /** The first-steps guide: the player's starting unit count, the steps done, and whether it was put away. */
+  guide?: { units: number; done?: string[]; hidden?: boolean };
   nextId: number;
   rng: [number, number, number, number];
   /** Options set at the start. */
