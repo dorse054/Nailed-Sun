@@ -6,7 +6,9 @@
  */
 import { effect } from '@preact/signals';
 import type { FactionId } from '../../data/schema';
-import { setJevProvider, type JevChoice, type JevProvider } from '../../campaign/jev';
+import { setJevProvider, situationFor, type JevChoice, type JevProvider } from '../../campaign/jev';
+import { regionDef } from '../../campaign/regions';
+import { neighbors } from '../../campaign/geometry';
 import type { CampaignState } from '../../campaign/types';
 import type { Deal, DealKind, DealValue } from '../../campaign/diplomacy';
 import { relation } from '../../campaign/state';
@@ -174,6 +176,48 @@ export async function writeSaga(s: CampaignState): Promise<{ title: string; text
     if (text.length < 40) return null;
     const title = typeof j?.title === 'string' && j.title.trim() ? j.title.trim().replace(/^"|"$/g, '').slice(0, 80) : 'The War of the Shudder';
     return { title, text: text.slice(0, 1600) };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * The player's own council, asked on request: three things to do this Toll,
+ * in the faction's voice, from the same plain-language picture the AI
+ * factions get. Null when Claude can't be asked or gives nothing usable.
+ */
+export async function councilAdvice(s: CampaignState): Promise<string[] | null> {
+  if (claudeStatus.value !== 'ready') return null;
+  const f = s.player;
+  const armies = s.armies
+    .filter((a) => a.faction === f)
+    .map((a) => `${a.name} (${a.units.length} units) at ${regionDef(a.region).settlement || regionDef(a.region).name}${a.moves > 0 ? '' : ', done moving this Toll'}`);
+  const place = (id: string) => regionDef(id).settlement || regionDef(id).name;
+  const ours = Object.keys(s.regions).filter((id) => s.regions[id]!.owner === f);
+  const near = new Set<string>();
+  for (const id of ours) for (const n of neighbors(id)) if (s.regions[n]!.owner !== f) near.add(n);
+  for (const a of s.armies) if (a.faction === f) for (const n of neighbors(a.region)) if (s.regions[n]!.owner !== f) near.add(n);
+  const beside = [...near].map((id) => `${place(id)} (${s.regions[id]!.owner === 'free' ? 'free' : factionDef(s.regions[id]!.owner as FactionId).short})`);
+  const prompt = [
+    `You are the war council of ${PERSONA[f]} You advise your ruler, who is playing Nailed Sun, a strategy game.`,
+    '',
+    'Situation:',
+    situationFor(s, f),
+    `Our armies: ${armies.length ? armies.join('; ') : 'none'}.`,
+    `Our towns: ${ours.length ? ours.map(place).join(', ') : 'none'}.`,
+    `Beside our lands and armies: ${beside.length ? beside.join(', ') : 'nothing'}.`,
+    '',
+    'Give three concrete, different things to do this Toll, most urgent first: where to march, what to build or recruit, which treaty to seek or war to press, how to move toward our victory. Name places and factions from the situation. One short sentence each, in character, spoken to the ruler. No numbers.',
+    'Reply with only JSON: {"advice": ["...", "...", "..."]}',
+  ].join('\n');
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 30000);
+  try {
+    const j = await askClaudeJson<{ advice?: unknown } | null>(prompt, { modelTier: 'default', signal: ctrl.signal });
+    const list = Array.isArray(j?.advice) ? j.advice.filter((x): x is string => typeof x === 'string' && x.trim().length > 0) : [];
+    return list.length ? list.slice(0, 3).map((x) => x.trim().slice(0, 240)) : null;
   } catch {
     return null;
   } finally {

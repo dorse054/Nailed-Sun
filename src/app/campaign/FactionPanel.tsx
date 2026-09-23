@@ -9,6 +9,7 @@ import { armyPower, currentObservance } from '../../campaign/rules';
 import { victoryStatus } from '../../campaign/victory';
 import { factionLedger, MIGRATION_RENOWN } from '../../campaign/turn';
 import { JevMark } from './Prompts';
+import { claudeStatus } from '../claude';
 import {
   HYMNS,
   OBSERVANCES,
@@ -63,6 +64,35 @@ export function FactionPanel({ session, focus }: { session: CampaignSession; foc
   );
 }
 
+/** Where Claude can be asked: the player's council suggests what to do this Toll. */
+function Council({ session }: { session: CampaignSession }) {
+  if (claudeStatus.value !== 'ready') return null;
+  const c = session.council.value;
+  const fresh = c && c.turn === session.s.turn ? c : null;
+  return (
+    <section class="council">
+      <div class="spread">
+        <h3>Your council</h3>
+        <button class="btn small" disabled={!!fresh?.asking} onClick={() => void session.askCouncil()} title="Ask Claude, as your council, what to do this Toll (uses your Claude usage)">
+          {fresh?.asking ? 'The council confers…' : fresh?.advice ? 'Ask again' : '✦ Ask what to do this Toll'}
+        </button>
+      </div>
+      {fresh?.advice && (
+        <ol class="council-advice">
+          {fresh.advice.map((a, i) => (
+            <li key={i}>{a}</li>
+          ))}
+        </ol>
+      )}
+      {fresh?.advice && (
+        <span class="jev-mark" title="Advice from Claude, speaking as your council">
+          ✦ Claude
+        </span>
+      )}
+    </section>
+  );
+}
+
 function Overview({ session }: { session: CampaignSession }) {
   const s = session.s;
   const f = session.player;
@@ -75,6 +105,7 @@ function Overview({ session }: { session: CampaignSession }) {
   };
   return (
     <div class="fp-body">
+      <Council session={session} />
       <section>
         <h2 style={{ color: OWNER_COLOR[f] }}>{fd.name}</h2>
         <p class="muted">{fd.essence}</p>

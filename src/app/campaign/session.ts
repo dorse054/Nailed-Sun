@@ -19,7 +19,7 @@ import { armyVisible, visibleRegions } from '../../campaign/vision';
 import { regionDef } from '../../campaign/regions';
 import { jevProvider } from '../../campaign/jev';
 import { claudeStatus } from '../claude';
-import { envoyDecision, envoyWords, writeSaga } from './claudeJev';
+import { councilAdvice, envoyDecision, envoyWords, writeSaga } from './claudeJev';
 import { guideBaseline } from './Guide';
 import { detachHero, heroById, heroReach, heroes, heroesNewToll, heroVision, moveHero } from '../../campaign/heroes';
 import { simulate } from '../../sim/pool';
@@ -156,6 +156,19 @@ export class CampaignSession {
     const text = await envoyWords(this.s, deal, accepted, why);
     // A later proposal to the same faction answers instead.
     if (this.envoys.value[deal.to]?.seq === seq) this.envoyAnswers(deal.to, seq, text);
+  }
+
+  /** The council's last advice to the player (Claude), for the Toll it was given. */
+  council = signal<{ turn: number; advice: string[] | null; asking: boolean } | null>(null);
+
+  async askCouncil(): Promise<void> {
+    if (this.council.value?.asking) return;
+    const turn = this.s.turn;
+    this.council.value = { turn, advice: this.council.value?.turn === turn ? this.council.value.advice : null, asking: true };
+    const advice = await councilAdvice(this.s);
+    if (this.s.turn !== turn) return;
+    this.council.value = { turn, advice, asking: false };
+    if (!advice) this.say('The council is silent. Try again later.');
   }
 
   /** Claude's chronicler is writing the campaign's saga. */
