@@ -42,7 +42,7 @@ export function HowToPage({ nav }: { nav: Nav }) {
             { name: 'Move and attack', desc: 'Right-click the ground to move, or an enemy to attack.' },
             { name: 'Form a line', desc: 'Right-drag: the selection lines up along the drag, facing away from you. Hold Alt as you order to walk rather than run.' },
             { name: 'Camera', desc: 'Wheel zooms. WASD or the arrow keys pan. On larger screens the minimap shows the whole field: click or drag it to look elsewhere.' },
-            { name: 'Keys', desc: 'Space pauses (you can still give orders), R run or walk, F fire at will, H halt, M melee mode, 1 to 3 abilities, + and − change speed.' },
+            { name: 'Keys', desc: 'Enter starts the battle once you have deployed. Space pauses (you can still give orders), Esc opens the battle menu, R run or walk, F fire at will, H halt, M melee mode, 1 to 3 abilities, + and − change speed, Tab jumps to your next unit, P saves a picture of the field.' },
           ]}
         />
       </Section>
