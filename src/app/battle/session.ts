@@ -9,7 +9,7 @@ import { DT } from '../../sim/constants';
 import type { BattleSetup, Command, Side, Unit, UnitSpec } from '../../sim/types';
 import { BattleAI } from '../../ai/battleAI';
 import { aiOptions } from '../../ai/plan';
-import { askGeneral, askGeneralMid, strengthRatio } from './claudeGeneral';
+import { askCounsel, askGeneral, askGeneralMid, strengthRatio } from './claudeGeneral';
 import { MomentLog, type Moment } from './moments';
 import { claudeStatus } from '../claude';
 import { layoutSlots, placeInFormation } from '../../sim/army';
@@ -142,6 +142,7 @@ export class BattleSession {
   dispose(): void {
     this.disposed = true;
     this.general.abort?.abort();
+    this.counsel.abort?.abort();
     this.mid.abort?.abort();
     clearTimeout(this.heraldTimer);
     cancelAnimationFrame(this.raf);
@@ -154,6 +155,25 @@ export class BattleSession {
    * comes after the battle starts is dropped.
    */
   readonly general: { abort?: AbortController; waiting: boolean; speech?: string; faction?: FactionId } = { waiting: false };
+
+  /** The player's own adviser, asked from the deployment panel. */
+  readonly counsel: { busy: boolean; tips: string[] | null; failed: boolean; abort?: AbortController } = { busy: false, tips: null, failed: false };
+
+  askCounsel(): void {
+    if (this.phase !== 'deploy' || this.counsel.busy || claudeStatus.value !== 'ready') return;
+    const abort = new AbortController();
+    const timer = setTimeout(() => abort.abort(), 30000);
+    Object.assign(this.counsel, { busy: true, failed: false, abort });
+    this.hud.value++;
+    void askCounsel(this.battle, this.side, abort.signal).then((tips) => {
+      clearTimeout(timer);
+      this.counsel.busy = false;
+      if (this.disposed) return;
+      if (tips) this.counsel.tips = tips;
+      else this.counsel.failed = !abort.signal.aborted || this.phase === 'deploy';
+      this.hud.value++;
+    });
+  }
 
   private consultGeneral(): void {
     const s = ([0, 1] as Side[]).find((x) => x !== this.side && this.req.setup.armies[x].controller === 'ai' && !this.req.setup.armies[x].plan);
@@ -430,6 +450,7 @@ export class BattleSession {
   /** Leave deployment: rebuild the battle from the deployed positions so replays are exact. */
   startBattle(): void {
     if (this.phase !== 'deploy') return;
+    this.counsel.abort?.abort();
     // Too late for the general's counsel: the scripted general decides.
     if (this.general.waiting) {
       this.general.abort?.abort();

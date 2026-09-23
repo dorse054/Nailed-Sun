@@ -2259,6 +2259,32 @@ button {
 }
 
 /* The enemy general's words at deployment (Claude). */
+/* The player's adviser, in the deployment panel. */
+.counsel {
+  margin: 6px 0 4px;
+  padding: 7px 10px 8px;
+  border-left: 2px solid color-mix(in srgb, var(--good) 60%, transparent);
+  background: color-mix(in srgb, var(--good) 6%, transparent);
+}
+.counsel-head {
+  font-family: var(--label);
+  font-size: 13px;
+  color: var(--muted);
+}
+.counsel ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+  font-size: 14px;
+  line-height: 1.35;
+}
+.counsel .general-says {
+  margin: 0;
+  border: 0;
+  padding: 0;
+  background: none;
+}
 .general-says {
   margin: 6px 0 4px;
   padding: 6px 9px;

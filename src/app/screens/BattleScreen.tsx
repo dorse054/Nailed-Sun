@@ -19,6 +19,7 @@ import { formationSize } from '../../sim/army';
 import { audio } from '../../audio/audio';
 import { matchupNote } from '../../data/lore';
 import { TutorialLayer } from '../tutorial/TutorialLayer';
+import { claudeStatus } from '../claude';
 
 export function BattleScreen({ req }: { req: BattleRequest }) {
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -294,6 +295,29 @@ function DeployPanel({ s }: { s: BattleSession }) {
           )}
         </p>
       )}
+      {open && (s.counsel.busy || s.counsel.tips || s.counsel.failed) && (
+        <div class="counsel">
+          {s.counsel.tips ? (
+            <>
+              <div class="counsel-head">
+                Your adviser
+                <span class="jev-mark" title="Counsel from Claude, from the field and both armies">
+                  ✦ Claude
+                </span>
+              </div>
+              <ul>
+                {s.counsel.tips.map((x) => (
+                  <li key={x}>{x}</li>
+                ))}
+              </ul>
+            </>
+          ) : s.counsel.busy ? (
+            <p class="general-says waiting">Your adviser studies the field…</p>
+          ) : (
+            <p class="muted">{claudeStatus.value === 'refused' ? 'Claude isn’t allowed on this page right now.' : 'Your adviser has nothing to say. Try again later.'}</p>
+          )}
+        </div>
+      )}
       {open && (
         <div class="deploy-tips">
           <ul>
@@ -313,6 +337,20 @@ function DeployPanel({ s }: { s: BattleSession }) {
         <button class="btn small ghost" onClick={() => (deployTips.value = !open)} aria-expanded={open}>
           {open ? 'Hide tips' : 'Tips'}
         </button>
+        {claudeStatus.value === 'ready' && !s.req.tutorial && !s.counsel.tips && (
+          <button
+            class="btn small ghost"
+            disabled={s.counsel.busy}
+            onClick={() => {
+              // The answer shows with the tips: open them.
+              deployTips.value = true;
+              s.askCounsel();
+            }}
+            title="Ask Claude for three tips on how to fight this battle"
+          >
+            ✦ Counsel
+          </button>
+        )}
         <button class="btn" onClick={() => s.autoDeploy()}>
           Reset
         </button>

@@ -20,6 +20,7 @@ import { COVER } from '../../sim/terrain';
 import { askClaudeJson, claudeStatus } from '../claude';
 import { settings } from '../store';
 import { PERSONA } from '../campaign/claudeJev';
+import { COUNTERS, matchupNote } from '../../data/lore';
 
 /** How long a holding army waits for the enemy, by plan. */
 const PATIENCE = { hold: 120, ambush: 300 } as const;
@@ -100,6 +101,58 @@ export function fieldReport(b: Battle, side: Side): string {
   if (mid > 0.06) lines.push('Woods break up the middle of the field.');
   if (t.fort) lines.push(t.fort.defender === side ? 'You hold a walled town: the attacker must take its square.' : 'You must storm a walled town and hold its square.');
   return lines.join('\n');
+}
+
+/** Each kind of unit in an army once, with its role and what it does. */
+function unitNotes(units: Unit[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const u of units) {
+    if (seen.has(u.def.id)) continue;
+    seen.add(u.def.id);
+    const n = units.filter((x) => x.def.id === u.def.id).length;
+    out.push(`- ${n > 1 ? `${n}× ` : ''}${u.def.name} (${u.def.roleLabel.toLowerCase()}): ${u.def.summary}`);
+  }
+  return out;
+}
+
+/**
+ * Counsel for the player while they deploy: three short tips for this
+ * battle, from the field, both armies and what each faction does best and
+ * worst. Null when Claude is unavailable, slow or unclear.
+ */
+export async function askCounsel(b: Battle, side: Side, signal?: AbortSignal): Promise<string[] | null> {
+  if (claudeStatus.value !== 'ready') return null;
+  const me = factionDef(b.sides[side].faction);
+  const foe = factionDef(b.sides[(1 - side) as Side].faction);
+  const note = matchupNote(me.id, foe.id);
+  const prompt = [
+    `You are a veteran adviser to the player, who commands ${me.name} in Nailed Sun, a strategy game of real-time battles on a world whose sun never moves. The player is about to deploy. Give three short, concrete tips for this battle.`,
+    '',
+    fieldReport(b, side),
+    '',
+    `${me.name}: ${me.strengths} Weak at: ${me.weaknesses} ${me.playstyle}`,
+    `Their traits: ${me.traitText.map((t) => `${t.name} (${t.desc})`).join('; ')}.`,
+    'The player\'s units:',
+    ...unitNotes(b.units.filter((u) => u.side === side)),
+    '',
+    `The enemy, ${foe.name}: ${foe.strengths} Weak at: ${foe.weaknesses} ${foe.playstyle}`,
+    'Their units:',
+    ...unitNotes(b.units.filter((u) => u.side !== side)),
+    note ? `\nThis matchup: ${note}` : '',
+    '',
+    `Counters: ${COUNTERS.map((c) => `${c.role} beats ${c.beats.toLowerCase()}, loses to ${c.losesTo.toLowerCase()}`).join('; ')}.`,
+    '',
+    'Each tip is one sentence of plain advice that names the player\'s own units: where to place them or what to do with them, and which enemy to fear or hunt. No numbers.',
+    'Reply with only JSON: {"tips": ["<tip>", "<tip>", "<tip>"]}',
+  ].join('\n');
+  try {
+    const j = await askClaudeJson<{ tips?: unknown } | null>(prompt, { modelTier: 'default', signal });
+    const tips = Array.isArray(j?.tips) ? j!.tips.filter((t): t is string => typeof t === 'string' && t.trim().length > 8).map((t) => t.trim().slice(0, 260)) : [];
+    return tips.length ? tips.slice(0, 3) : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Our army's strength against theirs as things stand: 1 is even, 2 twice theirs. */
