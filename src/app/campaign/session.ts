@@ -38,6 +38,7 @@ export interface FieldNotes {
   setup: BattleSetup;
   moments: Moment[];
   result: BattleResult;
+  strength: [number, number, number][];
 }
 
 export type Prompt =
@@ -400,8 +401,8 @@ export class CampaignSession {
         playerSide: prep.playerSide ?? 0,
         mode: 'campaign',
         title: `Battle of ${place}`,
-        onDone: (result: BattleResult, _log, setup, moments) => {
-          this.fieldNotes.set(p.pb.id, { setup, moments, result });
+        onDone: (result: BattleResult, _log, setup, moments, strength) => {
+          this.fieldNotes.set(p.pb.id, { setup, moments, result, strength });
           // Only the latest battles can still be told: forget the rest.
           for (const k of [...this.fieldNotes.keys()].slice(0, -8)) this.fieldNotes.delete(k);
           p.resolve({ prep, result, fought: true, driftChoice });

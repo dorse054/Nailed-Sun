@@ -17,7 +17,7 @@ export interface BattleRequest {
   skipDeploy?: boolean;
   replay?: TimedCommand[];
   /** Called with the outcome; campaign and tutorials use it. */
-  onDone?: (result: BattleResult, log: TimedCommand[], setup: BattleSetup, moments: Moment[]) => void;
+  onDone?: (result: BattleResult, log: TimedCommand[], setup: BattleSetup, moments: Moment[], strength: [number, number, number][]) => void;
   tutorial?: string;
   /** A made-up battle's name and story, shown while the player deploys. */
   briefing?: { title: string; text: string };

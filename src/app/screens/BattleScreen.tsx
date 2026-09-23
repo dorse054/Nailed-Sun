@@ -804,7 +804,7 @@ function EndOverlay({ s }: { s: BattleSession }) {
   const reason = r.reason === 'rout' ? (won ? 'The enemy army is broken.' : 'Your army is broken.') : r.reason === 'capture' ? 'The settlement has fallen.' : r.reason === 'withdraw' ? 'The field was conceded.' : 'Time ran out.';
   const legend = s.req.legend ? legendById(s.req.legend) : undefined;
   const done = () => {
-    if (s.req.onDone) s.req.onDone(r, s.battle.log, s.req.setup, s.moments);
+    if (s.req.onDone) s.req.onDone(r, s.battle.log, s.req.setup, s.moments, s.strength);
     else go({ name: 'results', req: s.req, result: r, log: s.battle.log, setup: s.req.setup, moments: s.moments, strength: s.strength });
   };
   return (

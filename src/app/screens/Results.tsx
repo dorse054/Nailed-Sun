@@ -8,8 +8,8 @@ import { signal } from '@preact/signals';
 import { useEffect } from 'preact/hooks';
 import { saveFile } from '../claude';
 import { replayJson, replayName } from '../replayFile';
-import { clock, type Moment } from '../battle/moments';
-import { Moments, TaleOf } from '../battle/Tale';
+import type { Moment } from '../battle/moments';
+import { Moments, StrengthChart, TaleOf } from '../battle/Tale';
 import { legendById, medalFor } from '../legends';
 import { book } from '../book';
 import { MEDAL_WORDS, MedalChip } from './Legends';
@@ -137,39 +137,6 @@ export function Results({ req, result, log, setup, moments = [], strength = [] }
         </p>
       </div>
     </div>
-  );
-}
-
-/**
- * Each army's strength through the battle, the player's in blue and the
- * enemy's in red, with a tick at every turning point (hover for what it was).
- */
-function StrengthChart({ strength, moments, me, end }: { strength: [number, number, number][]; moments: Moment[]; me: 0 | 1; end: number }) {
-  if (strength.length < 3 || end <= 0) return null;
-  const W = 600;
-  const H = 110;
-  const pad = 4;
-  const x = (t: number) => pad + (Math.min(end, t) / end) * (W - pad * 2);
-  const y = (v: number) => pad + (1 - Math.max(0, Math.min(1, v))) * (H - pad * 2 - 12);
-  const line = (side: 1 | 2) => strength.map((p) => `${x(p[0]).toFixed(1)},${y(p[side]).toFixed(1)}`).join(' ');
-  const mineIdx = (me === 0 ? 1 : 2) as 1 | 2;
-  const theirsIdx = (me === 0 ? 2 : 1) as 1 | 2;
-  return (
-    <figure class="strength-chart">
-      <figcaption class="muted">
-        Strength through the battle: <b class="mine">yours</b> and <b class="theirs">theirs</b>
-      </figcaption>
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label="Each army's remaining strength over the battle">
-        <line x1={pad} x2={W - pad} y1={y(0.5)} y2={y(0.5)} class="grid" />
-        <polyline points={line(theirsIdx)} class="theirs" />
-        <polyline points={line(mineIdx)} class="mine" />
-        {moments.map((m, i) => (
-          <line key={i} x1={x(m.t)} x2={x(m.t)} y1={H - 10} y2={H - 2} class={`tick ${m.side === undefined ? '' : m.side === me ? 'mine' : 'theirs'}`}>
-            <title>{`${clock(m.t)} ${m.text}`}</title>
-          </line>
-        ))}
-      </svg>
-    </figure>
   );
 }
 
