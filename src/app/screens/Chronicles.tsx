@@ -7,6 +7,7 @@ import { FACTION_IDS } from '../../data/schema';
 import { factionDef } from '../../data/index';
 import { book, forgetBook, type BookTale } from '../book';
 import { go } from '../store';
+import { LEGENDS } from '../legends';
 
 const pct = (a: number, b: number) => (b ? `${Math.round((a / b) * 100)}%` : '–');
 
@@ -28,6 +29,28 @@ function meta(t: BookTale): string {
     // An odd locale is no reason to hide the tale.
   }
   return parts.join(' · ');
+}
+
+/** The Legends won, by medal, with the way to them. */
+function LegendsLine() {
+  const won = book.value.legends ?? {};
+  const n = (m: string) => Object.values(won).filter((x) => x === m).length;
+  const count = Object.keys(won).length;
+  return (
+    <p class="chron-legends">
+      <b>Legends</b>{' '}
+      {count ? (
+        <span class="num">
+          {count} of {LEGENDS.length} won · Gold {n('gold')} · Silver {n('silver')} · Bronze {n('bronze')}
+        </span>
+      ) : (
+        <span class="muted">none won yet</span>
+      )}{' '}
+      <button class="btn small ghost" onClick={() => go({ name: 'legends' })}>
+        Legends →
+      </button>
+    </p>
+  );
 }
 
 export function Chronicles() {
@@ -84,6 +107,7 @@ export function Chronicles() {
           ) : (
             <p class="muted">No battles yet. Every battle you fight to its end, and every campaign you finish, is counted here.</p>
           )}
+          <LegendsLine />
         </section>
         <section class="panel chron-book">
           <div class="spread">
