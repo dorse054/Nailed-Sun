@@ -112,7 +112,8 @@ export async function askScenario(wish: string, signal?: AbortSignal): Promise<S
   ].join('\n');
   let j: Record<string, unknown> | null;
   try {
-    j = await askClaudeJson<Record<string, unknown> | null>(prompt, { modelTier: 'default', signal });
+    // Asking again should bring another battle, not the same one replayed from the cache.
+    j = await askClaudeJson<Record<string, unknown> | null>(prompt, { modelTier: 'default', signal, cache: false });
   } catch {
     return null;
   }
