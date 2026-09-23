@@ -1,0 +1,325 @@
+/* Tutorials: the list screen, the step panel over a battle, and its pointers. Tokens come from styles.css. */
+
+/* ------------------------------------------------------------ list screen */
+
+.tut-screen .setup-head h1 {
+  flex: 1;
+  text-align: center;
+}
+.tut-intro {
+  max-width: 1100px;
+  margin: 0 auto 14px;
+  font-size: 15px;
+}
+.tut-grid {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.tut-card {
+  padding: 14px 16px;
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  border-top: 3px solid var(--fc, var(--gold));
+  min-width: 0;
+}
+.tut-card.done {
+  background: color-mix(in srgb, var(--panel) 80%, var(--fc, var(--gold)) 6%);
+}
+.tut-card-top {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+.tut-card-head {
+  min-width: 0;
+}
+.tut-card h2 {
+  font-size: 28px;
+  line-height: 1.05;
+  color: var(--text);
+}
+.tut-tag {
+  font-family: var(--label);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--fc, var(--gold));
+}
+.tut-card-field {
+  font-size: 12.5px;
+}
+.tut-card-badge {
+  align-self: start;
+}
+.tut-card-idea {
+  margin: 2px 0 0;
+  font-size: 15.5px;
+  color: var(--text);
+}
+.tut-card-blurb {
+  margin: 0;
+  font-size: 13.5px;
+}
+.tut-card-learn {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px 14px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.tut-card-foot {
+  margin-top: 4px;
+  font-size: 13px;
+}
+
+@media (max-width: 760px) {
+  .tut-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .tut-card-learn {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .tut-card h2 {
+    font-size: 24px;
+  }
+}
+
+/* ------------------------------------------------------ panel over a battle */
+
+.tut-panel {
+  position: absolute;
+  left: 8px;
+  top: calc(104px + env(safe-area-inset-top, 0px));
+  width: min(360px, calc(100% - 16px));
+  max-height: calc(100% - 240px);
+  overflow: auto;
+  scrollbar-width: thin;
+  padding: 9px 12px 10px;
+  display: grid;
+  gap: 6px;
+  border-left: 3px solid var(--fc, var(--gold));
+  transition: box-shadow 0.2s;
+}
+.tut-panel.flash {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--good) 60%, transparent),
+    var(--shadow);
+}
+.tut-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.tut-head .tut-tag {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tut-count {
+  font-family: var(--label);
+  font-size: 12px;
+  color: var(--muted);
+}
+.tut-head-btns {
+  display: flex;
+  gap: 4px;
+}
+.tut-head-btns .btn.small {
+  min-height: 26px;
+  padding: 2px 8px;
+}
+.tut-icon {
+  min-width: 30px;
+}
+.tut-progress {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--panel-3);
+  overflow: hidden;
+}
+.tut-progress > i {
+  display: block;
+  height: 100%;
+  background: var(--fc, var(--gold));
+  transition: width 0.3s;
+}
+.tut-title {
+  font-size: 23px;
+  line-height: 1.1;
+  color: var(--gold);
+}
+.tut-check {
+  color: var(--good);
+}
+.tut-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.tut-text b {
+  color: var(--gold);
+  font-weight: 700;
+}
+.tut-live {
+  font-size: 13px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: rgba(255, 210, 122, 0.08);
+  border: 1px solid color-mix(in srgb, var(--gold) 25%, transparent);
+  color: var(--text);
+}
+.tut-done {
+  font-size: 13.5px;
+  color: var(--good);
+  font-weight: 700;
+}
+.tut-msg {
+  font-size: 13px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--warn);
+}
+.tut-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+.tut-foot-mid {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+}
+.tut-foot-mid .chip {
+  font-size: 11px;
+  white-space: normal;
+}
+.tut-panel.min .tut-title {
+  font-size: 19px;
+}
+
+/* Pointers: rings on the field (under the HUD) and around HUD elements. */
+.tut-marks {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
+.tut-mark-label {
+  font-family: var(--label);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  paint-order: stroke;
+  stroke: rgba(10, 6, 20, 0.85);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+.tut-mark-badge {
+  font-size: 13px;
+  fill: #ffd27a;
+  paint-order: stroke;
+  stroke: rgba(10, 6, 20, 0.85);
+  stroke-width: 3px;
+}
+.tut-ring {
+  position: fixed;
+  pointer-events: none;
+  border: 2px solid var(--gold);
+  border-radius: 8px;
+  box-shadow:
+    0 0 0 3px rgba(255, 210, 122, 0.22),
+    0 0 18px rgba(255, 210, 122, 0.45);
+  animation: tut-pulse 1.1s ease-in-out infinite;
+}
+@keyframes tut-pulse {
+  50% {
+    box-shadow:
+      0 0 0 6px rgba(255, 210, 122, 0.1),
+      0 0 26px rgba(255, 210, 122, 0.6);
+  }
+}
+
+/* The battle HUD while a tutorial runs: messages show in the panel, the
+   pause menu covers the tutorial, and the tutorial's own pause needs no banner. */
+.screen:has(.tut-layer) .hud-flash {
+  display: none;
+}
+.screen:has(> .modal-veil) .tut-layer {
+  display: none;
+}
+.screen:has(.tut-panel.holding) .center-banner {
+  display: none;
+}
+
+/* The closing dialog. */
+.tut-end-card {
+  border-top: 3px solid var(--fc, var(--gold));
+  overflow: auto;
+}
+.tut-end-card p {
+  margin: 0;
+}
+.tut-end-stats {
+  gap: 24px;
+}
+.tut-recap {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+}
+.tut-end-btns {
+  justify-content: flex-end;
+}
+
+/* On phones the unit panel covers half the field: in tutorials it drops the stat grid and summary. */
+@media (max-width: 520px) {
+  .screen:has(.tut-layer) .unit-panel .stats,
+  .screen:has(.tut-layer) .unit-panel > .muted:last-child {
+    display: none;
+  }
+  .tut-panel {
+    padding: 8px 10px;
+    gap: 5px;
+  }
+}
+
+@media (max-width: 760px) {
+  .tut-panel {
+    right: 8px;
+    width: auto;
+    max-height: 42vh;
+  }
+  .tut-title {
+    font-size: 21px;
+  }
+  .tut-text {
+    font-size: 13.5px;
+  }
+  /* The Toll panel and the pause banner move below the tutorial panel. */
+  .screen:has(.tut-panel) [data-tut='hours'] {
+    top: calc(var(--tut-bottom, 250px) + 6px) !important;
+  }
+  .screen:has(.tut-panel) .center-banner {
+    top: calc(var(--tut-bottom, 250px) + 24px);
+  }
+  .tut-end-btns {
+    justify-content: stretch;
+  }
+  .tut-end-btns .btn {
+    flex: 1 1 auto;
+  }
+}

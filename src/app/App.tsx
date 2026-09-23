@@ -7,6 +7,7 @@ import { Placeholder } from './screens/Placeholder';
 import { Codex } from './screens/Codex';
 import { CampaignRoot } from './campaign/CampaignStart';
 import { LabRoute } from './screens/LabRoute';
+import { TutorialsScreen } from './tutorial/TutorialsScreen';
 
 export function App() {
   const s = screen.value;
@@ -23,9 +24,12 @@ export function App() {
       return <Codex page={s.page} />;
     case 'campaign':
       return <CampaignRoot />;
+    case 'tutorials':
+      return <TutorialsScreen />;
     case 'lab':
       return <LabRoute />;
     default:
-      return <Placeholder name={s.name} />;
+      // Every screen has a case now; this only catches ones added later.
+      return <Placeholder name={(s as { name: string }).name} />;
   }
 }

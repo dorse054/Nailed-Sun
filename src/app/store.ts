@@ -2,6 +2,7 @@
  * App-level state: which screen is showing, and player settings.
  */
 import { signal } from '@preact/signals';
+import type { Controller } from '../sim/battle';
 import type { BattleResult, BattleSetup, Side, TimedCommand } from '../sim/types';
 
 export type BattleMode = 'custom' | 'campaign' | 'tutorial' | 'replay' | 'demo';
@@ -17,6 +18,8 @@ export interface BattleRequest {
   /** Called with the outcome; campaign and tutorials use it. */
   onDone?: (result: BattleResult, log: TimedCommand[], setup: BattleSetup) => void;
   tutorial?: string;
+  /** Who plays a side instead of the default (tutorials script their opponent). Undefined keeps the default. */
+  controller?: (side: Side) => Controller | null | undefined;
 }
 
 export type Screen =
