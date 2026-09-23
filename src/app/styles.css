@@ -2,6 +2,11 @@
  * Nailed Sun UI. One committed look: the eternal sunset over the Evernight.
  * Indigo ground, dusk panels, sunset amber and Nail gold, bone-white text.
  */
+/* The hidden attribute always hides, whatever display a class gives. */
+[hidden] {
+  display: none !important;
+}
+
 :root {
   color-scheme: dark;
   --ink: #120f1e;
