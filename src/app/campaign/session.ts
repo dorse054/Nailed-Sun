@@ -17,6 +17,7 @@ import { findPath, reachable } from '../../campaign/rules';
 import { armyById, playerEvents } from '../../campaign/state';
 import { armyVisible, visibleRegions } from '../../campaign/vision';
 import { regionDef } from '../../campaign/regions';
+import { detachHero, heroById, heroReach, heroes, heroesNewToll, heroVision, moveHero } from '../../campaign/heroes';
 import { simulate } from '../../sim/pool';
 import { go, loadRaw, remove, save, settings } from '../store';
 import { factionDef } from '../../data/index';
@@ -41,6 +42,8 @@ export class CampaignSession {
   version = signal(0);
   selArmy = signal<string | null>(null);
   selRegion = signal<string | null>(null);
+  /** A lone hero selected on the map. */
+  selHero = signal<string | null>(null);
   prompt = signal<Prompt | null>(null);
   busy = signal<string | null>(null);
   toast = signal<{ text: string; id: number } | null>(null);
@@ -65,6 +68,7 @@ export class CampaignSession {
   visibility(): { regions: Set<string>; armies: Set<string> } {
     if (this.vis) return this.vis;
     const regions = visibleRegions(this.s, this.player);
+    for (const r of heroVision(this.s, this.player)) regions.add(r);
     const armies = new Set(this.s.armies.filter((a) => armyVisible(this.s, this.player, a, regions)).map((a) => a.id));
     this.vis = { regions, armies };
     return this.vis;
@@ -82,6 +86,7 @@ export class CampaignSession {
 
   selectArmy(id: string | null): void {
     this.selArmy.value = id;
+    if (id) this.selHero.value = null;
     if (id) {
       const a = armyById(this.s, id);
       this.selRegion.value = a ? a.region : null;
@@ -93,6 +98,7 @@ export class CampaignSession {
   selectRegion(id: string | null): void {
     this.selRegion.value = id;
     this.selArmy.value = null;
+    this.selHero.value = null;
     this.path = null;
     this.bump();
   }
@@ -151,6 +157,46 @@ export class CampaignSession {
     if (!a) return;
     const pb = makeBattle(this.s, a, a.from ?? a.region, a.region);
     await this.fightThrough([pb], true);
+  }
+
+  // ----------------------------------------------------------- lone heroes
+
+  selectHero(id: string | null): void {
+    this.selHero.value = id;
+    this.selArmy.value = null;
+    const h = id ? heroById(this.s, id) : null;
+    if (h) this.selRegion.value = h.region;
+    this.path = null;
+    this.bump();
+  }
+
+  /** Where the selected hero can travel this Toll. */
+  heroReach(): Record<string, number> | null {
+    const h = this.selHero.value ? heroById(this.s, this.selHero.value) : null;
+    return h && h.faction === this.player ? heroReach(this.s, h) : null;
+  }
+
+  heroOrder(r: { ok: boolean; reason?: string }): void {
+    if (!r.ok && r.reason) this.say(r.reason);
+    this.save();
+    this.bump();
+  }
+
+  moveHeroTo(region: string): void {
+    const id = this.selHero.value;
+    if (!id || this.busy.value) return;
+    const r = moveHero(this.s, id, region);
+    if (r.ok) this.selRegion.value = region;
+    this.heroOrder(r);
+  }
+
+  /** Send a hero out of an army: it is selected, ready to travel next Toll. */
+  sendHero(armyId: string, index: number): void {
+    const before = new Set(heroes(this.s).map((h) => h.id));
+    const r = detachHero(this.s, armyId, index);
+    this.heroOrder(r);
+    const h = heroes(this.s).find((x) => !before.has(x.id));
+    if (h) this.selectHero(h.id);
   }
 
   /** An AI faction puts a deal to the player: resolves true if they accept. */
@@ -238,11 +284,13 @@ export class CampaignSession {
   async endToll(): Promise<void> {
     if (this.busy.value || this.s.winner) return;
     this.selArmy.value = null;
+    this.selHero.value = null;
     this.path = null;
     this.busy.value = 'The world turns…';
     audio.toll();
     try {
       await endTurn(this.s, this.hooks(false), scriptedAI);
+      heroesNewToll(this.s);
     } finally {
       this.busy.value = null;
     }

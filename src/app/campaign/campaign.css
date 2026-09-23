@@ -951,3 +951,24 @@
 .camp-tip small {
   color: var(--muted);
 }
+
+/* Lone heroes. */
+.hero-acts {
+  display: grid;
+  gap: 6px;
+}
+.hero-acts .btn {
+  display: grid;
+  justify-items: start;
+  text-align: left;
+  gap: 2px;
+  padding: 6px 10px;
+  min-height: 0;
+}
+.hero-join {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}

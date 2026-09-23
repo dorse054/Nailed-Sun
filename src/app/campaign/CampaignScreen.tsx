@@ -13,6 +13,8 @@ import { audio } from '../../audio/audio';
 import { factionDef } from '../../data/index';
 import { BANDS } from '../../data/rules';
 import { regionBand } from '../../campaign/rules';
+import { heroes } from '../../campaign/heroes';
+import { HeroPanel } from './HeroPanel';
 
 /**
  * The campaign map: pan by dragging, zoom with the wheel or a pinch, click
@@ -66,11 +68,15 @@ export function CampaignScreen({ session }: { session: CampaignSession }) {
         selectedRegion: session.selRegion.value,
         hover: session.hover,
         hoverArmy: session.hoverArmy,
-        reach: session.reach(),
+        reach: session.reach() ?? session.heroReach(),
         path: session.path,
         visibleArmies: vis.armies,
         visibleRegions: vis.regions,
         player: session.player,
+        heroes: heroes(session.s)
+          .filter((h) => h.faction === session.player)
+          .map((h) => ({ id: h.id, region: h.region, faction: h.faction, resting: (h.restUntil ?? 0) > session.s.turn })),
+        selectedHero: session.selHero.value,
       };
     };
     let cachedView: MapView | null = null;
@@ -178,6 +184,19 @@ export function CampaignScreen({ session }: { session: CampaignSession }) {
       if (session.busy.value || session.prompt.value) return;
       audio.unlock();
       const hit = map.pick(session.s, cachedView ?? view(), x, y);
+      // Lone heroes: select one, or send the selected one to a region in reach.
+      const heroHit = map.pickHero(cachedView ?? view(), x, y);
+      if (heroHit && !hit.army) {
+        audio.ui('click');
+        session.selectHero(heroHit === session.selHero.value ? null : heroHit);
+        return;
+      }
+      const reachH = session.heroReach();
+      if (session.selHero.value && reachH && hit.region && hit.region in reachH && !hit.army) {
+        audio.ui('click');
+        session.moveHeroTo(hit.region);
+        return;
+      }
       const sel = session.selArmy.value ? armyById(session.s, session.selArmy.value) : null;
       const mine = sel && sel.faction === session.player;
       // Right-click, or a click on another region with an army selected, marches.
@@ -245,6 +264,7 @@ export function CampaignScreen({ session }: { session: CampaignSession }) {
   }, [session]);
 
   const selArmy = session.selArmy.value ? armyById(session.s, session.selArmy.value) : null;
+  const selHero = session.selHero.value;
   const selRegion = session.selRegion.value;
   const focus = (region: string) => {
     const m = mapRef.current;
@@ -257,9 +277,15 @@ export function CampaignScreen({ session }: { session: CampaignSession }) {
       <canvas ref={ref} class="campaign-map" aria-label="Campaign map" />
       <div ref={tipRef} class="camp-tip panel" aria-hidden="true" hidden />
       <TopBar session={session} />
-      {(selArmy || selRegion) && (
+      {(selArmy || selHero || selRegion) && (
         <aside class="camp-side panel scroll">
-          {selArmy ? <ArmyPanel session={session} army={selArmy} /> : selRegion ? <RegionPanel session={session} region={selRegion} focus={focus} /> : null}
+          {selArmy ? (
+            <ArmyPanel session={session} army={selArmy} />
+          ) : selHero ? (
+            <HeroPanel session={session} heroId={selHero} />
+          ) : selRegion ? (
+            <RegionPanel session={session} region={selRegion} focus={focus} />
+          ) : null}
         </aside>
       )}
       <div class="camp-end">
