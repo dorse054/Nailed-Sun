@@ -454,6 +454,49 @@ button {
   flex-wrap: wrap;
   gap: 4px;
 }
+/* Deployment: tips fold away on small screens; the buttons always show. */
+.deploy-panel {
+  position: absolute;
+  top: calc(104px + env(safe-area-inset-top, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(620px, calc(100% - 16px));
+  padding: 12px 16px;
+  display: grid;
+  gap: 8px;
+}
+.deploy-panel h2 {
+  font-size: 28px;
+  color: var(--gold);
+}
+.deploy-tips {
+  display: grid;
+  gap: 8px;
+}
+.deploy-tips ul {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 3px;
+}
+.deploy-actions {
+  justify-content: flex-end;
+}
+@media (max-width: 720px), (max-height: 560px) {
+  .deploy-panel {
+    padding: 8px 10px;
+    gap: 6px;
+  }
+  .deploy-panel h2 {
+    font-size: 20px;
+  }
+  .deploy-tips {
+    max-height: calc(100vh - 330px);
+    min-height: 60px;
+    overflow-y: auto;
+    font-size: 13px;
+  }
+}
 /* Chips are buttons so touch screens can read their exact numbers. */
 .mods .chip {
   background: none;

@@ -145,6 +145,8 @@ export function bandName(band: string, steppe: boolean): string {
 
 /** Deployment is the first decision of every battle: read the sun and the wind. */
 function DeployPanel({ s }: { s: BattleSession }) {
+  // Reading a signal memoizes this panel by props, so follow the HUD ticks too.
+  void s.hud.value;
   const b = s.battle;
   const t = b.terrain;
   const own = s.own();
@@ -178,24 +180,37 @@ function DeployPanel({ s }: { s: BattleSession }) {
   if (me === 'choir') tips.push('Mirrorflash: your mirror-shield units want to face the sun.');
   if (enemy === 'choir') tips.push('Against the Choir, attack from the side, never with the sun at your back.');
   const note = matchupNote(me, enemy);
+  const open = deployTips.value ?? !matchMedia('(max-width: 720px), (max-height: 560px)').matches;
+  const touch = matchMedia('(pointer: coarse)').matches;
   return (
-    <div class="panel" style={{ position: 'absolute', top: 'calc(104px + env(safe-area-inset-top, 0px))', left: '50%', transform: 'translateX(-50%)', width: 'min(620px, calc(100% - 16px))', padding: '12px 16px', display: 'grid', gap: '8px' }}>
+    <div class={`panel deploy-panel ${open ? 'open' : ''}`}>
       <div class="spread">
-        <h2 style={{ fontSize: '28px', color: 'var(--gold)' }}>Deployment</h2>
-        <span class="chip gold">{factionDef(me).short} vs {factionDef(enemy).short}</span>
+        <h2>Deployment</h2>
+        <span class="chip gold">
+          {factionDef(me).short} vs {factionDef(enemy).short}
+        </span>
       </div>
-      <ul style={{ margin: 0, paddingLeft: '18px', display: 'grid', gap: '3px' }}>
-        {tips.map((x) => (
-          <li key={x}>{x}</li>
-        ))}
-      </ul>
-      {note && <div class="muted" style={{ fontSize: '13px' }}>{note}</div>}
-      <div class="muted" style={{ fontSize: '12.5px' }}>
-        Drag your units to move them. Select units and right-drag to set a line and its facing. Right-click to move a selection.
-      </div>
-      <div class="row" style={{ justifyContent: 'flex-end' }}>
+      {open && (
+        <div class="deploy-tips">
+          <ul>
+            {tips.map((x) => (
+              <li key={x}>{x}</li>
+            ))}
+          </ul>
+          {note && <div class="muted" style={{ fontSize: '13px' }}>{note}</div>}
+          <div class="muted" style={{ fontSize: '12.5px' }}>
+            {touch
+              ? 'Drag your units to place them. Tap a unit to select it, then tap the ground to send it there. Pinch to zoom.'
+              : 'Drag your units to move them. Select units and right-drag to set a line and its facing. Right-click to move a selection.'}
+          </div>
+        </div>
+      )}
+      <div class="row deploy-actions">
+        <button class="btn small ghost" onClick={() => (deployTips.value = !open)} aria-expanded={open}>
+          {open ? 'Hide tips' : 'Tips'}
+        </button>
         <button class="btn" onClick={() => s.autoDeploy()}>
-          Reset deployment
+          Reset
         </button>
         <button class="btn primary" onClick={() => s.startBattle()}>
           Start the battle
@@ -204,6 +219,9 @@ function DeployPanel({ s }: { s: BattleSession }) {
     </div>
   );
 }
+
+/** Deployment tips start folded on small screens, where they would hide the army. */
+const deployTips = signal<boolean | null>(null);
 
 function HourPicker({ s }: { s: BattleSession }) {
   const b = s.battle;
