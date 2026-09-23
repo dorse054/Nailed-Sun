@@ -483,6 +483,11 @@ export class BattleSession {
       if (u && u.side === this.side) this.clickSelect(u, e.shiftKey);
       else if (!e.shiftKey) this.select([]);
     } else if (d.button === 2) {
+      // Line mode on touch: a tap still aims an ability that is waiting for a target.
+      if (this.targeting && e.pointerType === 'touch' && !d.moved) {
+        this.castTargeting(w.x, w.y, p);
+        return;
+      }
       if (this.targeting) {
         this.targeting = null;
         this.overlay.abilityPreview = null;
