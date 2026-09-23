@@ -481,16 +481,22 @@ function driftSettlement(s: CampaignState, region: string, choice: 'sack' | 'moo
   }
 }
 
-/** Factions with no land and no armies are gone. */
+/**
+ * A faction falls when it can no longer rise again. A realm needs a town, or
+ * a host with men in it to take one back: a lord alone cannot, and would
+ * only keep a dead realm alive (and block a Domination). The Drift hold no
+ * land by design: they fall when their last sail is gone. What is left of a
+ * fallen faction leaves the map.
+ */
 export function checkDeaths(s: CampaignState): void {
   for (const f of Object.values(s.factions)) {
     if (!f.alive) continue;
-    const land = Object.values(s.regions).some((r) => r.owner === f.id);
-    const armies = s.armies.some((a) => a.faction === f.id);
-    if (!land && !armies) {
-      f.alive = false;
-      log(s, 'warning', `${factionDef(f.id).name} have fallen. Their banners will not rise again.`);
-    }
+    const armies = s.armies.filter((a) => a.faction === f.id);
+    const fallen = f.id === 'drift' ? armies.length === 0 : !Object.values(s.regions).some((r) => r.owner === f.id) && !armies.some((a) => a.units.length > 0);
+    if (!fallen) continue;
+    f.alive = false;
+    s.armies = s.armies.filter((a) => a.faction !== f.id);
+    log(s, 'warning', `${factionDef(f.id).name} have fallen. Their banners will not rise again.`);
   }
 }
 

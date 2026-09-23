@@ -581,7 +581,8 @@ export function lensReady(s: CampaignState): Result {
   if (s.turn < 50) return fail('The world is not ready: the Last Lens can begin on Toll 50');
   if (c.lensBuilding) return fail('A stage is being built');
   if (s.regions[NAIL_SPIRE]!.owner !== 'choir') return fail('Hold the Nail Spire');
-  if (!CANDLES.every((x) => s.regions[x]!.owner === 'choir' && s.regions[x]!.lit)) return fail('Hold all three Candles, lit');
+  // "Hold all three Candles, then build": the Candles begin the Lens; the later stages need the Spire and the Tilt.
+  if (c.lens === 0 && !CANDLES.every((x) => s.regions[x]!.owner === 'choir' && s.regions[x]!.lit)) return fail('Hold all three Candles, lit, to begin the Lens');
   if (s.tilt < 3) return fail('The Tilt must be +3 or higher');
   if (c.coin < LENS_COST.coin || c.res < LENS_COST.res) return fail(`Needs ${LENS_COST.coin} coin and ${LENS_COST.res} Radiance`);
   return { ok: true };
@@ -628,7 +629,7 @@ export function extinguish(s: CampaignState, region: string): Result {
 export const OBSERVANCES: Record<ObservanceId, { name: string; desc: string; hours: number }> = {
   harvest: { name: 'Harvest', desc: '+25% food in every Vesperate region.', hours: 4 },
   muster: { name: 'Muster', desc: '−25% recruitment cost.', hours: 4 },
-  market: { name: 'Market', desc: '+20% coin from every Vesperate region.', hours: 4 },
+  market: { name: 'Market', desc: '+15% coin from every Vesperate region.', hours: 4 },
   vigil: { name: 'Vigil', desc: '+4 public order in every Vesperate region.', hours: 4 },
 };
 

@@ -559,5 +559,5 @@ export const DRIFT: FactionDef = {
     { name: 'Renown', desc: 'Their victory score, earned from raids, battles, trade and full migrations across all five bands.' },
     { name: 'Storm-riders', desc: "Every 2 points of Tilt in either direction raise wind strength one step everywhere, so the Drift profit from the others' wars." },
   ],
-  victory: { name: 'The Great Moot', desc: 'Reach 1,000 Renown and hold the Kite Fields for 5 Tolls.' },
+  victory: { name: 'The Great Moot', desc: 'Reach 2,000 Renown and hold the Kite Fields for 3 Tolls.' },
 };

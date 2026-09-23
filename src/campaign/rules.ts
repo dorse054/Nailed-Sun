@@ -103,11 +103,19 @@ export const LEVEL_COST = [0, 400, 900, 1800];
 
 const MAJOR_COIN = [0, 200, 280, 380, 500];
 const MINOR_COIN = [0, 110, 160, 220];
-const BAND_FOOD = [0, 1, 4, 2, 0];
+/**
+ * Food a settlement gathers by light band, before farms. The Gloaming is the
+ * breadbasket, but not so rich that its towns need no farms at all (which
+ * left every plot there free for markets), and the brightest land feeds a
+ * little.
+ */
+export const BAND_FOOD = [0, 1, 3, 2, 1];
 const FARM_MULT = [0.25, 0.6, 1.3, 1, 0.25];
 /** The Choir's salt gardens and sun orchards grow best under a bright sky. */
 const CHOIR_FARM_MULT = [0.2, 0.5, 1, 1.3, 1.3];
 const DIFFICULTY_AI = { easy: 0.85, normal: 1, hard: 1.25 } as const;
+/** Extra coin from every Vesperate region while the Market Observance rings. */
+export const MARKET_BONUS = 0.15;
 
 /** How much of a farm's food the light of a band lets its owner reap (Hush lodges hunt, in any band). */
 export function farmMult(f: FactionId, band: number): number {
@@ -149,7 +157,7 @@ export function regionYield(s: CampaignState, id: string): RegionYield {
   coin += RESOURCES[def.resource].coin;
   coin += sumEffect(eff, 'coin');
   if (r.order < 0) coin *= 1 + r.order / 40;
-  if (f === 'vesperate' && currentObservance(s) === 'market') coin *= 1.2;
+  if (f === 'vesperate' && currentObservance(s) === 'market') coin *= 1 + MARKET_BONUS;
   if (!fs.player) coin *= DIFFICULTY_AI[s.difficulty];
   if (r.raidedBy) coin = 0;
   out.coin = Math.round(coin);

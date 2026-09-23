@@ -124,7 +124,7 @@ export const CHAINS: ChainDef[] = [
   chain('vesperate', 'stables', 'stables', ['Outrider Stables', 'Antler Paddocks', 'Lancer Halls'], [{}, {}, {}], RECRUIT('cavalry')),
   chain('vesperate', 'foundry', 'foundry', ['Bell Foundry', 'Engine Works', 'Knell Foundry'], [{}, {}, {}], RECRUIT('engines and bell-cannon')),
   chain('vesperate', 'farm', 'farm', ['Grain Farms', 'Granaries', 'Harvest Mills'], [{ food: 2, growth: 1 }, { food: 4, growth: 1 }, { food: 6, growth: 2 }], 'Food, scaled by the light: best in the Gloaming.'),
-  chain('vesperate', 'market', 'market', ['Market Hall', 'Lantern Exchange', 'House Lantern Bank'], [{ coin: 60 }, { coin: 110 }, { coin: 180 }], 'Coin every Toll. Pleases House Lantern.'),
+  chain('vesperate', 'market', 'market', ['Market Hall', 'Lantern Exchange', 'House Lantern Bank'], [{ coin: 50 }, { coin: 100 }, { coin: 170 }], 'Coin every Toll. Pleases House Lantern.'),
   chain('vesperate', 'shrine', 'shrine', ['Chapel of Hours', 'Calendar House', 'Hall of Observances'], [{ order: 2, res: 1 }, { order: 4, res: 1 }, { order: 6, res: 2 }], 'Public order and Hours. Level 2 trains heroes.'),
   chain('vesperate', 'walls', 'walls', ['Stone Walls', 'Curtain Walls', 'Weir Bastions'], [{ walls: 1, garrison: 1, order: 1 }, { walls: 2, garrison: 2, order: 2 }, { walls: 3, garrison: 4, order: 2 }], 'The strongest walls in the world. Pleases House Weir.'),
   chain('vesperate', 'belltower', 'tower', ['Bell Tower', 'Great Bell', 'Carillon'], [{ res: 2, bellRange: true }, { res: 4, bellRange: true, order: 1 }, { res: 6, bellRange: true, order: 2 }], 'Hours every Toll. Bell Range: your armies fighting here gain +10% leadership.'),

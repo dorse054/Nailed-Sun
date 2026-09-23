@@ -30,7 +30,16 @@ export interface VictoryStatus {
   progress: number;
 }
 
-export const HOLD_NEEDED: Record<FactionId, number> = { choir: 0, hush: 5, vesperate: 10, drift: 5 };
+/** Straight Tolls a victory must be held (the Choir raise five Lens stages instead). */
+export const HOLD_NEEDED: Record<FactionId, number> = { choir: 0, hush: 5, vesperate: 10, drift: 3 };
+
+/**
+ * Renown the Great Moot needs. Not the design's first 1,000: the Drift reach
+ * that by Toll 30, and a five-Toll hold of an open field against every
+ * host in the world almost never happened. Twice the fame and three Tolls:
+ * the moot comes later, and the sails must pick their moment.
+ */
+export const MOOT_RENOWN = 2000;
 
 /** Final victory stages open in the late game, after the wars over the Gloaming. */
 export const VICTORY_OPENS = 50;
@@ -50,7 +59,7 @@ export function victoryStatus(s: CampaignState, f: FactionId): VictoryStatus {
   let met = false;
   if (f === 'choir') {
     const held = CANDLES.filter((c) => s.regions[c]!.owner === 'choir' && s.regions[c]!.lit).length;
-    lines.push({ label: 'Hold all three Candles, lit', ok: held === 3, detail: `${held} / 3` });
+    lines.push({ label: 'Hold all three Candles, lit, to begin the Lens', ok: held === 3 || fs.lens >= 1, detail: `${held} / 3` });
     lines.push({ label: 'Hold the Nail Spire', ok: s.regions[NAIL_SPIRE]!.owner === 'choir' });
     lines.push({ label: 'Tilt at +3 or higher', ok: s.tilt >= 3, detail: fmt(s.tilt) });
     lines.push({ label: 'Build the five stages of the Last Lens', ok: fs.lens >= 5, detail: `${fs.lens} / 5${fs.lensBuilding ? ' (building)' : ''}` });
@@ -69,9 +78,10 @@ export function victoryStatus(s: CampaignState, f: FactionId): VictoryStatus {
     lines.push({ label: 'Tilt between −1 and +1', ok: Math.abs(s.tilt) <= 1, detail: fmt(s.tilt) });
     met = held === gl.length && s.regions[STOPPED_DIAL]!.owner === 'vesperate' && Math.abs(s.tilt) <= 1;
   } else {
-    lines.push({ label: 'Reach 1,000 Renown', ok: fs.res >= 1000, detail: `${Math.floor(fs.res)} / 1,000` });
+    const bar = MOOT_RENOWN.toLocaleString('en-US');
+    lines.push({ label: `Reach ${bar} Renown`, ok: fs.res >= MOOT_RENOWN, detail: `${Math.floor(fs.res)} / ${bar}` });
     lines.push({ label: 'Hold the Kite Fields with a sail', ok: kiteFieldsHeld(s) });
-    met = fs.res >= 1000 && kiteFieldsHeld(s);
+    met = fs.res >= MOOT_RENOWN && kiteFieldsHeld(s);
   }
   const need = HOLD_NEEDED[f];
   if (need) lines.push({ label: `Hold it for ${need} straight Tolls`, ok: fs.hold >= need, detail: `${fs.hold} / ${need}` });
@@ -90,6 +100,15 @@ export function victoryStatus(s: CampaignState, f: FactionId): VictoryStatus {
     final: fs.finalStage,
     progress: okCount / lines.length,
   };
+}
+
+/**
+ * Everything the Choir need to raise their next Lens stage but the coin and
+ * Radiance: the Spire and the Tilt at +3, and all three Candles lit to begin.
+ */
+export function lensConditions(s: CampaignState): boolean {
+  const candles = s.factions.choir.lens >= 1 || CANDLES.every((c) => s.regions[c]!.owner === 'choir' && s.regions[c]!.lit);
+  return s.regions[NAIL_SPIRE]!.owner === 'choir' && candles && s.tilt >= 3;
 }
 
 export function dominationStatus(s: CampaignState, f: FactionId): { done: boolean; left: FactionId[] } {
@@ -114,11 +133,13 @@ export function checkVictory(s: CampaignState): void {
     const st = victoryStatus(s, f);
     const need = HOLD_NEEDED[f];
     if (need) fs.hold = st.met ? fs.hold + 1 : 0;
-    const final = s.turn >= VICTORY_OPENS && (f === 'choir' ? fs.lens >= 1 || !!fs.lensBuilding : st.met);
+    // The Choir are in their final stage while a Lens stage is being raised,
+    // or while they could raise the next one; the stages built stay built.
+    const final = s.turn >= VICTORY_OPENS && (f === 'choir' ? !!fs.lensBuilding || (fs.lens >= 1 && lensConditions(s)) : st.met);
     if (final && !fs.finalStage) {
       fs.finalStage = true;
       log(s, 'warning', `${factionDef(f).name} have begun their final victory stage: ${st.name}. Every rival gains +15% leadership against them.`);
-    } else if (!final && fs.finalStage && f !== 'choir') {
+    } else if (!final && fs.finalStage) {
       fs.finalStage = false;
       log(s, 'info', `${factionDef(f).name} have lost their grip on ${st.name}.`);
     }
