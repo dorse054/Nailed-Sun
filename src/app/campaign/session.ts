@@ -168,7 +168,7 @@ export class CampaignSession {
     const advice = await councilAdvice(this.s);
     if (this.s.turn !== turn) return;
     this.council.value = { turn, advice, asking: false };
-    if (!advice) this.say('The council is silent. Try again later.');
+    if (!advice) this.say(claudeStatus.value === 'refused' ? 'Claude isn’t allowed on this page right now.' : 'The council is silent. Try again later.');
   }
 
   /** Claude's chronicler is writing the campaign's saga. */
