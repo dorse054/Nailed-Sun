@@ -5,7 +5,8 @@ import { TAGLINE } from '../../data/lore';
 import { audio } from '../../audio/audio';
 import { quickBattle, demoBattle } from '../quick';
 import { completedTutorials } from '../tutorial/progress';
-import { savedCampaign } from '../campaign/session';
+import { active, continueCampaign, savedCampaign } from '../campaign/session';
+import { factionDef } from '../../data/index';
 
 /**
  * The stopped sun: a horizon of eternal sunset with long, still shadows.
@@ -141,7 +142,8 @@ function Backdrop() {
 export function MainMenu() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   // New players (no tutorial finished, no campaign begun) are pointed at the tutorials.
-  const fresh = completedTutorials().size === 0 && !savedCampaign();
+  const saved = active?.s ?? savedCampaign();
+  const fresh = completedTutorials().size === 0 && !saved;
   const click = (f: () => void) => () => {
     audio.unlock();
     audio.ui('click');
@@ -154,9 +156,23 @@ export function MainMenu() {
         <h1 class="menu-title">Nailed Sun</h1>
         <p class="menu-tag">{TAGLINE}</p>
         <div class="menu-items">
+          {saved && !saved.winner && saved.factions[saved.player].alive && (
+            <button
+              class="menu-item fresh"
+              onClick={click(() => {
+                if (!active) continueCampaign();
+                go({ name: 'campaign' });
+              })}
+            >
+              <b>Continue</b>
+              <span>
+                {factionDef(saved.player).name}, Toll {saved.turn}
+              </span>
+            </button>
+          )}
           <button class="menu-item" onClick={click(() => go({ name: 'campaign' }))}>
             <b>Campaign</b>
-            <span>Thirty regions and the Tilt</span>
+            <span>{saved ? 'A new campaign, or your saved one' : 'Thirty regions and the Tilt'}</span>
           </button>
           <button class="menu-item" onClick={click(() => go({ name: 'custom' }))}>
             <b>Custom Battle</b>
@@ -189,8 +205,8 @@ export function MainMenu() {
             <span>Sound, unit size and AI</span>
           </button>
         </div>
+        <div class="menu-foot">A strategy prototype: a turn-based campaign and real-time battles under a sun that never moves. Every battle can be replayed exactly.</div>
       </div>
-      <div class="menu-foot">A strategy prototype: a turn-based campaign and real-time battles under a sun that never moves. Every battle can be replayed exactly.</div>
       {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
     </div>
   );
