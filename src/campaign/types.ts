@@ -253,6 +253,10 @@ export interface CampaignState {
   reports: BattleReport[];
   shudder: { active: boolean; next: number; stillness: number };
   winner?: { faction: FactionId; kind: string; turn: number };
+  /** The world's big news over the whole campaign, oldest first (older saves have none). */
+  annals?: { turn: number; kind: EventKind; text: string }[];
+  /** The campaign's story, written at its end when Claude is on. */
+  saga?: { title: string; text: string };
   nextId: number;
   rng: [number, number, number, number];
   /** Options set at the start. */

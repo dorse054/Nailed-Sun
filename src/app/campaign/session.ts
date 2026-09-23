@@ -19,7 +19,7 @@ import { armyVisible, visibleRegions } from '../../campaign/vision';
 import { regionDef } from '../../campaign/regions';
 import { jevProvider } from '../../campaign/jev';
 import { claudeStatus } from '../claude';
-import { envoyDecision, envoyWords } from './claudeJev';
+import { envoyDecision, envoyWords, writeSaga } from './claudeJev';
 import { detachHero, heroById, heroReach, heroes, heroesNewToll, heroVision, moveHero } from '../../campaign/heroes';
 import { simulate } from '../../sim/pool';
 import { go, loadRaw, remove, save, settings } from '../store';
@@ -137,6 +137,21 @@ export class CampaignSession {
     const text = await envoyWords(this.s, deal, accepted, why);
     // A later proposal to the same faction answers instead.
     if (this.envoys.value[deal.to]?.seq === seq) this.envoyAnswers(deal.to, seq, text);
+  }
+
+  /** Claude's chronicler is writing the campaign's saga. */
+  sagaBusy = signal(false);
+
+  /** At the end, with Claude on, have the chronicler write the campaign's story (once). */
+  async saga(): Promise<void> {
+    if (this.s.saga || this.sagaBusy.value || !this.counsel()) return;
+    this.sagaBusy.value = true;
+    const story = await writeSaga(this.s);
+    this.sagaBusy.value = false;
+    if (!story) return;
+    this.s.saga = story;
+    this.save();
+    this.bump();
   }
 
   private counsel(): boolean {

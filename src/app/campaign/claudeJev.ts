@@ -130,6 +130,56 @@ export async function envoyDecision(s: CampaignState, deal: Deal, value: DealVal
   }
 }
 
+/** The annals worth telling, oldest first: every war, fall and turn of the Tilt, and the latest conquests. */
+function sagaLines(s: CampaignState): string[] {
+  const a = s.annals ?? s.events.filter((e) => !e.faction);
+  const captures = a.filter((e) => e.kind === 'capture');
+  const tilts = a.filter((e) => e.kind === 'tilt');
+  const keep = new Set([...captures.slice(-30), ...tilts.slice(-15)]);
+  return a
+    .filter((e) => (e.kind !== 'capture' && e.kind !== 'tilt') || keep.has(e))
+    .slice(-90)
+    .map((e) => `Toll ${e.turn}: ${e.text}`);
+}
+
+/**
+ * The story of a finished campaign, told by Claude as the world's chronicler
+ * from the campaign's own annals. Null when Claude is off or can't be asked.
+ */
+export async function writeSaga(s: CampaignState): Promise<{ title: string; text: string } | null> {
+  if (!settings.value.claudeAI || claudeStatus.value !== 'ready') return null;
+  const player = factionDef(s.player).name;
+  const w = s.winner;
+  const outcome = w
+    ? w.faction === s.player
+      ? `${player} won on Toll ${w.turn} by ${w.kind}`
+      : `${factionDef(w.faction).name} won on Toll ${w.turn} by ${w.kind}, and ${player} did not`
+    : `${player} fell on Toll ${s.turn}`;
+  const prompt = [
+    'You are the chronicler of the world of Nailed Sun, a strategy game. The world is tidally locked: one half burns in endless noon, the other freezes in endless night, and the sun had not moved in a thousand years until it shuddered.',
+    `Write the saga of this war for the player, who led ${player}. ${outcome}.`,
+    'One paragraph of 110 to 160 words, past tense, vivid but plain. Name the factions and places from the annals, dwell on the turning points, and end with how it ended. Invent nothing that contradicts the annals.',
+    '',
+    'The annals, oldest first:',
+    ...sagaLines(s),
+    '',
+    'Reply with only JSON: {"title": "<a title of 2 to 6 words>", "saga": "<the paragraph>"}',
+  ].join('\n');
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 60000);
+  try {
+    const j = await askClaudeJson<{ title?: unknown; saga?: unknown } | null>(prompt, { modelTier: 'default', signal: ctrl.signal });
+    const text = typeof j?.saga === 'string' ? j.saga.trim() : '';
+    if (text.length < 40) return null;
+    const title = typeof j?.title === 'string' && j.title.trim() ? j.title.trim().replace(/^"|"$/g, '').slice(0, 80) : 'The War of the Shudder';
+    return { title, text: text.slice(0, 1600) };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 let synced = false;
 
 /** Keep the campaign's advisor in step with the setting and Claude's availability. */

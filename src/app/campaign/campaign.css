@@ -721,6 +721,42 @@
   max-width: 52ch;
   margin: 14px auto 18px;
 }
+.end {
+  max-height: calc(100% - 24px);
+  overflow-y: auto;
+}
+.end-saga {
+  text-align: left;
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-left: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  border-radius: 0 6px 6px 0;
+}
+.end-saga h2 {
+  margin: 0 0 6px;
+  font-size: 22px;
+}
+.end-saga p {
+  margin: 0 0 6px;
+  line-height: 1.5;
+}
+.end-saga .jev-mark {
+  margin-left: 0;
+}
+.end-saga.waiting {
+  color: var(--muted);
+  font-style: italic;
+  text-align: center;
+  border: 0;
+  background: none;
+  animation: envoy-wait 1.4s ease-in-out infinite alternate;
+}
+@media (prefers-reduced-motion: reduce) {
+  .end-saga.waiting {
+    animation: none;
+  }
+}
 .end-standings {
   width: 100%;
   border-collapse: collapse;

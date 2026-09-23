@@ -1,4 +1,4 @@
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import type { CampaignSession, Prompt } from './session';
 import { abandonCampaign, leaveCampaign } from './session';
 import type { ArmyState, Owner, PendingBattle } from '../../campaign/types';
@@ -400,6 +400,12 @@ const EPILOGUE: Record<string, string> = {
 };
 
 function End({ session }: { session: CampaignSession }) {
+  // Signal-aware components skip parent re-renders; subscribe to campaign changes.
+  void session.version.value;
+  const writing = session.sagaBusy.value;
+  useEffect(() => {
+    void session.saga();
+  }, [session]);
   const s = session.s;
   const w = s.winner;
   const alive = s.factions[session.player].alive;
@@ -419,6 +425,17 @@ function End({ session }: { session: CampaignSession }) {
           {w ? `${factionDef(w.faction).name} win on Toll ${w.turn}: ${w.kind}.` : !alive ? 'Your last army and your last settlement are lost.' : ''}
         </p>
         {epilogue && <p class="end-epilogue">{epilogue}</p>}
+        {s.saga ? (
+          <section class="end-saga">
+            <h2>{s.saga.title}</h2>
+            <p>{s.saga.text}</p>
+            <span class="jev-mark" title="Written by Claude from this campaign's annals">
+              ✦ Claude
+            </span>
+          </section>
+        ) : (
+          writing && <p class="end-saga waiting">The chronicler writes the saga of your war…</p>
+        )}
         {!won && !w && <p class="muted">{st.desc}</p>}
         <table class="end-standings">
           <thead>

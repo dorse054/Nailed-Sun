@@ -84,7 +84,15 @@ export function log(s: CampaignState, kind: EventKind, text: string, faction?: F
   if (by) e.by = by;
   s.events.push(e);
   if (s.events.length > 300) s.events.splice(0, s.events.length - 300);
+  // The world's big news, kept for the whole campaign (the chronicle forgets).
+  if (!faction && ANNALS.has(kind)) {
+    const a = (s.annals ??= []);
+    a.push({ turn: s.turn, kind, text });
+    if (a.length > 240) a.splice(0, a.length - 240);
+  }
 }
+
+const ANNALS = new Set<EventKind>(['capture', 'loss', 'tilt', 'diplomacy', 'revolt', 'shudder', 'victory']);
 
 /** Events the player should hear about: their own, and the world's big news. */
 export function playerEvents(s: CampaignState, turn = s.turn): CampaignEvent[] {
