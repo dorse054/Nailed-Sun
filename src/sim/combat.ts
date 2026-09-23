@@ -169,8 +169,9 @@ export function applyOnHit(b: Battle, effects: OnHit[] | undefined, t: Soldier, 
         tu.chill = Math.max(tu.chill, COMBAT.chill.duration);
         break;
       case 'burn':
+        // While a burn lasts the hotter fire wins; a burn that has gone out is forgotten.
+        t.burnDps = t.burn > 0 ? Math.max(t.burnDps, e.dps) : e.dps;
         t.burn = Math.max(t.burn, e.duration);
-        t.burnDps = Math.max(t.burnDps, e.dps);
         break;
       case 'stagger':
         if (t.alive) staggerSoldier(b, t, e.duration);
@@ -189,8 +190,9 @@ export function applyOnHit(b: Battle, effects: OnHit[] | undefined, t: Soldier, 
         break;
       case 'slow':
         if (e.largeOnly && tu.def.size === 'small') break;
+        // Check the old slow before extending it: while one is active the stronger wins, an expired one is forgotten.
+        tu.slowPct = tu.slow > 0 ? Math.max(tu.slowPct, e.pct) : e.pct;
         tu.slow = Math.max(tu.slow, e.duration);
-        tu.slowPct = Math.max(tu.slow > 0 ? tu.slowPct : 0, e.pct);
         if (e.grounds) groundFlyer(b, tu, 6);
         break;
       case 'swallow':

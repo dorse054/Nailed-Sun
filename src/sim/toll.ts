@@ -55,7 +55,9 @@ export function updateToll(b: Battle): void {
     st.tollInterval = iv;
     if (!Number.isFinite(iv)) continue;
     st.tollTimer += DT;
-    if (st.tollTimer >= iv) ringToll(b, side, false);
+    // The timer sums DT (1/20 s is not exact in binary): 900 steps add up to 44.99999999999..., so
+    // compare with a tolerance or a 45 s bell rings a tick late, at 45.05 s.
+    if (st.tollTimer >= iv - 1e-6) ringToll(b, side, false);
   }
 }
 
