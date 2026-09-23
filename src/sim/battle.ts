@@ -257,18 +257,22 @@ export class Battle {
   }
 
   private applyOrders(): void {
+    // Queued orders first. Controllers issue theirs during the previous tick and the player issues
+    // between ticks, so in the recorded battle a tick's logged orders always came after the
+    // controllers' ones; a replay applies its log entries after the queue to keep that order.
+    if (this.queue.length) {
+      const q = this.queue;
+      this.queue = [];
+      for (const { side, cmd, record } of q) {
+        if (record && !this.replay) this.log.push({ tick: this.tick, side, cmd });
+        this.applyCommand(side, cmd);
+      }
+    }
     if (this.replay) {
       while (this.replayIdx < this.replay.length && this.replay[this.replayIdx]!.tick <= this.tick) {
         const c = this.replay[this.replayIdx++]!;
         this.applyCommand(c.side, c.cmd);
       }
-    }
-    if (!this.queue.length) return;
-    const q = this.queue;
-    this.queue = [];
-    for (const { side, cmd, record } of q) {
-      if (record && !this.replay) this.log.push({ tick: this.tick, side, cmd });
-      this.applyCommand(side, cmd);
     }
   }
 

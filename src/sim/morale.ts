@@ -36,6 +36,12 @@ export function updateMorale(b: Battle): void {
       updateRouting(b, u);
       continue;
     }
+    // Broken at 0: a shock that left morale at or below zero breaks the unit before this tick's
+    // regeneration can lift it back above zero. (Unbreakable units are held at 1 below.)
+    if (u.morale <= 0 && !u.stats.unbreakable) {
+      rout(b, u);
+      continue;
+    }
     const max = u.maxMorale;
     let drain = u.stats.moraleDrain;
     let regen = u.stats.moraleRegen;

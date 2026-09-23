@@ -82,10 +82,14 @@ export class SpatialHash {
     let x1 = Math.floor((x + r) * this.inv);
     let y0 = Math.floor((y - r) * this.inv);
     let y1 = Math.floor((y + r) * this.inv);
-    if (x0 < 0) x0 = 0;
-    if (y0 < 0) y0 = 0;
-    if (x1 >= this.cols) x1 = this.cols - 1;
-    if (y1 >= this.rows) y1 = this.rows - 1;
+    // Items outside the grid are stored in its edge cells (see cellOf), so clamp both ends of the
+    // cell range into the grid: a query lying wholly outside must still scan the nearest edge cells.
+    const cmax = this.cols - 1;
+    const rmax = this.rows - 1;
+    x0 = x0 < 0 ? 0 : x0 > cmax ? cmax : x0;
+    x1 = x1 < 0 ? 0 : x1 > cmax ? cmax : x1;
+    y0 = y0 < 0 ? 0 : y0 > rmax ? rmax : y0;
+    y1 = y1 < 0 ? 0 : y1 > rmax ? rmax : y1;
     for (let cy = y0; cy <= y1; cy++) {
       for (let cx = x0; cx <= x1; cx++) {
         let i = this.head[cy * this.cols + cx]!;
