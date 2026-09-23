@@ -78,7 +78,8 @@ export class BattleSession {
     const b = this.battle;
     for (const s of [0, 1] as Side[]) {
       const ctrl = b.setup.armies[s].controller;
-      const auto = this.req.mode === 'demo' || (ctrl === 'ai' && s !== this.side) || (this.req.mode === 'replay' && s !== this.side);
+      // Replays re-run the AI wherever it played, including both sides of a watched battle.
+      const auto = this.req.mode === 'demo' || (ctrl === 'ai' && s !== this.side) || (this.req.mode === 'replay' && (s !== this.side || ctrl === 'ai'));
       if (auto) b.setController(s, new BattleAI());
     }
   }
