@@ -31,6 +31,13 @@ import { OBSERVANCES } from './actions';
 
 export const GREAT_SHUDDER_TOLL = 70;
 
+/**
+ * Renown for a wind-city's full migration through the five bands. A sail
+ * on open Gale Roads can finish one every few Tolls, and Renown also comes
+ * from raids, moorings and shrines, so it is kept modest.
+ */
+export const MIGRATION_RENOWN = 50;
+
 /** Every coin, meal and point of resource a faction gains or spends this Toll. */
 export function factionLedger(s: CampaignState, f: FactionId): Ledger {
   const L: Ledger = { coinIn: 0, coinOut: 0, foodIn: 0, foodOut: 0, resIn: 0, lines: [] };
@@ -239,10 +246,10 @@ export function endRound(s: CampaignState): void {
         a.bandsVisited = a.bandsVisited ?? [];
         if (!a.bandsVisited.includes(b)) a.bandsVisited.push(b);
         if (a.bandsVisited.length >= 5) {
-          s.factions.drift.res += 100;
+          s.factions.drift.res += MIGRATION_RENOWN;
           s.factions.drift.migrations++;
           a.bandsVisited = [b];
-          log(s, 'victory', `${a.name} completes a full migration through all five bands: +100 Renown.`, undefined, a.region);
+          log(s, 'victory', `${a.name} completes a full migration through all five bands: +${MIGRATION_RENOWN} Renown.`, undefined, a.region);
         }
       }
     }

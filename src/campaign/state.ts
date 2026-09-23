@@ -77,10 +77,11 @@ export function withRng<T>(s: CampaignState, fn: (rng: Rng) => T): T {
   return out;
 }
 
-export function log(s: CampaignState, kind: EventKind, text: string, faction?: FactionId, region?: string): void {
+export function log(s: CampaignState, kind: EventKind, text: string, faction?: FactionId, region?: string, by?: CampaignEvent['by']): void {
   const e: CampaignEvent = { turn: s.turn, kind, text };
   if (faction) e.faction = faction;
   if (region) e.region = region;
+  if (by) e.by = by;
   s.events.push(e);
   if (s.events.length > 300) s.events.splice(0, s.events.length - 300);
 }

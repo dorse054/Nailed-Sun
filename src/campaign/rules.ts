@@ -208,8 +208,13 @@ export function armyUpkeep(a: ArmyState): number {
     t += d.cost * UPKEEP_RATE * (1 + 0.05 * ((counts.get(u.def) ?? 1) - 1));
   }
   if (a.crusade) t *= 0.7;
+  // A wind-city trades as it sails and pays its crews on the move: the
+  // landless Drift keep their hosts for a fifth less.
+  if (a.faction === 'drift') t *= DRIFT_UPKEEP;
   return Math.round(t);
 }
+
+export const DRIFT_UPKEEP = 0.8;
 
 export function duplicatePenalty(a: ArmyState, def: string): number {
   const n = a.units.filter((u) => u.def === def).length;
@@ -221,6 +226,11 @@ export function duplicatePenalty(a: ArmyState, def: string): number {
 export interface OrderLine {
   label: string;
   value: number;
+}
+
+/** The "recently conquered" public order penalty, by Tolls since the capture. */
+export function conquestUnrest(since: number): number {
+  return since < 8 ? -Math.ceil((8 - since) / 3) : 0;
 }
 
 export function orderLines(s: CampaignState, id: string): OrderLine[] {
@@ -236,7 +246,7 @@ export function orderLines(s: CampaignState, id: string): OrderLine[] {
   add('City size', -(r.level - 1));
   if (armiesIn(s, id, f).length > 0) add('Garrisoned army', 2);
   const since = s.turn - r.takenTurn;
-  if (since < 8) add('Recently conquered', -Math.ceil((8 - since) / 3));
+  if (since < 8) add('Recently conquered', conquestUnrest(since));
   if (r.culture !== f) add('Foreign people', -1);
   if (f !== 'hush' && s.factions.hush.alive && s.factions.hush.res >= 50) {
     const near = neighbors(id).some((n) => s.regions[n]!.owner === 'hush' || armiesIn(s, n, 'hush').length > 0) || armiesIn(s, id, 'hush').length > 0;

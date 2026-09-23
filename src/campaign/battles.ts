@@ -12,7 +12,7 @@ import type { ArmyState, BattleReport, CampaignState, Owner, PendingBattle } fro
 import { regionDef } from './regions';
 import { neighbors } from './geometry';
 import { armyById, hostile, log, relation } from './state';
-import { armyPower, battleLeadership, regionBand, regionWind, wallLevel, regionEffects, sumEffect } from './rules';
+import { armyPower, bandIndex, battleLeadership, regionBand, regionWind, wallLevel, regionEffects, sumEffect } from './rules';
 import { chainDef, factionChains } from './buildings';
 import { lordName } from './names';
 
@@ -48,6 +48,8 @@ export function garrisonFor(s: CampaignState, region: string): string[] {
   if (r.owner === 'free' && walls > 0 && sumEffect(eff, 'garrison') === 0) n += 1;
   if (r.owner === 'free' && (def.landmark === 'candle' || def.landmark === 'nailSpire')) n += 2;
   if (r.owner === 'free' && def.major) n += 1;
+  // The dark keeps its own: Hush towns in the Evernight and the Dimmark raise an extra company.
+  if (r.owner === 'hush' && bandIndex(s, region) <= 1) n += 1;
   const tierCap = Math.max(1, Math.min(3, r.level));
   const roster = factionDef(culture).units.filter((u) => u.tier <= tierCap && u.category !== 'monster');
   const pattern = ['line', 'missile', 'antiLarge', 'missile', 'line', 'shock', 'missileCav', 'antiLarge'];
