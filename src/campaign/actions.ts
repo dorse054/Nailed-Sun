@@ -364,7 +364,7 @@ export interface BuildOption {
 /** What could go in (or upgrade) a slot. */
 export function buildOptions(s: CampaignState, region: string, slot: number): BuildOption[] {
   const r = s.regions[region]!;
-  if (r.owner === 'free') return [];
+  if (r.owner === 'free' || slot < 0 || slot >= r.slots.length) return [];
   const f = r.owner;
   const def = regionDef(region);
   const cur = r.slots[slot];
@@ -448,7 +448,7 @@ export function upgradeSettlement(s: CampaignState, region: string): Result {
 
 export function cityBuildOptions(s: CampaignState, armyId: string, slot: number): BuildOption[] {
   const a = armyById(s, armyId);
-  if (!a?.city) return [];
+  if (!a?.city || slot < 0 || slot >= a.city.slots.length) return [];
   const cur = a.city.slots[slot];
   const fs = s.factions.drift;
   const out: BuildOption[] = [];
