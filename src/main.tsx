@@ -25,3 +25,4 @@ if (hash.startsWith('demo')) {
   });
 } else if (hash === 'quick') quickBattle();
 else if (hash === 'codex') go({ name: 'codex' });
+else if (hash === 'lab') go({ name: 'lab' });
