@@ -186,7 +186,7 @@ export function CustomBattle() {
     set({ mine: next });
   };
 
-  const fight = () => {
+  const fight = (watch = false) => {
     audio.unlock();
     const specs = (ids: string[]): UnitSpec[] => {
       const l = ids.filter((id) => unitDef(id).role === 'lord');
@@ -207,7 +207,12 @@ export function CustomBattle() {
       setup.attacker = fort.defender === 1 ? 0 : 1;
       setup.timeLimit = 25 * 60;
     }
-    go({ name: 'battle', req: { setup, playerSide: 0, mode: 'custom', ...(c.scenario ? { title: c.scenario.title, briefing: c.scenario } : {}) } });
+    const story = c.scenario ? { title: c.scenario.title, briefing: c.scenario } : {};
+    // Watching: two generals fight it out on the same field.
+    if (watch) {
+      setup.armies[0].controller = 'ai';
+      go({ name: 'battle', req: { setup, playerSide: 0, mode: 'demo', skipDeploy: true, ...story } });
+    } else go({ name: 'battle', req: { setup, playerSide: 0, mode: 'custom', ...story } });
   };
 
   return (
@@ -217,9 +222,14 @@ export function CustomBattle() {
           ← Menu
         </button>
         <h1>Custom Battle</h1>
-        <button class="btn primary" disabled={!canFight} onClick={fight}>
-          Deploy
-        </button>
+        <div class="row">
+          <button class="btn" disabled={!canFight} onClick={() => fight(true)} title="Let two generals fight this battle while you watch">
+            Watch
+          </button>
+          <button class="btn primary" disabled={!canFight} onClick={() => fight()}>
+            Deploy
+          </button>
+        </div>
       </header>
       <ScenarioBar scenario={c.scenario ?? null} onScenario={useScenario} onClear={() => set({ scenario: null })} />
       <div class="setup-grid">
