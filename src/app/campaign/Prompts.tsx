@@ -30,6 +30,8 @@ export function Prompts({ session, focus }: { session: CampaignSession; focus: (
       return <Summary session={session} />;
     case 'reports':
       return <Reports session={session} p={p} />;
+    case 'offer':
+      return <OfferPrompt p={p} />;
     case 'end':
       return <End session={session} />;
   }
@@ -73,6 +75,65 @@ function Side({ session, title, owner, armies, garrison, region, align }: { sess
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** What an AI faction is putting to the player, in words. */
+function offerText(d: Extract<Prompt, { kind: 'offer' }>['deal']): { title: string; body: string } {
+  const A = factionDef(d.from).name;
+  const coin = d.coin ?? 0;
+  switch (d.kind) {
+    case 'peace':
+      return { title: `${A} offer peace`, body: coin ? `An end to the war, and ${coin} coin besides.` : 'An end to the war between you.' };
+    case 'trade':
+      return { title: `${A} propose trade`, body: 'Open markets between your lands: coin for both every Toll.' };
+    case 'alliance':
+      return { title: `${A} propose an alliance`, body: 'Allies share vision and join each other’s wars.' };
+    case 'tribute':
+      return d.demand
+        ? { title: `${A} demand tribute`, body: `They want ${coin} coin a Toll for 10 Tolls. Refusing will anger them.` }
+        : { title: `${A} offer tribute`, body: `They will pay you ${coin} coin a Toll for 10 Tolls.` };
+    case 'gift':
+      return { title: `${A} send a gift`, body: `${coin} coin, as a token of good will.` };
+    case 'mooring':
+      return { title: `${A} ask for a mooring`, body: `They would tie a wind-city to the walls of ${d.region ? regionDef(d.region).settlement || regionDef(d.region).name : 'one of your towns'}.` };
+    case 'vassal':
+      return { title: `${A} propose vassalage`, body: 'One of you would bow to the other.' };
+    default:
+      return { title: `${A} send envoys`, body: `A proposal: ${d.kind}.` };
+  }
+}
+
+const DEAL_TONE: Record<string, string> = { insult: 'bad', poor: 'bad', fair: 'warn', good: 'good', generous: 'good' };
+
+/** An AI faction puts a deal to the player: accept or refuse. */
+function OfferPrompt({ p }: { p: Extract<Prompt, { kind: 'offer' }> }) {
+  const d = p.deal;
+  const t = offerText(d);
+  return (
+    <div class="modal-veil">
+      <div class="panel modal offer" role="dialog" aria-label={t.title}>
+        <span class="label">envoys</span>
+        <h2 style={{ color: OWNER_COLOR[d.from] }}>{t.title}</h2>
+        <p>{t.body}</p>
+        <div class="row">
+          <span class={`chip ${DEAL_TONE[p.value.label] ?? ''}`}>For you: {p.value.label}</span>
+          {p.value.why.map((w) => (
+            <span key={w} class="muted small">
+              {w}
+            </span>
+          ))}
+        </div>
+        <div class="row" style={{ justifyContent: 'flex-end' }}>
+          <button class="btn" onClick={() => p.resolve(false)}>
+            Refuse
+          </button>
+          <button class="btn primary" onClick={() => p.resolve(true)}>
+            Accept
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
