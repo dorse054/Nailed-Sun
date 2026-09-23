@@ -72,6 +72,12 @@ function Hud({ s }: { s: BattleSession }) {
         {s.message.value && <div class="panel hud-flash">{s.message.value}</div>}
         <Herald s={s} />
       </div>
+      {s.req.mode === 'demo' && s.req.briefing && s.phase === 'battle' && b.time < 10 && (
+        <div class="center-banner watch-briefing">
+          <h2>{s.req.briefing.title}</h2>
+          <p>{s.req.briefing.text}</p>
+        </div>
+      )}
       {s.paused && s.phase === 'battle' && !menu && (
         <div class="center-banner">
           <h2 style={{ fontSize: '34px', color: 'var(--gold)', textShadow: '0 2px 12px #000' }}>Paused</h2>

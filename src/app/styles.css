@@ -2329,3 +2329,22 @@ button {
     animation: none;
   }
 }
+
+/* A watched battle made from a story opens with its briefing. */
+.watch-briefing {
+  /* Below the generals' words, which open a watched battle too. */
+  top: 30vh;
+  max-width: min(560px, calc(100vw - 32px));
+  text-align: center;
+  text-shadow: 0 2px 10px #000;
+}
+.watch-briefing h2 {
+  font-size: 30px;
+  color: var(--gold);
+}
+.watch-briefing p {
+  font-family: var(--display);
+  font-size: 18px;
+  font-style: italic;
+  line-height: 1.4;
+}
