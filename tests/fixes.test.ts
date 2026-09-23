@@ -277,7 +277,7 @@ describe('burning ground', () => {
 
 describe('fortified battles', () => {
   const FORT: Partial<MapSetup> = { preset: 'open', fort: { defender: 1, radius: 170 } };
-  const outside = (b: Battle, side: 0 | 1, i: number) => b.units[i]!.soldiers.every((s) => !s.alive || !b.terrain.insideFort(s.x, s.y));
+  const outside = (b: Battle, _side: 0 | 1, i: number) => b.units[i]!.soldiers.every((s) => !s.alive || !b.terrain.insideFort(s.x, s.y));
 
   it('a routing defender slips out through one of its own gates, even on horseback', () => {
     const b = makeBattle({
