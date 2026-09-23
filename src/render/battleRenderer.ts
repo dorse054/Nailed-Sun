@@ -82,10 +82,12 @@ export class BattleRenderer {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = voidColor(b.terrain.light);
     ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    // Big moments shake the view a little, less the further away they are.
+    const [sx, sy] = this.shakeOffset();
     // World transform: meters -> device pixels.
     const k = cam.zoom * dpr;
-    const tx = (cam.width / 2 - cam.x * cam.zoom) * dpr;
-    const ty = (cam.height / 2 - cam.y * cam.zoom) * dpr;
+    const tx = (cam.width / 2 - cam.x * cam.zoom + sx) * dpr;
+    const ty = (cam.height / 2 - cam.y * cam.zoom + sy) * dpr;
     ctx.setTransform(k, 0, 0, k, tx, ty);
     ctx.imageSmoothingEnabled = true;
     const S = this.art.scale;
@@ -127,11 +129,12 @@ export class BattleRenderer {
     this.drawWind(ctx, dt);
     if (ov.abilityPreview) this.drawAbilityPreview(ctx, ov.abilityPreview);
     this.drawPings(ctx, ov);
-    // Screen space.
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // Screen space: banners and texts shake with the world; the drag box stays under the pointer.
+    ctx.setTransform(dpr, 0, 0, dpr, sx * dpr, sy * dpr);
     this.drawSunGlow(ctx);
     this.drawBanners(ctx, ov, alpha);
     this.drawTexts(ctx, alpha);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     if (ov.dragBox) {
       const d = ov.dragBox;
       ctx.strokeStyle = 'rgba(255,230,160,0.9)';
@@ -141,6 +144,30 @@ export class BattleRenderer {
       ctx.strokeRect(Math.min(d.x0, d.x1), Math.min(d.y0, d.y1), Math.abs(d.x1 - d.x0), Math.abs(d.y1 - d.y0));
     }
     this.effects.update(dt);
+  }
+
+  private shake = 0;
+  private shakeClock = 0;
+  private readonly calm = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /** Screen offset for this frame, in CSS pixels. Decays in real time, so a pause never freezes it. */
+  private shakeOffset(): [number, number] {
+    const cam = this.camera;
+    for (const q of this.effects.shakes) {
+      const d = (Math.hypot(q.x - cam.x, q.y - cam.y) * cam.zoom) / Math.max(cam.width, cam.height);
+      this.shake = Math.max(this.shake, q.amp * Math.max(0, 1 - d));
+    }
+    this.effects.shakes.length = 0;
+    const now = performance.now() / 1000;
+    const dt = Math.min(0.1, Math.max(0, now - this.shakeClock));
+    this.shakeClock = now;
+    if (this.calm || this.shake < 0.05) {
+      this.shake = 0;
+      return [0, 0];
+    }
+    const out: [number, number] = [Math.sin(now * 83) * this.shake, Math.cos(now * 71) * this.shake];
+    this.shake *= Math.exp(-dt * 7);
+    return out;
   }
 
   private shouldDraw(u: Unit): boolean {
