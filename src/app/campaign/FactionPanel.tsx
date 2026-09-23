@@ -22,7 +22,7 @@ import {
   singHymn,
   armyCap,
 } from '../../campaign/actions';
-import { declareWar, propose, valueDeal, type Deal, type DealKind } from '../../campaign/diplomacy';
+import { declareWar, valueDeal, type Deal, type DealKind } from '../../campaign/diplomacy';
 import { OWNER_COLOR } from './campaignMap';
 
 const TITLES: Record<Exclude<Panel, 'none'>, string> = {
@@ -293,12 +293,8 @@ function Diplomacy({ session }: { session: CampaignSession }) {
       const r = declareWar(s, me, d.to);
       if (!r.ok) session.say(r.reason);
       else void session.envoy(d, true, []);
-    } else {
-      const r = propose(s, d);
-      session.say(r.accepted ? `${factionDef(d.to).short} accept.` : `${factionDef(d.to).short} refuse: they find it ${r.value.label}.`);
-      void session.envoy(d, r.accepted, r.value.why);
-    }
-    session.bump();
+      session.bump();
+    } else void session.propose(d);
   };
   const words = session.envoys.value;
   return (
@@ -343,7 +339,7 @@ function Diplomacy({ session }: { session: CampaignSession }) {
                   const d = deal(x.kind, o, x.coin);
                   const v = x.kind === 'war' || x.kind === 'breakAlliance' ? null : valueDeal(s, d);
                   return (
-                    <button key={x.label} class={`btn small ${x.kind === 'war' ? 'danger' : ''}`} title={v ? `They would find it ${v.label}: ${v.why.join('; ')}` : ''} onClick={() => tryDeal(d)}>
+                    <button key={x.label} class={`btn small ${x.kind === 'war' ? 'danger' : ''}`} disabled={session.envoyBusy(o)} title={v ? `They would find it ${v.label}: ${v.why.join('; ')}` : ''} onClick={() => tryDeal(d)}>
                       {x.label}
                       {v && <em class={`deal ${v.label}`}> {v.label}</em>}
                     </button>

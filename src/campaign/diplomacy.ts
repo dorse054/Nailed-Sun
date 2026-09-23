@@ -158,8 +158,13 @@ export function propose(s: CampaignState, d: Deal): { accepted: boolean; value: 
   const value = valueDeal(s, d);
   const accepted = value.value >= 0 && canApply(s, d);
   if (accepted) apply(s, d);
-  if (!accepted && d.kind !== 'war') relation(s, d.from, d.to).opinion -= value.label === 'insult' ? 5 : 1;
+  else refuse(s, d, value);
   return { accepted, value };
+}
+
+/** A refused proposal costs the proposer a little standing; an insult more. */
+export function refuse(s: CampaignState, d: Deal, value: DealValue): void {
+  if (d.kind !== 'war') relation(s, d.from, d.to).opinion -= value.label === 'insult' ? 5 : 1;
 }
 
 /** The other side said yes (a player answering an AI offer): apply it if it still stands. */

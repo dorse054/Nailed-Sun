@@ -8,7 +8,7 @@ import { effect } from '@preact/signals';
 import type { FactionId } from '../../data/schema';
 import { setJevProvider, type JevChoice, type JevProvider } from '../../campaign/jev';
 import type { CampaignState } from '../../campaign/types';
-import type { Deal, DealKind } from '../../campaign/diplomacy';
+import type { Deal, DealKind, DealValue } from '../../campaign/diplomacy';
 import { relation } from '../../campaign/state';
 import { factionDef } from '../../data/index';
 import { askClaudeJson, claudeStatus, findClaude } from '../claude';
@@ -87,6 +87,42 @@ export async function envoyWords(s: CampaignState, deal: Deal, accepted: boolean
     const j = await askClaudeJson<{ reply?: unknown } | null>(prompt, { modelTier: 'quick', signal: ctrl.signal });
     const text = typeof j?.reply === 'string' ? j.reply.trim().replace(/\s+/g, ' ').replace(/^"|"$/g, '') : '';
     return text ? text.slice(0, 240) : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * A close call on the player's proposal, decided in character as the design
+ * asks: the game values the deal and labels it; Claude's envoy weighs that
+ * and answers. Null when Claude is off, unavailable or slow: the game then
+ * decides by the value alone.
+ */
+export async function envoyDecision(s: CampaignState, deal: Deal, value: DealValue): Promise<{ accept: boolean; reply: string | null } | null> {
+  if (!settings.value.claudeAI || claudeStatus.value !== 'ready') return null;
+  const to = deal.to;
+  const from = factionDef(deal.from).name;
+  const opinion = relation(s, to, deal.from).opinion;
+  const mood = opinion < -40 ? 'hostile' : opinion < -10 ? 'cold' : opinion < 10 ? 'wary' : opinion < 40 ? 'warm' : 'friendly';
+  const offer = `${DEAL_WORDS[deal.kind] ?? 'made you an offer'}${deal.coin ? `, with ${deal.coin} coin` : ''}`;
+  const reasons = value.why.map((w) => w.replace(/\s*\([^)]*\)/g, '').trim()).filter(Boolean);
+  const prompt = [
+    `You are the envoy of ${PERSONA[to]}`,
+    `In Nailed Sun, a strategy game, it is Toll ${s.turn}. ${from} have just ${offer}. Relations between you are ${mood}.`,
+    `Your council's advisers judge the deal ${value.label}${reasons.length ? `: ${reasons.join('; ')}` : ''}.`,
+    'Decide in character whether your council accepts. A deal your advisers call poor is usually refused and a good one usually accepted, but your people\'s temper decides the close calls.',
+    `Then speak your council's answer to ${from} in one or two short sentences. No numbers or game terms.`,
+    'Reply with only JSON: {"accept": true or false, "reply": "<what the envoy says>"}',
+  ].join('\n');
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 12000);
+  try {
+    const j = await askClaudeJson<{ accept?: unknown; reply?: unknown } | null>(prompt, { modelTier: 'quick', signal: ctrl.signal });
+    if (typeof j?.accept !== 'boolean') return null;
+    const text = typeof j.reply === 'string' ? j.reply.trim().replace(/\s+/g, ' ').replace(/^"|"$/g, '').slice(0, 240) : '';
+    return { accept: j.accept, reply: text || null };
   } catch {
     return null;
   } finally {

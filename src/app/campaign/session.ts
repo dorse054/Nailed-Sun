@@ -7,7 +7,7 @@ import { signal } from '@preact/signals';
 import type { FactionId } from '../../data/schema';
 import type { BattleResult } from '../../sim/types';
 import type { BattleReport, CampaignState, PendingBattle } from '../../campaign/types';
-import type { Deal, DealValue } from '../../campaign/diplomacy';
+import { accept, propose, refuse, valueDeal, type Deal, type DealValue } from '../../campaign/diplomacy';
 import { newCampaign } from '../../campaign/setup';
 import { endTurn, resolveBattles, type PlayerBattleOutcome, type TurnHooks } from '../../campaign/controller';
 import { scriptedAI } from '../../campaign/ai';
@@ -19,7 +19,7 @@ import { armyVisible, visibleRegions } from '../../campaign/vision';
 import { regionDef } from '../../campaign/regions';
 import { jevProvider } from '../../campaign/jev';
 import { claudeStatus } from '../claude';
-import { envoyWords } from './claudeJev';
+import { envoyDecision, envoyWords } from './claudeJev';
 import { detachHero, heroById, heroReach, heroes, heroesNewToll, heroVision, moveHero } from '../../campaign/heroes';
 import { simulate } from '../../sim/pool';
 import { go, loadRaw, remove, save, settings } from '../store';
@@ -88,23 +88,75 @@ export class CampaignSession {
     }, 3200);
   }
 
-  /** With Claude on, the other side's envoy answers the player's proposal in words. */
-  async envoy(deal: Deal, accepted: boolean, why: string[]): Promise<void> {
-    if (!settings.value.claudeAI || claudeStatus.value !== 'ready') return;
+  /** Is this faction's envoy still weighing the player's last proposal? */
+  envoyBusy(f: FactionId): boolean {
+    const e = this.envoys.value[f];
+    return !!e && !e.text;
+  }
+
+  /**
+   * The player proposes a deal. With Claude on, a close call (a deal valued
+   * poor, fair or good) goes to the other side's envoy, who decides in
+   * character, as the design asks; clear cases, and any failure, are decided
+   * by the deal's value alone.
+   */
+  async propose(deal: Deal): Promise<void> {
     const to = deal.to;
+    const short = factionDef(to).short;
+    const value = valueDeal(this.s, deal);
+    const close = value.label === 'poor' || value.label === 'fair' || value.label === 'good';
+    if (!close || !this.counsel()) {
+      const r = propose(this.s, deal);
+      this.say(r.accepted ? `${short} accept.` : `${short} refuse: they find it ${r.value.label}.`);
+      this.bump();
+      void this.envoy(deal, r.accepted, r.value.why);
+      return;
+    }
     const turn = this.s.turn;
-    const seq = ++this.envoySeq;
-    this.envoys.value = { ...this.envoys.value, [to]: { text: '', turn, seq } };
+    const seq = this.envoyWaits(to);
+    const answer = await envoyDecision(this.s, deal, value);
+    if (this.envoys.value[to]?.seq !== seq) return;
+    if (this.s.turn !== turn) {
+      // The Toll ended while the envoy weighed it: the moment has passed.
+      this.envoyAnswers(to, seq, null);
+      return;
+    }
+    let accepted: boolean;
+    if (answer) {
+      accepted = answer.accept && accept(this.s, deal);
+      if (!accepted) refuse(this.s, deal, value);
+    } else accepted = propose(this.s, deal).accepted;
+    this.say(accepted ? `${short} accept.` : `${short} refuse.`);
+    this.envoyAnswers(to, seq, answer?.reply ?? null);
+  }
+
+  /** With Claude on, the other side's envoy puts a decided answer into words. */
+  async envoy(deal: Deal, accepted: boolean, why: string[]): Promise<void> {
+    if (!this.counsel()) return;
+    const seq = this.envoyWaits(deal.to);
     const text = await envoyWords(this.s, deal, accepted, why);
     // A later proposal to the same faction answers instead.
-    if (this.envoys.value[to]?.seq !== seq) return;
+    if (this.envoys.value[deal.to]?.seq === seq) this.envoyAnswers(deal.to, seq, text);
+  }
+
+  private counsel(): boolean {
+    return settings.value.claudeAI && claudeStatus.value === 'ready';
+  }
+
+  private envoyWaits(to: FactionId): number {
+    const seq = ++this.envoySeq;
+    this.envoys.value = { ...this.envoys.value, [to]: { text: '', turn: this.s.turn, seq } };
+    return seq;
+  }
+
+  private envoyAnswers(to: FactionId, seq: number, text: string | null): void {
     const next = { ...this.envoys.value };
     if (text) {
-      next[to] = { text, turn, seq };
+      next[to] = { text, turn: this.s.turn, seq };
       log(this.s, 'diplomacy', `${factionDef(to).short} envoy: “${text}”`, this.player, undefined, 'jev');
-      this.bump();
     } else delete next[to];
     this.envoys.value = next;
+    this.bump();
   }
 
   // ------------------------------------------------------------ selection
