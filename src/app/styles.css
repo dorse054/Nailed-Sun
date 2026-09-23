@@ -651,6 +651,29 @@ button {
   pointer-events: none;
 }
 
+/* Tablets and narrow windows: the Rose keeps its words, and the power bar takes its own row. */
+@media (min-width: 721px) and (max-width: 980px) {
+  .hud-cluster:has(.power) {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 4px 6px;
+    padding: 6px 8px;
+    min-width: 0;
+  }
+  .hud-top .power {
+    width: auto;
+    flex: 1 0 100%;
+  }
+  .hud-cluster .btn.small {
+    padding: 3px 7px;
+  }
+  .clock {
+    min-width: 42px;
+  }
+  .rose-text {
+    max-width: 250px;
+  }
+}
 @media (max-width: 720px) {
   /* The top bar must fit a phone: small Rose, no 0.5x, power bar on its own row. */
   .hud-top {

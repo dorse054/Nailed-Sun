@@ -420,6 +420,22 @@ function HourPicker({ s }: { s: BattleSession }) {
 /** Whether the Toll panel shows its Hours (null: open on large screens, folded on small). */
 const hoursOpen = signal<boolean | null>(null);
 
+let measure: CanvasRenderingContext2D | null | undefined;
+const labelSizes = new Map<string, number>();
+/** The font size a card needs so the longest word of a unit's name fits it: 10.5px unless it must shrink. */
+function labelSize(name: string): number {
+  const known = labelSizes.get(name);
+  if (known) return known;
+  measure ??= document.createElement('canvas').getContext('2d');
+  if (!measure) return 10.5;
+  measure.font = `10.5px ${getComputedStyle(document.body).fontFamily}`;
+  const widest = Math.max(...name.split(/\s+|(?<=-)/).map((w) => measure!.measureText(w).width));
+  const size = widest > 56 ? Math.max(9, Math.floor(((10.5 * 56) / widest) * 4) / 4) : 10.5;
+  // Until the fonts arrive the measure is of a stand-in, so it is not kept.
+  if (document.fonts?.status === 'loaded') labelSizes.set(name, size);
+  return size;
+}
+
 function UnitCards({ s }: { s: BattleSession }) {
   const units = s.own();
   return (
@@ -453,7 +469,9 @@ function UnitCards({ s }: { s: BattleSession }) {
             }}
           >
             <UnitIcon def={u.def} size={34} />
-            <div class="nm">{u.def.name}</div>
+            <div class="nm" style={{ fontSize: `${labelSize(u.def.name)}px` }}>
+              {u.def.name}
+            </div>
             <div class="bar">
               <i style={{ width: `${(u.alive / u.initial) * 100}%`, background: '#e8dcc0' }} />
             </div>
