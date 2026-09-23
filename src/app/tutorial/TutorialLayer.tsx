@@ -347,7 +347,12 @@ function EndDialog({ s, run }: { s: BattleSession; run: TutorialRun }) {
               Try again
             </button>
           )}
-          <button class={`btn ${won && !next ? 'primary' : ''}`} onClick={click(() => go({ name: 'tutorials' }))}>
+          {won && !next && (
+            <button class="btn primary" onClick={click(() => go({ name: 'legends' }))} title="Six harder battles, each built around one idea, with medals">
+              On to the Legends
+            </button>
+          )}
+          <button class="btn" onClick={click(() => go({ name: 'tutorials' }))}>
             Back to tutorials
           </button>
         </div>
