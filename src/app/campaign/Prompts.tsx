@@ -433,11 +433,11 @@ function Reports({ session, p }: { session: CampaignSession; p: Extract<Prompt, 
 /** A fought battle's turning points, and its tale when the player asks for it. */
 function ReportStory({ session, r, place }: { session: CampaignSession; r: BattleReport; place: string }) {
   const notes = session.notesOf(r);
-  if (!notes || !r.result) return r.tale ? <ToldTale tale={r.tale} /> : null;
+  if (!notes) return r.tale ? <ToldTale tale={r.tale} /> : null;
   const player = notes.setup.armies.findIndex((a) => a.faction === session.player && a.controller === 'player');
   return (
     <div class="report-story">
-      <TaleOf setup={notes.setup} result={r.result} moments={notes.moments} player={(player === 1 ? 1 : 0) as 0 | 1} title={`The battle at ${place}`} tale={r.tale} onTale={(t) => session.keepTale(r, t)} />
+      <TaleOf setup={notes.setup} result={notes.result} moments={notes.moments} player={(player === 1 ? 1 : 0) as 0 | 1} title={`The battle at ${place}`} tale={r.tale} onTale={(t) => session.keepTale(r, t)} />
       <Moments moments={notes.moments} open={false} />
     </div>
   );

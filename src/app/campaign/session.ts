@@ -32,6 +32,13 @@ import { audio } from '../../audio/audio';
 
 const SAVE_KEY = 'nailedsun.campaign.v1';
 
+/** A battle the player fought on the field: its setup, turning points and result. */
+export interface FieldNotes {
+  setup: BattleSetup;
+  moments: Moment[];
+  result: BattleResult;
+}
+
 export type Prompt =
   | { kind: 'battle'; pb: PendingBattle; attacking: boolean; resolve: (o: PlayerBattleOutcome) => void }
   | { kind: 'settlement'; army: string; region: string }
@@ -391,7 +398,7 @@ export class CampaignSession {
         mode: 'campaign',
         title: `Battle of ${place}`,
         onDone: (result: BattleResult, _log, setup, moments) => {
-          this.fieldNotes.set(`${this.s.turn}:${p.pb.region}`, { setup, moments });
+          this.fieldNotes.set(`${this.s.turn}:${p.pb.region}`, { setup, moments, result });
           p.resolve({ prep, result, fought: true, driftChoice });
           go({ name: 'campaign' });
         },
@@ -400,9 +407,9 @@ export class CampaignSession {
   }
 
   /** What the player saw of the battles they fought this session: the field and its turning points. */
-  private fieldNotes = new Map<string, { setup: BattleSetup; moments: Moment[] }>();
+  private fieldNotes = new Map<string, FieldNotes>();
 
-  notesOf(r: BattleReport): { setup: BattleSetup; moments: Moment[] } | null {
+  notesOf(r: BattleReport): FieldNotes | null {
     return this.fieldNotes.get(`${r.turn}:${r.region}`) ?? null;
   }
 
