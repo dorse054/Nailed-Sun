@@ -527,9 +527,20 @@ button {
   }
   .unit-panel {
     width: 100%;
+    padding: 8px 10px;
+    gap: 6px;
   }
+  .unit-panel h3 {
+    font-size: 18px;
+  }
+  /* Phones keep the battlefield visible: the stat grid collapses. */
   .stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    font-size: 11px;
+    gap: 2px 6px;
+  }
+  .stats div:nth-child(n + 5) {
+    display: none;
   }
 }
 

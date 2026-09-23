@@ -87,11 +87,20 @@ export class BattleSession {
     const t = this.battle.terrain;
     const cam = this.renderer.camera;
     cam.fit(t.width, t.height);
+    const portrait = cam.height > cam.width * 1.1;
     if (this.phase === 'deploy') {
       const z = t.deployZone(this.side);
       cam.x = z.x + z.w / 2;
       cam.y = z.y + z.h / 2 + (this.side === 0 ? -140 : 140);
-      cam.zoom = Math.min(cam.width / 1000, cam.height / 620);
+      cam.zoom = portrait ? Math.max(cam.width / 1000, cam.height / 1000) : Math.min(cam.width / 1000, cam.height / 620);
+    } else if (portrait) {
+      // Phones: fill the height instead of letterboxing, centered on our army.
+      cam.zoom = Math.max(cam.width / t.width, cam.height / t.height);
+      const own = this.battle.units.filter((u) => u.side === this.side && u.alive > 0);
+      if (own.length) {
+        cam.x = own.reduce((s, u) => s + u.x, 0) / own.length;
+        cam.y = own.reduce((s, u) => s + u.y, 0) / own.length - 120;
+      }
     }
   }
 
