@@ -15,7 +15,8 @@ import { askClaudeJson, claudeStatus, findClaude } from '../claude';
 import { settings } from '../store';
 
 /** The design's plain-language personalities. */
-const PERSONA: Record<FactionId, string> = {
+/** Each faction's temper, for Claude to speak and choose in character. */
+export const PERSONA: Record<FactionId, string> = {
   choir: 'the Choir of the Nail: zealots of the fixed sun who mean to make all the world shine. Bold, certain, quick to crusade, slow to forgive.',
   hush: 'the Hush: the patient people of the endless night. Ambush-minded; they strike only when the dark favours them and never spend lives for nothing.',
   vesperate: 'the Vesperate: bell-keepers of the Gloaming who want the world held at the Hour. Cautious and orderly; they distrust whoever pushes the Tilt.',

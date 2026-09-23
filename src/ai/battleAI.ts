@@ -65,6 +65,8 @@ export interface AIOptions {
   abilityUse?: number;
   /** Seconds before a defending army gives up waiting and attacks. */
   patience?: number;
+  /** A general's plan (see ArmySetup.plan): sets the opening stance, but the army still walks up in order. */
+  plan?: 'attack' | 'defend';
 }
 
 export class BattleAI implements Controller {
@@ -200,6 +202,7 @@ export class BattleAI implements Controller {
     else if (f === 'hush') this.stance = b.terrain.light <= 1 || foeR > myR ? 'defend' : 'attack';
     else if (myR > foeR + 0.08) this.stance = 'defend';
     else this.stance = 'attack';
+    if (this.opts.plan) this.stance = this.opts.plan;
     if (b.terrain.fort) this.stance = b.terrain.fort.defender === side ? 'defend' : 'attack';
     // Everyone starts in a running state for the approach.
     for (const u of mine) {

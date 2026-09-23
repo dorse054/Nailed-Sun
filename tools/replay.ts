@@ -9,6 +9,7 @@
 import fs from 'node:fs';
 import { Battle } from '../src/sim/battle';
 import { BattleAI } from '../src/ai/battleAI';
+import { aiOptions } from '../src/ai/plan';
 import { dataFingerprint, parseReplay } from '../src/app/replayFile';
 
 const path = process.argv[2];
@@ -26,7 +27,7 @@ if (!sameBuild) console.warn(`Recorded with data ${file.build}; this build is ${
 
 const b = new Battle(file.setup, { replay: file.log });
 for (const side of [0, 1] as const) {
-  if (side !== file.playerSide || file.setup.armies[side].controller === 'ai') b.setController(side, new BattleAI());
+  if (side !== file.playerSide || file.setup.armies[side].controller === 'ai') b.setController(side, new BattleAI(aiOptions(file.setup.armies[side])));
 }
 const r = b.run();
 const reason = r.reason === 'rout' ? 'decided by rout' : r.reason === 'timeout' ? 'time ran out' : r.reason;

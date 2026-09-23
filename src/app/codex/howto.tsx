@@ -75,7 +75,7 @@ export function HowToPage({ nav }: { nav: Nav }) {
             { name: 'Battles', desc: 'When armies meet, fight the battle yourself or auto-resolve it with the same simulation. The direction you attack from decides where the sun stands.' },
             { name: 'The Tilt', desc: 'Faction actions push the world sunward or nightward, shifting every region’s light and harvest. After Toll 70 the Great Shudder shakes it at random.' },
             { name: 'Diplomacy', desc: 'Trade, alliances, peace and gifts. Every offer is valued before it is sent, from insult to generous. The other factions make offers and demands of their own.' },
-            { name: 'Claude as counsel', desc: 'Played on claude.ai, Settings can let the AI factions take Claude’s advice: every other Toll each asks Claude, in character, whether to change its wars, treaties or plans, and envoys decide your closer proposals and answer in their own words. Choices made on its advice are marked ✦ Claude in the chronicle.' },
+            { name: 'Claude as counsel', desc: 'Played on claude.ai, Settings can let the AI factions take Claude’s advice: every other Toll each asks Claude, in character, whether to change its wars, treaties or plans, and envoys decide your closer proposals and answer in their own words. In battles, the enemy general reads the field while you deploy, chooses to attack, hold or lie in ambush, and speaks. Choices made on its advice are marked ✦ Claude in the chronicle.' },
           ]}
         />
         <p class="cx-note">
