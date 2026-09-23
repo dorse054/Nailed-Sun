@@ -402,6 +402,8 @@ export class CampaignSession {
         title: `Battle of ${place}`,
         onDone: (result: BattleResult, _log, setup, moments) => {
           this.fieldNotes.set(`${this.s.turn}:${p.pb.region}`, { setup, moments, result });
+          // Only the latest battles can still be told: forget the rest.
+          for (const k of [...this.fieldNotes.keys()].slice(0, -8)) this.fieldNotes.delete(k);
           p.resolve({ prep, result, fought: true, driftChoice });
           go({ name: 'campaign' });
         },
