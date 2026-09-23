@@ -144,7 +144,7 @@ export function Rose({ sunBearing, light, wind, facing, size = 84 }: RoseProps) 
 export function roseLines(light: LightLevel, wind: WindLevel): { light: string; lightFx: string; wind: string; windFx: string } {
   const L = LIGHT_RULES[light];
   const W = WIND_RULES[wind];
-  const glare = L.glareAccuracyPct ? `Facing the sun: ${L.glareAccuracyPct}% accuracy${L.glareMa ? `, ${L.glareMa} melee attack` : ''}` : light === 4 ? 'Sun overhead: no glare; non-Choir tire 50% faster' : L.spotMult < 1 ? `Spotting ${Math.round((L.spotMult - 1) * 100)}%` : 'No glare';
+  const glare = L.glareAccuracyPct ? `Facing the sun: ${L.glareAccuracyPct}% accuracy${L.glareMa ? `, ${L.glareMa} melee attack` : ''}` : light === 4 ? `Sun overhead: no glare; non-Choir tire ${Math.round((L.fatigueMult - 1) * 100)}% faster` : L.spotMult < 1 ? `Spotting ${Math.round((L.spotMult - 1) * 100)}%` : 'No glare';
   const beams = `Beams ${Math.round(L.beamMult * 100)}%`;
   return {
     light: LIGHT_NAMES[light],

@@ -106,6 +106,11 @@ export function generateArmy(faction: FactionId, budget: number, rng: Rng, opts:
     const heroes = count((u) => u.role === 'hero');
     const artillery = count((u) => u.role === 'artillery');
     const monsters = count((u) => u.role === 'monster');
+    // Near the unit limit, lean toward units that use the budget: an army of cheap units
+    // would otherwise hit the limit with points unspent and fight below its budget.
+    const slotsLeft = Math.max(1, maxUnits - (out.length - 1));
+    const perSlot = left / slotsLeft;
+    const fillAt = slotsLeft <= 4 ? 0.8 : 0.5;
     const weights = affordable.map((u) => {
       let w = DOCTRINE[faction][u.id] ?? 1;
       const n = count((x) => x.id === u.id);
@@ -115,6 +120,8 @@ export function generateArmy(faction: FactionId, budget: number, rng: Rng, opts:
       if (u.role === 'hero' && heroes >= 1) w *= 0.15;
       if (u.role === 'artillery' && artillery >= 2) w *= 0.2;
       if (u.role === 'monster' && monsters >= 1) w *= 0.3;
+      const fill = u.cost / perSlot;
+      if (fill < fillAt) w *= Math.max(0.05, fill / fillAt) ** 2;
       return w;
     });
     const total = weights.reduce((a, w) => a + w, 0);
