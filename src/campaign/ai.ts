@@ -28,6 +28,7 @@ import {
   chainLevel,
   conquestUnrest,
   currentObservance,
+  farmMult,
   findPath,
   herdIn,
   maxMoves,
@@ -83,8 +84,8 @@ import {
 } from './actions';
 import { attackerPower, defenderPower, garrisonPower, sunForAttacker, MAX_SIDE_UNITS } from './battles';
 import { declareWar, factionStrength, propose, valueDeal, type Deal } from './diplomacy';
-import type { AiContext } from './controller';
-import { factionLedger, ledgerNet } from './turn';
+import { OFFER_REFUSED_REST, offerKind, offeredThisToll, type AiContext } from './controller';
+import { GREAT_SHUDDER_TOLL, factionLedger, ledgerNet } from './turn';
 import { HOLD_NEEDED, VICTORY_OPENS, gloamingSettlements, kiteFieldsHeld, victoryStatus } from './victory';
 import { consultJev } from './jev';
 
@@ -107,21 +108,23 @@ const PERSONA: Record<FactionId, Persona> = {
 };
 
 /**
- * How auto-resolved battles tend to go for each faction by light band,
- * measured on even test fights (1 = even). The AI weighs its odds with it.
+ * How auto-resolved battles tend to go for each faction by light band
+ * (darkest first), measured on even test fights against the other three
+ * (1 = even; about 48 fights a cell). The AI weighs its odds with it.
+ * Re-measure when the battle simulation or the unit data change.
  */
 const EDGE: Record<FactionId, number[]> = {
-  choir: [1.0, 1.05, 1.05, 1.15, 1.18],
-  hush: [1.02, 1.0, 0.95, 0.9, 0.88],
-  vesperate: [1.18, 1.18, 1.15, 1.08, 1.1],
-  drift: [0.82, 0.82, 0.87, 0.9, 0.84],
+  choir: [0.88, 0.97, 1.13, 1.12, 1.14],
+  hush: [0.95, 0.97, 0.92, 0.93, 0.89],
+  vesperate: [1.22, 1.2, 1.12, 1.13, 1.13],
+  drift: [0.97, 0.87, 0.83, 0.82, 0.84],
 };
 
 /**
  * Walled garrisons do worse in auto-resolved assaults than their numbers
  * suggest (attackers often seize the square), unwalled ones a little.
  */
-const GARRISON_EFF = { walled: 0.75, open: 0.9 };
+const GARRISON_EFF = { walled: 0.85, open: 0.9 };
 
 /** Army make-up per 16 units, by battle role. */
 const DOCTRINE: Record<FactionId, Partial<Record<Role, number>>> = {
@@ -560,7 +563,7 @@ function farmFood(s: CampaignState, id: string): number {
   let food = 0;
   for (const sl of st.slots) if (sl && sl.level > 0) food += chainDef(sl.chain).effects[sl.level - 1]!.food ?? 0;
   const owner = st.owner;
-  return owner === 'hush' ? food : food * [0.25, 0.6, 1.3, 1, 0.25][bandIndex(s, id)]!;
+  return owner === 'free' ? food : food * farmMult(owner, bandIndex(s, id));
 }
 
 /** The food a region would give us each Toll, before farms. */
@@ -684,38 +687,66 @@ function suePeace(s: CampaignState, f: FactionId, o: FactionId, losing: boolean)
 /**
  * Deals put to the human player, sparingly and in character: peace when a
  * war with them goes badly, trade when relations are decent, an alliance
- * against a common enemy, tribute when we are far stronger. One offer every
- * few Tolls at most; nothing happens when no one is there to ask.
+ * against a common enemy, tribute when we are far stronger. One envoy
+ * reaches the player each Toll from all the factions together (a tribute
+ * demanded under threat goes first), a faction sends one every four Tolls
+ * at most, and a kind of deal the player refused waits ten Tolls, unless
+ * it is peace from a faction losing badly. Nothing happens when no one is
+ * there to ask.
  */
 async function offers(s: CampaignState, f: FactionId, v: View, ctx: AiContext): Promise<void> {
-  const pl = s.player;
-  if (!ctx.offer || pl === f || !s.factions[pl].alive || s.factions[pl].finalStage) return;
-  if (overlordOf(s, f) === pl || overlordOf(s, pl) === f) return;
+  if (!ctx.offer || !mayOffer(s, f) || offeredThisToll(s, f)) return;
+  const deal = offerFor(s, f, v.leader);
+  if (!deal) return;
+  // The Toll's one envoy goes to a demand under threat: leave it to a faction still to move that has one.
+  if (!deal.demand && FACTION_IDS.slice(FACTION_IDS.indexOf(f) + 1).some((o) => o !== s.player && mayOffer(s, o) && offerFor(s, o, null)?.demand)) return;
   const mem = memory(s, f);
-  if (mem.lastOffer !== undefined && s.turn - mem.lastOffer < 4) return;
+  mem.lastOffer = s.turn;
+  if (!(await ctx.offer(deal))) (mem.refused ??= {})[offerKind(deal)] = s.turn;
+}
+
+/** This faction may put a deal to the player this Toll (a living player, no vassalage, four Tolls since its last). */
+function mayOffer(s: CampaignState, f: FactionId): boolean {
+  const pl = s.player;
+  if (pl === f || !s.factions[f].alive || !s.factions[pl].alive || s.factions[pl].finalStage) return false;
+  if (overlordOf(s, f) === pl || overlordOf(s, pl) === f) return false;
+  const last = s.factions[f].ai?.lastOffer;
+  return last === undefined || s.turn - last >= 4;
+}
+
+/** The player refused this kind of deal from this faction within the last OFFER_REFUSED_REST Tolls. */
+function refusedLately(s: CampaignState, f: FactionId, kind: string): boolean {
+  const t = s.factions[f].ai?.refused?.[kind];
+  return t !== undefined && s.turn - t < OFFER_REFUSED_REST;
+}
+
+/** The deal this faction would put to the player now, if any. */
+function offerFor(s: CampaignState, f: FactionId, leader: FactionId | null): Deal | null {
+  const pl = s.player;
+  const mem = s.factions[f].ai ?? {};
   const rel = relation(s, f, pl);
-  const me = v.strength[f];
-  const them = v.strength[pl];
+  const me = factionStrength(s, f);
+  const them = factionStrength(s, pl);
   const oldFoes = (f === 'choir' && pl === 'hush') || (f === 'hush' && pl === 'choir');
-  let deal: Deal | null = null;
   if (rel.stance === 'war') {
     const age = s.turn - rel.since;
     const held = mem.holdWar && mem.holdWar.target === pl && mem.holdWar.until > s.turn;
     const losing = them > me * (oldFoes ? 1.8 : 1.3) || lostTo(s, f, pl, 6) >= 2;
-    const elsewhere = v.wars.length >= 2 && recentFighting(s, f, pl, 5) === 0;
-    if (age >= 5 && !held && (losing || elsewhere || (v.leader && v.leader !== pl))) deal = { kind: 'peace', from: f, to: pl };
-  } else if (!rel.trade && rel.opinion >= 0 && !oldFoes) {
-    deal = { kind: 'trade', from: f, to: pl };
-  } else if (rel.stance === 'peace' && rel.opinion >= 10 && FACTION_IDS.some((x) => x !== f && x !== pl && s.factions[x].alive && atWar(s, f, x) && atWar(s, pl, x))) {
-    deal = { kind: 'alliance', from: f, to: pl };
-  } else if (rel.stance === 'peace' && f !== 'vesperate' && me > them * 2.2 && rel.opinion < 10 && s.turn - rel.since > 8 && bordering(s, f, pl) && noise(s, `demand:${f}`) < 0.3) {
+    const losingBadly = them > me * (oldFoes ? 2.5 : 2) || lostTo(s, f, pl, 6) >= 3;
+    const wars = FACTION_IDS.filter((o) => o !== f && s.factions[o].alive && atWar(s, f, o)).length;
+    const elsewhere = wars >= 2 && recentFighting(s, f, pl, 5) === 0;
+    if (age < 5 || held || !(losing || elsewhere || (leader && leader !== pl))) return null;
+    return refusedLately(s, f, 'peace') && !losingBadly ? null : { kind: 'peace', from: f, to: pl };
+  }
+  if (!rel.trade && rel.opinion >= 0 && !oldFoes && !refusedLately(s, f, 'trade')) return { kind: 'trade', from: f, to: pl };
+  const common = FACTION_IDS.some((x) => x !== f && x !== pl && s.factions[x].alive && atWar(s, f, x) && atWar(s, pl, x));
+  if (rel.stance === 'peace' && rel.opinion >= 10 && common && !refusedLately(s, f, 'alliance')) return { kind: 'alliance', from: f, to: pl };
+  if (rel.stance === 'peace' && f !== 'vesperate' && !refusedLately(s, f, 'demand') && me > them * 2.2 && rel.opinion < 10 && s.turn - rel.since > 8 && bordering(s, f, pl) && noise(s, `demand:${f}`) < 0.3) {
     const income = ledgerNet(factionLedger(s, pl)).coin;
     const coin = Math.min(250, Math.max(50, Math.round((income * 0.15) / 10) * 10));
-    deal = { kind: 'tribute', from: f, to: pl, coin, demand: true };
+    return { kind: 'tribute', from: f, to: pl, coin, demand: true };
   }
-  if (!deal) return;
-  mem.lastOffer = s.turn;
-  await ctx.offer(deal);
+  return null;
 }
 
 function wantsWar(s: CampaignState, f: FactionId, o: FactionId, v: View, me: number, them: number): boolean {
@@ -750,6 +781,9 @@ function wantsWar(s: CampaignState, f: FactionId, o: FactionId, v: View, me: num
     const busy = FACTION_IDS.some((x) => x !== f && x !== o && s.factions[x].alive && atWar(s, o, x));
     need = Math.min(need, (busy ? 0.7 : 0.9) / p.warlike);
   }
+  // A full treasury buys its losses back: a rich realm goes to war more readily.
+  const purse = s.factions[f].coin;
+  need *= purse > 15000 ? 0.75 : purse > 8000 ? 0.9 : 1;
   // A new front must be affordable on top of the wars already fought.
   const enemies = v.wars.reduce((t, x) => t + v.strength[x], 0);
   if (me < (them + enemies) * need) return false;
@@ -824,7 +858,9 @@ function vesperateMechanics(s: CampaignState, v: View): void {
   const pushingAway = s.tilt !== 0 && Math.sign(s.tiltProgress) === Math.sign(s.tilt) && Math.abs(s.tiltProgress) >= 40;
   // A Tilt of one either way does not trouble the Gloaming: let it be until the endgame.
   const late = s.turn >= VICTORY_OPENS - 5;
-  const want = drift >= 2 || (drift === 1 && late && hold && pushingAway) || (drift === 0 && ves.finalStage && Math.abs(s.tiltProgress) >= 70);
+  // Once the Great Shudder shakes the world, a Tilt of one is a Shudder away from two.
+  const shaken = ves.finalStage && s.turn >= GREAT_SHUDDER_TOLL;
+  const want = drift >= 2 || (drift === 1 && late && hold && (pushingAway || shaken)) || (drift === 0 && ves.finalStage && Math.abs(s.tiltProgress) >= 70);
   if (want && ves.greatTollCooldown === 0 && ves.coin >= GREAT_TOLL.coin + v.reserve * 0.5 && ves.res >= GREAT_TOLL.res) greatToll(s);
   // Keep the Houses content, and none too proud.
   for (const hId of ['carillon', 'lantern', 'weir'] as const) {
@@ -1130,8 +1166,7 @@ function effectWorth(s: CampaignState, f: FactionId, v: View, id: string, c: Cha
   const hub = isHub(s, f, id, v);
   let u = d('coin');
   const foodWorth = foodWorthOf(s, f, v);
-  const farmMult = f === 'hush' ? 1 : [0.25, 0.6, 1.3, 1, 0.25][band]!;
-  u += d('food') * farmMult * foodWorth;
+  u += d('food') * farmMult(f, band) * foodWorth;
   if (f === 'hush' && d('herdFood') > 0) {
     const herds = [id, ...neighbors(id)].reduce((t, n) => t + herdIn(s, n), 0);
     u += d('herdFood') * Math.min(4, herds) * 0.6 * foodWorth;
@@ -1732,7 +1767,8 @@ function defenceNeeds(s: CampaignState, f: FactionId, v: View): { region: string
     const t = v.threat[id] ?? 0;
     if (t <= 0) continue;
     const d = defenseOf(s, f, id);
-    if (t < d * (v.focus?.kind === 'defend' ? 0.6 : 0.85)) continue;
+    // The capital is guarded early: losing it costs the realm its barracks and its heart.
+    if (t < d * (v.focus?.kind === 'defend' ? 0.6 : id === v.capital ? 0.7 : 0.85)) continue;
     out.push({ region: id, threat: t, value: regionValue(s, f, id, v) + (id === v.capital ? 4 : 0) });
   }
   return out.sort((a, b) => b.value - a.value);

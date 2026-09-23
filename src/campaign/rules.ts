@@ -105,7 +105,15 @@ const MAJOR_COIN = [0, 200, 280, 380, 500];
 const MINOR_COIN = [0, 110, 160, 220];
 const BAND_FOOD = [0, 1, 4, 2, 0];
 const FARM_MULT = [0.25, 0.6, 1.3, 1, 0.25];
+/** The Choir's salt gardens and sun orchards grow best under a bright sky. */
+const CHOIR_FARM_MULT = [0.2, 0.5, 1, 1.3, 1.3];
 const DIFFICULTY_AI = { easy: 0.85, normal: 1, hard: 1.25 } as const;
+
+/** How much of a farm's food the light of a band lets its owner reap (Hush lodges hunt, in any band). */
+export function farmMult(f: FactionId, band: number): number {
+  if (f === 'hush') return 1;
+  return (f === 'choir' ? CHOIR_FARM_MULT : FARM_MULT)[band]!;
+}
 
 export interface RegionYield {
   coin: number;
@@ -149,7 +157,7 @@ export function regionYield(s: CampaignState, id: string): RegionYield {
   let food = f === 'hush' ? 0 : BAND_FOOD[band]!;
   const farm = sumEffect(eff, 'food');
   const farmKind = eff.length ? farm : 0;
-  food += f === 'hush' ? farmKind : farmKind * FARM_MULT[band]!;
+  food += farmKind * farmMult(f, band);
   food += RESOURCES[def.resource].food ?? 0;
   if (f === 'hush') {
     const herd = herdIn(s, id);

@@ -47,14 +47,36 @@ export interface AiContext {
   offer?(deal: Deal): Promise<boolean>;
 }
 
-/** Ask the player about an AI offer; an accepted deal is applied at once. */
+/** Tolls a faction waits before putting a kind of deal the player refused to them again. */
+export const OFFER_REFUSED_REST = 10;
+
+/** The kind of a deal, for remembering refusals: a tribute demand is not a tribute offer. */
+export function offerKind(d: Deal): string {
+  return d.kind === 'tribute' && d.demand ? 'demand' : d.kind;
+}
+
+/** Has an AI faction (other than `except`) already put a deal to the player this Toll? */
+export function offeredThisToll(s: CampaignState, except?: FactionId): boolean {
+  return FACTION_IDS.some((o) => o !== except && o !== s.player && s.factions[o].ai?.lastOffer === s.turn);
+}
+
+/**
+ * Ask the player about an AI offer; an accepted deal is applied at once.
+ * One envoy reaches the player each Toll, from all the factions together:
+ * a second one that Toll is not asked (false). A refused kind of deal is
+ * remembered, so that faction waits before putting it again.
+ */
 export async function offerToPlayer(s: CampaignState, deal: Deal, hooks: TurnHooks): Promise<boolean> {
   if (!hooks.offer) return false;
+  const ai = deal.to === s.player ? deal.from : deal.to;
+  if (offeredThisToll(s, ai)) return false;
+  const mem = (s.factions[ai].ai ??= {});
+  mem.lastOffer = s.turn;
   const yes = await hooks.offer(s, deal, valueDeal(s, deal));
   if (yes) return accept(s, deal);
   // A refused demand rankles; a refused offer a little.
-  const ai = deal.to === s.player ? deal.from : deal.to;
   relation(s, ai, s.player).opinion -= deal.demand ? 5 : 1;
+  (mem.refused ??= {})[offerKind(deal)] = s.turn;
   return false;
 }
 
