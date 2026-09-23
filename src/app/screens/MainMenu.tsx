@@ -23,7 +23,14 @@ function Backdrop() {
       w: 0.006 + (Math.sin(i * 3.1) * 0.5 + 0.5) * 0.012,
     }));
     const start = performance.now();
+    let last = -1e9;
     const draw = (now: number) => {
+      // Slow twinkles and haze: 30 fps looks the same and costs half.
+      if (now - last < 30) {
+        raf = requestAnimationFrame(draw);
+        return;
+      }
+      last = now;
       const dpr = Math.min(2, window.devicePixelRatio || 1);
       const W = c.clientWidth;
       const H = c.clientHeight;
