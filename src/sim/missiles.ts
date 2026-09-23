@@ -194,7 +194,7 @@ export function updateMissileUnits(b: Battle): void {
     const reloadMult = u.stats.reloadMult;
     for (const s of u.soldiers) {
       if (!s.alive || s.target || s.downTimer > 0 || s.staggerTimer > 0 || s.ammo <= 0) continue;
-      s.reload -= DT / reloadMult;
+      s.reload -= (DT / reloadMult) * u.entityScale;
       if (s.reload > 0) continue;
       s.reload = w.reload * (0.85 + b.rng.next() * 0.3);
       s.ammo--;

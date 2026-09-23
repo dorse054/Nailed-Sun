@@ -277,12 +277,13 @@ export function createUnit(id: number, def: UnitDef, side: Side, spec: UnitSpec,
     cost: def.cost,
     hpStart: 0,
     altAmmo: false,
+    entityScale: scalable ? 1 : Math.min(1, scale),
   };
   const flyer = def.mechanics?.some((m) => m.kind === 'flyer') ?? false;
   for (let i = 0; i < count; i++) {
     const leader = i === 0 && !!def.leader;
     const L = def.leader;
-    const hp = leader && L ? L.hp : def.hp;
+    const hp = (leader && L ? L.hp : def.hp) * u.entityScale;
     const s: Soldier = {
       id: -1,
       unit: u,

@@ -160,6 +160,8 @@ export function computeStats(b: Battle, u: Unit): void {
   // Army-wide leadership from the campaign (Bell Range, Dread, crusades, weaknesses).
   const army = b.setup.armies[u.side];
   if (army.leadershipPct) s.leadershipMult += army.leadershipPct / 100;
+  // Campaign-wide buffs such as Choir Hymns and unit experience.
+  if (army.mods) applyMods(s, army.mods);
 
   // The Hour, for 6 s after each Toll.
   if (tollActive(b, u) && fac.hours) {

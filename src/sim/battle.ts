@@ -594,6 +594,7 @@ export class Battle {
         damageDealt: Math.round(u.damageDealt),
         state: u.state,
         cost: u.cost,
+        hp: hpShare(u),
       })),
     };
   }
@@ -606,4 +607,14 @@ export class Battle {
   factionOf(side: Side) {
     return factionDef(this.sides[side].faction);
   }
+}
+
+function hpShare(u: Unit): number {
+  let now = 0;
+  let max = 0;
+  for (const s of u.soldiers) {
+    max += s.maxHp;
+    if (s.alive) now += Math.max(0, s.hp);
+  }
+  return max > 0 ? Math.round((now / max) * 1000) / 1000 : 0;
 }

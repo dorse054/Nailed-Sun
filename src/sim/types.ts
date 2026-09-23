@@ -213,6 +213,12 @@ export interface Unit {
   cost: number;
   /** Maximum hit points of the whole unit at the start. */
   hpStart: number;
+  /**
+   * Single entities (colossi, artillery, heroes, monsters) do not shrink with
+   * the unit size setting, so at smaller sizes their HP and attack rate scale
+   * instead. Battles then play out alike at any unit size.
+   */
+  entityScale: number;
   /** Alternate ammunition selected. */
   altAmmo: boolean;
 }
@@ -324,6 +330,8 @@ export interface ArmySetup {
   hour?: HourId;
   /** Army-wide leadership modifier in % (campaign traits, Dread, Bell Range). */
   leadershipPct?: number;
+  /** Army-wide stat modifiers from the campaign (Hymns, Observances). */
+  mods?: StatMods;
   name?: string;
   /** AI style: 'default' uses the faction personality. */
   ai?: 'default' | 'aggressive' | 'defensive' | 'passive';
@@ -351,6 +359,8 @@ export interface UnitSummary {
   damageDealt: number;
   state: UnitState;
   cost: number;
+  /** Share of the unit's starting hit points still standing, 0..1. */
+  hp: number;
 }
 
 export interface SideSummary {

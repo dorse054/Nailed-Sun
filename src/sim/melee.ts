@@ -89,7 +89,7 @@ export function updateMelee(b: Battle): void {
     }
     if (s.staggerTimer > 0) continue;
     if (u.special.disorderUntil !== undefined && b.time < u.special.disorderUntil) continue;
-    s.atkTimer -= DT * u.stats.attackSpeedMult;
+    s.atkTimer -= DT * u.stats.attackSpeedMult * u.entityScale;
     if (s.atkTimer <= 0) {
       meleeAttack(b, s, t, 0);
       const w = weaponOf(s);
