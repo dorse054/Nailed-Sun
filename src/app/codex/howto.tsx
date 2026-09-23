@@ -40,7 +40,7 @@ export function HowToPage({ nav }: { nav: Nav }) {
             { name: 'Select', desc: 'Left-click a unit or its card. Drag a box to select many; Shift adds to the selection. Double-click selects every unit of that type.' },
             { name: 'Move and attack', desc: 'Right-click the ground to move, or an enemy to attack.' },
             { name: 'Form a line', desc: 'Right-drag: the selection lines up along the drag, facing away from you. Hold Alt as you order to walk rather than run.' },
-            { name: 'Camera', desc: 'Wheel zooms. WASD or the arrow keys pan.' },
+            { name: 'Camera', desc: 'Wheel zooms. WASD or the arrow keys pan. On larger screens the minimap shows the whole field: click or drag it to look elsewhere.' },
             { name: 'Keys', desc: 'Space pauses (you can still give orders), R run or walk, F fire at will, H halt, M melee mode, 1 to 3 abilities, + and − change speed.' },
           ]}
         />
@@ -75,7 +75,7 @@ export function HowToPage({ nav }: { nav: Nav }) {
             { name: 'Battles', desc: 'When armies meet, fight the battle yourself or auto-resolve it with the same simulation. The direction you attack from decides where the sun stands.' },
             { name: 'The Tilt', desc: 'Faction actions push the world sunward or nightward, shifting every region’s light and harvest. After Toll 70 the Great Shudder shakes it at random.' },
             { name: 'Diplomacy', desc: 'Trade, alliances, peace and gifts. Every offer is valued before it is sent, from insult to generous. The other factions make offers and demands of their own.' },
-            { name: 'Claude as counsel', desc: 'Played on claude.ai, Settings can let the AI factions take Claude’s advice: every other Toll each asks Claude, in character, whether to change its wars, treaties or plans, and envoys decide your closer proposals and answer in their own words. In battles, the enemy general reads the field while you deploy, chooses to attack, hold or lie in ambush, and speaks. Your own council, in the Faction panel, suggests what to do this Toll when you ask. Choices made on its advice are marked ✦ Claude in the chronicle.' },
+            { name: 'Claude as counsel', desc: 'Played on claude.ai, Settings (or the new-campaign screen) can let the AI factions take Claude’s advice: every other Toll each asks Claude, in character, whether to change its wars, treaties or plans, and envoys decide your closer proposals and answer in their own words. In battles, the enemy general reads the field while you deploy, chooses to attack, hold or lie in ambush, and speaks. Your own council, in the Faction panel, suggests what to do this Toll when you ask. Choices made on its advice are marked ✦ Claude in the chronicle.' },
           ]}
         />
         <p class="cx-note">
@@ -92,7 +92,7 @@ export function HowToPage({ nav }: { nav: Nav }) {
       <Section id="cx-h-files" title="Saves and replays">
         <Items
           items={[
-            { name: 'Campaign saves', desc: 'Your campaign saves itself after every Toll. Settings can download it as a file, to keep a copy or carry it to another device, and load it back.' },
+            { name: 'Campaign saves', desc: 'Your campaign saves itself as you play: after every move, battle and Toll. Settings can download it as a file, to keep a copy or carry it to another device, and load it back.' },
             { name: 'Replays', desc: 'Every battle replays exactly from its orders. After a battle, Watch the replay, or Save replay as a small file; open one again from Custom Battle.' },
           ]}
         />
