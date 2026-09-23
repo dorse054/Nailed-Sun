@@ -1,5 +1,6 @@
 import { render } from 'preact';
 import './app/styles.css';
+import './app/screens.css';
 import { App } from './app/App';
 import { go } from './app/store';
 import { demoBattle, quickBattle } from './app/quick';
@@ -25,3 +26,4 @@ if (hash.startsWith('demo')) {
   });
 } else if (hash === 'quick') quickBattle();
 else if (hash === 'codex') go({ name: 'codex' });
+else if (hash === 'custom') go({ name: 'custom' });
