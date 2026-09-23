@@ -10,6 +10,9 @@ import { saveFile } from '../claude';
 import { replayJson, replayName } from '../replayFile';
 import type { Moment } from '../battle/moments';
 import { Moments, TaleOf } from '../battle/Tale';
+import { legendById, medalFor } from '../legends';
+import { book } from '../book';
+import { MEDAL_WORDS, MedalChip } from './Legends';
 
 /** What happened to the last "Save replay". */
 const saved = signal<string | null>(null);
@@ -40,6 +43,7 @@ function placeName(map: BattleSetup['map']): string | null {
 
 export function Results({ req, result, log, setup, moments = [] }: { req: BattleRequest; result: BattleResult; log: TimedCommand[]; setup: BattleSetup; moments?: Moment[] }) {
   const me = req.playerSide;
+  const legend = req.legend ? legendById(req.legend) : undefined;
   const won = result.winner === me;
   const draw = result.winner === -1;
   const mine = result.sides[me];
@@ -62,7 +66,7 @@ export function Results({ req, result, log, setup, moments = [] }: { req: Battle
       delete u.facing;
     }
     s.seed = Math.floor(Math.random() * 1e9);
-    go({ name: 'battle', req: { setup: s, playerSide: me, mode: req.mode === 'demo' ? 'demo' : 'custom', skipDeploy: req.mode === 'demo', ...(req.briefing ? { title: req.title, briefing: req.briefing } : {}) } });
+    go({ name: 'battle', req: { setup: s, playerSide: me, mode: req.mode === 'demo' ? 'demo' : 'custom', skipDeploy: req.mode === 'demo', ...(req.briefing ? { title: req.title, briefing: req.briefing } : {}), ...(req.legend ? { legend: req.legend } : {}) } });
   };
   return (
     <div class="screen setup-screen scroll">
@@ -73,6 +77,12 @@ export function Results({ req, result, log, setup, moments = [] }: { req: Battle
             {factionDef(mine.faction).name} against {factionDef(theirs.faction).name}
             {placeName(setup.map) ? ` at ${placeName(setup.map)}` : ''} · {fmt(result.time)} · {result.reason === 'rout' ? 'decided by rout' : result.reason === 'timeout' ? 'time ran out' : result.reason === 'capture' ? 'the settlement fell' : 'the field was conceded'}
           </div>
+          {legend && (
+            <div class="legend-medal">
+              <b>{legend.title}</b>: <MedalChip medal={medalFor(legend, result, me)} /> <span class="muted">Best: {book.value.legends?.[legend.id] ? MEDAL_WORDS[book.value.legends[legend.id]!] : 'none yet'}.</span>
+              <div class="muted">{legend.lesson}</div>
+            </div>
+          )}
           {mvp && mvp.kills > 0 && (
             <div>
               Most feared: <b style={{ color: 'var(--gold)' }}>{mvp.name}</b>, {mvp.kills} kills

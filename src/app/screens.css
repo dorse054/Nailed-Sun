@@ -475,3 +475,80 @@
   text-align: center;
   font-size: 13px;
 }
+
+/* Legends: set battles with medals. */
+.legends {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: grid;
+  gap: 12px;
+}
+.legends-intro {
+  margin: 0;
+  text-align: center;
+}
+.legend-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 12px;
+}
+.legend-card {
+  padding: 14px 16px;
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  border-top: 3px solid color-mix(in srgb, var(--fc, var(--accent)) 70%, transparent);
+}
+.legend-card h2 {
+  font-size: 24px;
+  color: var(--gold);
+}
+.legend-sides {
+  font-size: 13px;
+}
+.legend-hook {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 17px;
+  line-height: 1.35;
+}
+.legend-terms {
+  margin: 0;
+  font-size: 12.5px;
+}
+.legend-card .btn {
+  justify-self: start;
+}
+.medal {
+  display: inline-block;
+  padding: 1px 9px;
+  border-radius: 999px;
+  font-family: var(--label);
+  font-size: 12.5px;
+  white-space: nowrap;
+  border: 1px solid var(--line-strong);
+}
+.medal.none {
+  color: var(--faint);
+}
+.medal.bronze {
+  color: #e0a070;
+  border-color: #b8764a;
+  background: rgba(184, 118, 74, 0.15);
+}
+.medal.silver {
+  color: #e4e8f0;
+  border-color: #a8b0c0;
+  background: rgba(168, 176, 192, 0.15);
+}
+.medal.gold {
+  color: var(--gold);
+  border-color: #e0b04a;
+  background: rgba(224, 176, 74, 0.18);
+}
+.legend-medal {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  font-size: 14px;
+}

@@ -21,6 +21,8 @@ export interface BattleRequest {
   tutorial?: string;
   /** A made-up battle's name and story, shown while the player deploys. */
   briefing?: { title: string; text: string };
+  /** The Legend this battle is (see legends.ts), for its medal. */
+  legend?: string;
   /** Who plays a side instead of the default (tutorials script their opponent). Undefined keeps the default. */
   controller?: (side: Side) => Controller | null | undefined;
 }
@@ -34,7 +36,8 @@ export type Screen =
   | { name: 'lab' }
   | { name: 'campaign' }
   | { name: 'tutorials' }
-  | { name: 'chronicles' };
+  | { name: 'chronicles' }
+  | { name: 'legends' };
 
 export const screen = signal<Screen>({ name: 'menu' });
 

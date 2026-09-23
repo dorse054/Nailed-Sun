@@ -83,6 +83,7 @@ for (const [w, h] of SIZES) {
   await fromMenu('codex', async () => page.click('text=Codex'));
   await fromMenu('new campaign', async () => page.click('text=Campaign'));
   await fromMenu('chronicles', async () => page.click('text=Chronicles'));
+  await fromMenu('legends', async () => page.click('.menu-item:has-text("Legends")'));
   await open('#quick', 1500);
   await report('deployment');
   // A battle under way, with a unit selected so its panel and abilities show.

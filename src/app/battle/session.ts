@@ -11,7 +11,8 @@ import { BattleAI } from '../../ai/battleAI';
 import { aiOptions } from '../../ai/plan';
 import { askAdvice, askCounsel, askGeneral, askGeneralMid, strengthRatio } from './claudeGeneral';
 import { MomentLog, type Moment } from './moments';
-import { noteBattle } from '../book';
+import { noteBattle, noteLegend } from '../book';
+import { legendById, medalFor, type Medal } from '../legends';
 import { claudeStatus } from '../claude';
 import { layoutSlots, placeInFormation } from '../../sim/army';
 import { castBlocker, casterPos, findAbility } from '../../sim/abilities';
@@ -251,6 +252,10 @@ export class BattleSession {
     });
   }
 
+  /** A Legend's medal for this battle, once it is over, and whether it is the best yet. */
+  medal: Medal | null = null;
+  medalBest = false;
+
   /** When the war drums last heard how hot the fighting is. */
   private heatTick = 0;
 
@@ -403,6 +408,11 @@ export class BattleSession {
         audio.drums(null);
         audio.battleEnd(b.result!.winner === this.side);
         if (this.req.mode === 'custom' || this.req.mode === 'campaign') noteBattle(b.sides[this.side].faction, b.result!.winner === this.side);
+        const legend = this.req.legend ? legendById(this.req.legend) : undefined;
+        if (legend) {
+          this.medal = medalFor(legend, b.result!, this.side);
+          this.medalBest = this.medal ? noteLegend(legend.id, this.medal) : false;
+        }
         this.hud.value++;
       }
     }

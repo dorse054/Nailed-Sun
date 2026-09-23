@@ -28,6 +28,7 @@ export function HowToPage({ nav }: { nav: Nav }) {
           items={[
             { name: 'Tutorials', desc: 'Four short battles, one per faction, each teaching its core idea. About five minutes each. The best first step.' },
             { name: 'Quick Battle', desc: 'A random fight between two random armies, right now.' },
+            { name: 'Legends', desc: 'Six set battles, each built around one idea: the bell charge, the silent charge, the downwind run, light against dark, the Veil, and the Choir’s mirrors. Win for bronze; win losing fewer soldiers for silver and gold. Your best medals are kept.' },
             { name: 'Custom Battle', desc: 'Pick both armies, the light band, the wind, where the sun stands and the ground. Fight in the open, assault a walled town or hold one. With Claude, ✦ Invent a battle makes one up, with a name, a story and both armies, about whatever you ask for.' },
             { name: 'Campaign', desc: 'Lead one faction across thirty-one regions for a hundred Tolls or so, toward its own victory.' },
             { name: 'Watch a Battle', desc: 'Two scripted generals fight while you watch.' },

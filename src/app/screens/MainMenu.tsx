@@ -2,6 +2,13 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { SettingsPanel } from './Settings';
 import { go, settings } from '../store';
 import { book } from '../book';
+import { LEGENDS } from '../legends';
+
+/** The Legends item's line: what they are, or how many are won. */
+function legendLine(): string {
+  const won = Object.keys(book.value.legends ?? {}).length;
+  return won ? `${won} of ${LEGENDS.length} won` : 'Six battles the world remembers';
+}
 import { claudeStatus } from '../claude';
 import { TAGLINE } from '../../data/lore';
 import { audio } from '../../audio/audio';
@@ -183,6 +190,10 @@ export function MainMenu() {
           <button class="menu-item" onClick={click(() => quickBattle())}>
             <b>Quick Battle</b>
             <span>A random fight, right now</span>
+          </button>
+          <button class="menu-item" onClick={click(() => go({ name: 'legends' }))}>
+            <b>Legends</b>
+            <span>{legendLine()}</span>
           </button>
           <button class={`menu-item ${fresh ? 'fresh' : ''}`} onClick={click(() => go({ name: 'tutorials' }))}>
             <b>Tutorials</b>

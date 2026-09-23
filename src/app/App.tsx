@@ -9,6 +9,7 @@ import { CampaignRoot } from './campaign/CampaignStart';
 import { LabRoute } from './screens/LabRoute';
 import { TutorialsScreen } from './tutorial/TutorialsScreen';
 import { Chronicles } from './screens/Chronicles';
+import { Legends } from './screens/Legends';
 
 export function App() {
   const s = screen.value;
@@ -31,6 +32,8 @@ export function App() {
       return <LabRoute />;
     case 'chronicles':
       return <Chronicles />;
+    case 'legends':
+      return <Legends />;
     default:
       // Every screen has a case now; this only catches ones added later.
       return <Placeholder name={(s as { name: string }).name} />;

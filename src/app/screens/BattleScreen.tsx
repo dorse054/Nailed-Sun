@@ -20,6 +20,8 @@ import { audio } from '../../audio/audio';
 import { matchupNote } from '../../data/lore';
 import { TutorialLayer } from '../tutorial/TutorialLayer';
 import { claudeStatus } from '../claude';
+import { legendById } from '../legends';
+import { MedalChip, medalTerms } from './Legends';
 
 export function BattleScreen({ req }: { req: BattleRequest }) {
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -797,6 +799,7 @@ function EndOverlay({ s }: { s: BattleSession }) {
   const theirs = r.sides[(1 - s.side) as 0 | 1];
   const title = draw ? 'Stalemate' : won ? (theirs.costLost / Math.max(1, theirs.costStart) > 0.7 && mine.costLost / Math.max(1, mine.costStart) < 0.3 ? 'Heroic Victory' : 'Victory') : 'Defeat';
   const reason = r.reason === 'rout' ? (won ? 'The enemy army is broken.' : 'Your army is broken.') : r.reason === 'capture' ? 'The settlement has fallen.' : r.reason === 'withdraw' ? 'The field was conceded.' : 'Time ran out.';
+  const legend = s.req.legend ? legendById(s.req.legend) : undefined;
   const done = () => {
     if (s.req.onDone) s.req.onDone(r, s.battle.log, s.req.setup, s.moments);
     else go({ name: 'results', req: s.req, result: r, log: s.battle.log, setup: s.req.setup, moments: s.moments });
@@ -806,6 +809,18 @@ function EndOverlay({ s }: { s: BattleSession }) {
       <div class="panel modal" style={{ textAlign: 'center' }}>
         <h2 style={{ fontSize: '44px', color: won ? 'var(--gold)' : draw ? 'var(--text)' : 'var(--bad)' }}>{title}</h2>
         <div>{reason}</div>
+        {legend && (
+          <div class="legend-medal">
+            {s.medal ? (
+              <>
+                <MedalChip medal={s.medal} /> {s.medalBest ? 'Your best yet in this Legend.' : 'Not better than your best.'}
+              </>
+            ) : (
+              'No medal: the Legend must be won.'
+            )}
+            <div class="muted">{medalTerms(legend)}</div>
+          </div>
+        )}
         <div class="row num" style={{ justifyContent: 'center', gap: '24px' }}>
           <div>
             <div class="label">your losses</div>

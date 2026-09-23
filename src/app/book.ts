@@ -6,6 +6,7 @@
 import { signal } from '@preact/signals';
 import { FACTION_IDS, type FactionId } from '../data/schema';
 import { loadRaw, save } from './store';
+import { MEDAL_RANK, type Medal } from './legends';
 
 export interface BookTale {
   /** When it was told (ms since 1970). */
@@ -38,6 +39,8 @@ export interface Book {
   records: Record<FactionId, FactionRecord>;
   /** Campaigns already counted, so a reloaded ending isn't counted twice. */
   counted: string[];
+  /** The best medal won in each Legend. */
+  legends?: Record<string, Medal>;
 }
 
 const KEY = 'nailedsun.book';
@@ -54,7 +57,7 @@ function read(): Book {
   if (!b || b.version !== 1 || !Array.isArray(b.tales) || !b.records) return empty();
   const e = empty();
   for (const f of FACTION_IDS) e.records[f] = { ...e.records[f], ...b.records[f] };
-  return { version: 1, tales: b.tales.slice(0, MAX_TALES), records: e.records, counted: Array.isArray(b.counted) ? b.counted.slice(-200) : [] };
+  return { version: 1, tales: b.tales.slice(0, MAX_TALES), records: e.records, counted: Array.isArray(b.counted) ? b.counted.slice(-200) : [], legends: b.legends && typeof b.legends === 'object' ? b.legends : {} };
 }
 
 /** The book as it stands; screens re-render when it changes. */
@@ -88,6 +91,15 @@ export function noteCampaign(key: string, faction: FactionId, won: boolean, toll
   const next: FactionRecord = { ...r, campaigns: r.campaigns + 1, campaignsWon: r.campaignsWon + (won ? 1 : 0) };
   if (fastest !== undefined && Number.isFinite(fastest)) next.fastest = fastest;
   write({ ...b, records: { ...b.records, [faction]: next }, counted: [...b.counted, key].slice(-200) });
+}
+
+/** A Legend won: keep its medal if it beats the best so far. Returns whether it did. */
+export function noteLegend(id: string, medal: Medal): boolean {
+  const b = book.value;
+  const best = b.legends?.[id];
+  if (best && MEDAL_RANK[best] >= MEDAL_RANK[medal]) return false;
+  write({ ...b, legends: { ...b.legends, [id]: medal } });
+  return true;
 }
 
 export function forgetBook(): void {
