@@ -196,9 +196,28 @@ function search(b: Battle, s: Soldier, reach: number): void {
       near = o;
     }
   });
-  if (!near && pref && (s.charging || u.order.kind === 'attack')) near = nearestSoldier(pref, s.x, s.y);
-  if (!near && pref && pref.def.category === 'colossus') near = pref.soldiers.find((x) => x.alive) ?? null;
+  if (!near && pref && (s.charging || u.order.kind === 'attack')) {
+    const cand = nearestSoldier(pref, s.x, s.y);
+    const lim = s.charging ? 30 : 20;
+    if (cand && (cand.x - s.x) * (cand.x - s.x) + (cand.y - s.y) * (cand.y - s.y) < (lim + cand.radius) * (lim + cand.radius)) near = cand;
+  }
+  // Only break formation to close on someone we can actually walk to.
+  const n = near as Soldier | null;
+  if (n && !s.airborne && !straightClear(b, s, n)) near = null;
   s.approach = near;
+}
+
+function straightClear(b: Battle, s: Soldier, t: Soldier): boolean {
+  const dx = t.x - s.x;
+  const dy = t.y - s.y;
+  const d = Math.sqrt(dx * dx + dy * dy);
+  const steps = Math.ceil(d / 2.5);
+  const cat = s.unit.def.category;
+  for (let k = 1; k < steps; k++) {
+    const f = k / steps;
+    if (!b.terrain.passable(s.x + dx * f, s.y + dy * f, cat)) return false;
+  }
+  return true;
 }
 
 /** Brace against a charge: stationary, facing it (rings face every way). */

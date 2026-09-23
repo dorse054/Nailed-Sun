@@ -8,6 +8,10 @@ export class SpatialHash {
   /** Cell list heads and per-item links; exposed for tight loops. */
   head: Int32Array;
   next: Int32Array;
+  /** Cell index of each inserted item. */
+  cellOfItem: Int32Array;
+  private touched: Int32Array;
+  private touchedCount = 0;
   private xs: Float64Array;
   private ys: Float64Array;
   private readonly inv: number;
@@ -22,6 +26,8 @@ export class SpatialHash {
     this.rows = Math.max(1, Math.ceil(height / cellSize));
     this.head = new Int32Array(this.cols * this.rows).fill(-1);
     this.next = new Int32Array(capacity).fill(-1);
+    this.cellOfItem = new Int32Array(capacity).fill(-1);
+    this.touched = new Int32Array(this.cols * this.rows);
     this.xs = new Float64Array(capacity);
     this.ys = new Float64Array(capacity);
     this.inv = 1 / cellSize;
@@ -31,12 +37,18 @@ export class SpatialHash {
     if (n <= this.next.length) return;
     const cap = Math.max(n, this.next.length * 2);
     this.next = new Int32Array(cap).fill(-1);
+    this.cellOfItem = new Int32Array(cap).fill(-1);
     this.xs = new Float64Array(cap);
     this.ys = new Float64Array(cap);
   }
 
+  /** Reset only the cells used since the last clear. */
   clear(): void {
-    this.head.fill(-1);
+    const head = this.head;
+    const t = this.touched;
+    for (let k = 0; k < this.touchedCount; k++) head[t[k]!] = -1;
+    this.touchedCount = 0;
+    this.cellOfItem.fill(-1);
   }
 
   private cellOf(x: number, y: number): number {
@@ -53,8 +65,11 @@ export class SpatialHash {
     const c = this.cellOf(x, y);
     this.xs[i] = x;
     this.ys[i] = y;
-    this.next[i] = this.head[c]!;
+    const h = this.head[c]!;
+    if (h === -1) this.touched[this.touchedCount++] = c;
+    this.next[i] = h;
     this.head[c] = i;
+    this.cellOfItem[i] = c;
   }
 
   /**

@@ -492,15 +492,25 @@ export class Battle {
 
   // ----------------------------------------------------------------- victory
 
+  /**
+   * A side is still in the fight while it has an active unit. An army reduced
+   * to characters, support and artillery at under 15% of its value withdraws.
+   */
   private sideActive(side: Side): boolean {
+    let any = false;
+    let fighting = false;
     for (const u of this.units) {
       if (u.side !== side || u.alive <= 0) continue;
       if (u.state === 'ready' || u.state === 'embarked') {
         if (u.special.withdrawn) continue;
-        return true;
+        any = true;
+        const r = u.def.role;
+        if (r !== 'hero' && r !== 'lord' && r !== 'support' && r !== 'artillery') fighting = true;
       }
     }
-    return false;
+    if (!any) return false;
+    if (!fighting && this.remainingValue(side) < 0.15) return false;
+    return true;
   }
 
   private checkVictory(): void {

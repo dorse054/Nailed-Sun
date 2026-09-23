@@ -68,9 +68,13 @@ export interface AIOptions {
 
 export class BattleAI implements Controller {
   private mem = new Map<number, Memory>();
+  /** Where each enemy unit was last seen, for hunting hidden units. */
+  private lastKnown = new Map<number, { x: number; y: number; t: number }>();
   private stance: 'attack' | 'defend' = 'attack';
   private decided = false;
+  /** When our main line first fought, and when it last did. */
   private contact = -1;
+  private lastLineFight = 0;
   private readonly opts: AIOptions;
 
   constructor(opts: AIOptions = {}) {
@@ -81,12 +85,17 @@ export class BattleAI implements Controller {
     const mine = b.units.filter((u) => u.side === side && (u.state === 'ready' || u.state === 'embarked') && u.alive > 0);
     if (!mine.length) return;
     const foes = b.units.filter((u) => u.side !== side && u.state === 'ready' && u.alive > 0 && (u.visible[side] || b.time - u.lastSeen[side] < 2));
+    for (const f of foes) this.lastKnown.set(f.id, { x: f.x, y: f.y, t: b.time });
     const routers = b.units.filter((u) => u.side !== side && u.state === 'routing' && u.alive > 0 && u.visible[side]);
     if (!this.decided) this.decide(b, side, mine, foes);
-    if (this.contact < 0 && mine.some((u) => u.engaged > 0)) this.contact = b.time;
-    // Nobody wants to start it: after a while the defender advances anyway.
+    const lineFight = mine.some((u) => u.engaged > u.alive * 0.15 && isMain(u));
+    if (lineFight) {
+      this.lastLineFight = b.time;
+      if (this.contact < 0) this.contact = b.time;
+    }
+    // Nobody wants to start it: after a quiet spell the defender advances anyway.
     const patience = this.opts.patience ?? 75;
-    if (this.stance === 'defend' && this.contact < 0 && b.time > patience) this.stance = 'attack';
+    if (this.stance === 'defend' && b.time - this.lastLineFight > patience && !b.terrain.fort) this.stance = 'attack';
     if (this.stance === 'defend' && this.contact >= 0 && b.time - this.contact > 60 && b.remainingValue(side) > b.remainingValue((1 - side) as Side) + 0.1) {
       this.stance = 'attack';
     }
@@ -183,7 +192,17 @@ export class BattleAI implements Controller {
     };
     const lineUnits = mine.filter((u) => this.memory(u).group === 'line');
     const me = c(lineUnits.length ? lineUnits : mine);
-    const them = c(foes.length ? foes : b.units.filter((u) => u.side !== side && u.alive > 0));
+    let them = foes.length ? c(foes) : null;
+    if (!them) {
+      // Nothing in sight: head for the freshest last-known position of an enemy still in the fight.
+      let best: { x: number; y: number; t: number } | null = null;
+      for (const e of b.units) {
+        if (e.side === side || e.state !== 'ready' || e.alive <= 0) continue;
+        const k = this.lastKnown.get(e.id);
+        if (k && (!best || k.t > best.t)) best = k;
+      }
+      them = best ? { x: best.x, y: best.y } : { x: b.terrain.width / 2, y: b.terrain.height / 2 };
+    }
     const dir = datan2(them.y - me.y, them.x - me.x);
     // The front: how far forward our line stands, along the axis toward the enemy.
     const fwd = (u: Unit) => (u.x - me.x) * dcos(dir) + (u.y - me.y) * dsin(dir);
@@ -1005,6 +1024,12 @@ type Ctx = {
   median: number;
   gap: number;
 };
+
+/** Main battle-line units whose fighting counts as the armies meeting. */
+function isMain(u: Unit): boolean {
+  const g = groupOf(u);
+  return g === 'line' || g === 'monster' || g === 'colossus';
+}
 
 function firstArea(def: AbilityDef): Area | undefined {
   for (const e of def.effects) if ('area' in e && e.area) return e.area;

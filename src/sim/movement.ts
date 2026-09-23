@@ -14,6 +14,7 @@ import { hasMechanic, isFlyer, mechanic } from './mechanics';
 import { tollActive } from './stats';
 
 const tmp = { x: 0, y: 0 };
+const SIDESTEPS = [0.8, -0.8, 1.6, -1.6, 2.4, -2.4];
 
 export function turnRate(u: Unit): number {
   if (hasMechanic(u.def, 'sailing')) return 0.16;
@@ -285,10 +286,32 @@ export function updateAnchors(b: Battle): void {
     const su = formationSize(u);
     const st = formationSize(t);
     const stop = Math.max(1.5, su.depth * 0.35 + (t.def.category === 'colossus' ? t.def.radius ?? 8 : st.depth * 0.2));
+    // Route around obstacles when the straight line to the target is blocked.
+    const flying = isFlyer(u.def) && u.grounded <= 0;
+    if (!flying && d > 12 && ((u.special.pathAt ?? 0) <= b.time || u.path.length === 0)) {
+      u.special.pathAt = b.time + 2;
+      const cat = u.def.category === 'colossus' ? 'colossus' : 'infantry';
+      u.path = b.nav.clear(u.x, u.y, tx, ty, cat) ? [] : (b.nav.find(u.x, u.y, tx, ty, cat) ?? []);
+    }
+    const wp = u.path.length > 1 ? u.path[0]! : null;
+    if (wp) {
+      const wx = wp.x - u.x;
+      const wy = wp.y - u.y;
+      const wd = Math.sqrt(wx * wx + wy * wy);
+      if (wd < 3) u.path.shift();
+      else if (speed > 0) {
+        u.facing = turnToward(u.facing, datan2(wy, wx), turn);
+        const step = speed * DT * cohesion(u);
+        u.x += (wx / wd) * Math.min(step, wd);
+        u.y += (wy / wd) * Math.min(step, wd);
+        u.moving = true;
+      }
+      continue;
+    }
     u.facing = turnToward(u.facing, dir, turn);
     if (u.running && d < chargeRange(u) && d > 4) startCharge(b, u);
     if (d > stop && speed > 0) {
-      const step = Math.min(d - stop, speed * DT * (u.engaged > u.alive * 0.4 ? 0.3 : 1));
+      const step = Math.min(d - stop, speed * DT * (u.engaged > u.alive * 0.4 ? 0.3 : cohesion(u)));
       u.x += (dx / d) * step;
       u.y += (dy / d) * step;
       u.moving = true;
@@ -311,7 +334,7 @@ function cohesion(u: Unit): number {
   }
   if (!n) return 1;
   err /= n;
-  return err > 12 ? 0.35 : err > 6 ? 0.7 : 1;
+  return err > 30 ? 0 : err > 12 ? 0.35 : err > 6 ? 0.7 : 1;
 }
 
 export function centroid(u: Unit): void {
@@ -454,7 +477,7 @@ export function moveSoldiers(b: Battle): void {
       s.vy += ay;
       const nx = s.x + s.vx * DT;
       const ny = s.y + s.vy * DT;
-      if (s.airborne || b.terrain.passable(nx, ny, cat)) {
+      if (s.airborne || b.terrain.passable(nx, ny, cat) || (routing && !b.terrain.inBounds(nx, ny))) {
         s.x = nx;
         s.y = ny;
       } else if (b.terrain.passable(nx, s.y, cat)) {
@@ -464,8 +487,28 @@ export function moveSoldiers(b: Battle): void {
         s.y = ny;
         s.vx *= 0.3;
       } else {
-        s.vx *= -0.2;
-        s.vy *= -0.2;
+        // Blocked head-on: sidestep around the obstacle, alternating sides by soldier.
+        const sp = Math.sqrt(s.vx * s.vx + s.vy * s.vy) || maxV;
+        const base = datan2(s.vy, s.vx);
+        const sign = (s.id & 1) === 0 ? 1 : -1;
+        let moved = false;
+        for (const off of SIDESTEPS) {
+          const a = base + off * sign;
+          const tx2 = s.x + dcos(a) * sp * DT;
+          const ty2 = s.y + dsin(a) * sp * DT;
+          if (b.terrain.passable(tx2, ty2, cat)) {
+            s.x = tx2;
+            s.y = ty2;
+            s.vx = dcos(a) * sp * 0.7;
+            s.vy = dsin(a) * sp * 0.7;
+            moved = true;
+            break;
+          }
+        }
+        if (!moved) {
+          s.vx *= -0.2;
+          s.vy *= -0.2;
+        }
       }
       // Facing: toward the opponent, else the way we move, else the slot.
       const sp2 = s.vx * s.vx + s.vy * s.vy;
@@ -568,43 +611,42 @@ export function resolveCollisions(b: Battle): void {
   const h = b.hash;
   const head = h.head;
   const next = h.next;
+  const cellOf = h.cellOfItem;
   const cols = h.cols;
   const rows = h.rows;
-  for (let cy = 0; cy < rows; cy++) {
-    for (let cx = 0; cx < cols; cx++) {
-      let i = head[cy * cols + cx]!;
-      while (i !== -1) {
-        const s = soldiers[i]!;
-        if (s.radius <= 1.3) {
-          let j = next[i]!;
-          while (j !== -1) {
-            const o = soldiers[j]!;
-            if (o.radius <= 1.3) collide(s, o, i);
-            j = next[j]!;
-          }
-          // Forward neighbors: E, SW, S, SE.
-          if (cx + 1 < cols) {
-            j = head[cy * cols + cx + 1]!;
-            while (j !== -1) {
-              const o = soldiers[j]!;
-              if (o.radius <= 1.3) collide(s, o, i);
-              j = next[j]!;
-            }
-          }
-          if (cy + 1 < rows) {
-            const row = (cy + 1) * cols;
-            for (let ox = cx - 1; ox <= cx + 1; ox++) {
-              if (ox < 0 || ox >= cols) continue;
-              j = head[row + ox]!;
-              while (j !== -1) {
-                const o = soldiers[j]!;
-                if (o.radius <= 1.3) collide(s, o, i);
-                j = next[j]!;
-              }
-            }
-          }
+  for (let i = 0; i < soldiers.length; i++) {
+    const c = cellOf[i]!;
+    if (c < 0) continue;
+    const s = soldiers[i]!;
+    if (s.radius > 1.3) continue;
+    // Later items in the same cell, then the forward neighbor cells: E, SW, S, SE.
+    let j = next[i]!;
+    while (j !== -1) {
+      const o = soldiers[j]!;
+      if (o.radius <= 1.3) collide(s, o, i);
+      j = next[j]!;
+    }
+    const cx = c % cols;
+    const cy = (c - cx) / cols;
+    if (cx + 1 < cols) {
+      j = head[c + 1]!;
+      while (j !== -1) {
+        const o = soldiers[j]!;
+        if (o.radius <= 1.3) collide(s, o, i);
+        j = next[j]!;
+      }
+    }
+    if (cy + 1 < rows) {
+      const row = c + cols;
+      const x0 = cx > 0 ? -1 : 0;
+      const x1 = cx + 1 < cols ? 1 : 0;
+      for (let ox = x0; ox <= x1; ox++) {
+        j = head[row + ox]!;
+        while (j !== -1) {
+          const o = soldiers[j]!;
+          if (o.radius <= 1.3) collide(s, o, i);
+          j = next[j]!;
         }
-        i = next[i]!;
       }
     }
   }
@@ -629,9 +671,10 @@ export function resolveCollisions(b: Battle): void {
       if (dx * dx + dy * dy < min * min && Math.abs(dx) + Math.abs(dy) > s.radius + 1.3) collide(s, o, s.id);
     }
   }
-  // Never leave a soldier inside a wall or building.
+  // Never leave a soldier inside a wall or building (routers may leave the map).
   for (const s of soldiers) {
     if (!s.alive || s.airborne || s.unit.state === 'embarked') continue;
+    if (!b.terrain.inBounds(s.x, s.y)) continue;
     if (!b.terrain.passable(s.x, s.y, s.unit.def.category)) {
       if (b.terrain.passable(s.px, s.py, s.unit.def.category)) {
         s.x = s.px;
