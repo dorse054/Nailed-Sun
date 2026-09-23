@@ -260,10 +260,10 @@ export class BattleRenderer {
     ctx.globalAlpha = u.side !== this.viewer && !u.visible[this.viewer] ? 0.35 : 1;
     drawColossus(ctx, u, x, y - (flying ? 8 : 0), s.facing, this.time, flying ? 14 : 0);
     ctx.globalAlpha = 1;
-    // Health ring.
+    // Health ring, a constant thickness on screen at any zoom.
     const frac = s.hp / s.maxHp;
     ctx.strokeStyle = 'rgba(0,0,0,0.5)';
-    ctx.lineWidth = 1.2;
+    ctx.lineWidth = Math.max(0.25, 2.4 / this.camera.zoom);
     ctx.beginPath();
     ctx.arc(x, y, (u.def.radius ?? 8) + 5, -Math.PI / 2, Math.PI * 1.5);
     ctx.stroke();

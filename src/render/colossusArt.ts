@@ -60,11 +60,15 @@ function nailbearer(ctx: CanvasRenderingContext2D, u: Unit, x: number, y: number
   // Shoulders and body: white-glazed ceramic.
   const body = ctx.createRadialGradient(1, -1, 1, 0, 0, 8);
   body.addColorStop(0, '#fbf8ef');
-  body.addColorStop(1, '#d8cfb8');
+  body.addColorStop(1, '#cfc4a8');
   ctx.fillStyle = body;
   ctx.beginPath();
   ctx.ellipse(0, 0, 5.5, 7.5, 0, 0, Math.PI * 2);
   ctx.fill();
+  // A dark rim so the white giant reads on bright ground.
+  ctx.strokeStyle = 'rgba(46,34,22,0.65)';
+  ctx.lineWidth = 0.4;
+  ctx.stroke();
   // Balconies of choristers around the waist.
   ctx.strokeStyle = '#8a6a3a';
   ctx.lineWidth = 0.35;
@@ -82,13 +86,14 @@ function nailbearer(ctx: CanvasRenderingContext2D, u: Unit, x: number, y: number
   const coreR = open ? 3.2 : 2.2;
   const pulse = 0.85 + 0.15 * Math.sin(t * 5);
   if (!dark) {
-    const g = ctx.createRadialGradient(2.2, 0, 0, 2.2, 0, coreR * 3.2);
+    // The star in its ribs: bright, but kept inside the body's outline.
+    const g = ctx.createRadialGradient(2.2, 0, 0, 2.2, 0, coreR * 2.2);
     g.addColorStop(0, 'rgba(255,255,245,1)');
-    g.addColorStop(0.25, `rgba(255,236,160,${0.95 * pulse})`);
+    g.addColorStop(0.3, `rgba(255,236,160,${0.8 * pulse})`);
     g.addColorStop(1, 'rgba(255,200,90,0)');
     ctx.fillStyle = g;
     ctx.beginPath();
-    ctx.arc(2.2, 0, coreR * 3.2, 0, Math.PI * 2);
+    ctx.arc(2.2, 0, coreR * 2.2, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.strokeStyle = '#b08d57';
