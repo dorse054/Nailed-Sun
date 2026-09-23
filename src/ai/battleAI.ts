@@ -527,6 +527,8 @@ export class BattleAI implements Controller {
    * until the time limit.
    */
   private hunt(b: Battle, side: Side, u: Unit, ctx: Ctx, run: boolean): void {
+    // A fort's garrison holds its walls: the attacker has to come to it.
+    if (b.terrain.fort && b.terrain.fort.defender === side) return;
     const d = this.dist(u, ctx.them);
     if (d < 20) return;
     const dir = datan2(ctx.them.y - u.y, ctx.them.x - u.x);
