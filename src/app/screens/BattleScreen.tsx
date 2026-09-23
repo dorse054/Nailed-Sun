@@ -47,7 +47,8 @@ export function BattleScreen({ req }: { req: BattleRequest }) {
 function Hud({ s }: { s: BattleSession }) {
   // Subscribe to the HUD tick.
   void s.hud.value;
-  const [menu, setMenu] = useState(false);
+  const menu = s.menuOpen.value;
+  const setMenu = (v: boolean) => (s.menuOpen.value = v);
   const b = s.battle;
   const fac = factionDef(b.sides[s.side].faction);
   const sel = s.selectedUnits();
@@ -335,7 +336,7 @@ function DeployPanel({ s }: { s: BattleSession }) {
           <div class="muted" style={{ fontSize: '12.5px' }}>
             {touch
               ? 'Drag your units to place them. Tap a unit to select it, then tap the ground to send it there; Line mode lays a selection out along a drag. Pinch to zoom.'
-              : 'Drag your units to move them. Select units and right-drag to set a line and its facing. Right-click to move a selection.'}
+              : 'Drag your units to move them. Select units and right-drag to set a line and its facing. Right-click to move a selection. Enter starts the battle.'}
           </div>
         </div>
       )}
@@ -710,7 +711,7 @@ function PauseMenu({ s, onClose }: { s: BattleSession; onClose: () => void }) {
         <div class="muted">
           {TOUCH
             ? 'Touch: tap a unit to select it, then tap the ground or an enemy to order it. Drag to pan, pinch to zoom. The Select button makes taps add units and a drag draw a box; Line makes a drag lay the selection out along a line. All selects every unit.'
-            : 'Mouse: left-click selects, drag a box to select many, right-click moves or attacks, right-drag lays out a line. Wheel zooms, WASD or arrows pan. Keys: Space pause, R run, F fire at will, H halt, M melee, 1-3 abilities, +/- speed.'}
+            : 'Mouse: left-click selects, drag a box to select many, right-click moves or attacks, right-drag lays out a line. Wheel zooms, WASD or arrows pan. Keys: Space pause, Esc menu, R run, F fire at will, H halt, M melee, 1-3 abilities, +/- speed, Tab next unit.'}
         </div>
         <div class="row">
           <button class="btn primary" onClick={onClose}>

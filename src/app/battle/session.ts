@@ -77,6 +77,8 @@ export class BattleSession {
   targeting: Targeting | null = null;
   hoverScreen: { x: number; y: number } | null = null;
   message = signal<string>('');
+  /** The battle menu (Esc opens it when there is nothing to cancel). */
+  readonly menuOpen = signal(false);
   private raf = 0;
   private acc = 0;
   private last = 0;
@@ -919,10 +921,18 @@ export class BattleSession {
         if (this.phase === 'battle') this.paused = !this.paused;
         break;
       case 'Escape':
-        if (this.targeting) {
+        if (this.menuOpen.value) this.menuOpen.value = false;
+        else if (this.targeting) {
           this.targeting = null;
           this.overlay.abilityPreview = null;
         } else if (this.overlay.selected.size) this.select([]);
+        else if (this.phase !== 'over' && !this.req.tutorial) this.menuOpen.value = true;
+        break;
+      case 'Enter':
+      case 'NumpadEnter':
+        // Deployed: to battle (unless Enter is pressing a focused button).
+        if (e.target instanceof HTMLElement && e.target.closest('button, a, textarea')) break;
+        if (this.phase === 'deploy' && !this.req.tutorial) this.startBattle();
         break;
       case 'KeyR':
         this.toggleRun();
