@@ -67,20 +67,33 @@ for (const [w, h] of SIZES) {
     await page.waitForTimeout(700);
     await report(name);
   };
+  // A hash change alone doesn't reload the page: start from a blank one.
+  const open = async (hash, wait) => {
+    await page.goto('about:blank');
+    await page.goto(URL + hash);
+    await page.waitForTimeout(wait);
+  };
   await fromMenu('menu', async () => {});
   await fromMenu('settings', async () => page.click('text=Settings'));
   await fromMenu('custom battle', async () => page.click('text=Custom Battle'));
   await fromMenu('tutorials', async () => page.click('text=Tutorials'));
   await fromMenu('codex', async () => page.click('text=Codex'));
   await fromMenu('new campaign', async () => page.click('text=Campaign'));
-  await fromMenu('deployment', async () => {
-    await page.goto(URL + '#quick');
-    await page.waitForTimeout(800);
+  await open('#quick', 1500);
+  await report('deployment');
+  // A battle under way, with a unit selected so its panel and abilities show.
+  await page.click('text=Start the battle');
+  await page.waitForTimeout(800);
+  await page.evaluate(() => {
+    const s = globalThis.__ns;
+    const u = s.battle.units.find((x) => x.side === s.side && x.def.abilities?.length) ?? s.battle.units.find((x) => x.side === s.side);
+    if (u) s.overlay.selected.add(u.id);
+    s.hud.value++;
   });
+  await page.waitForTimeout(500);
+  await report('battle');
   for (const panel of ['faction', 'diplomacy', 'log', 'help', 'army', 'region']) {
-    await page.goto('about:blank');
-    await page.goto(URL + '#camp:hush');
-    await page.waitForTimeout(2200);
+    await open('#camp:hush', 2200);
     await page.click('.modal .btn.primary');
     await page.waitForTimeout(300);
     await page.evaluate((panel) => {

@@ -429,7 +429,9 @@ function modifierChips(s: BattleSession, u: Unit): { text: string; tone: string;
 }
 
 /** Phones can fold the unit panel down to its name, abilities and orders. */
-const panelFolded = signal(false);
+/** Whether the unit panel is folded (null: folded on short screens, where it would cover the field). */
+const panelFolded = signal<boolean | null>(null);
+const SHORT = typeof matchMedia === 'function' && matchMedia('(max-height: 480px)').matches;
 
 /** The chip the player tapped for its exact numbers (touch screens have no hover). */
 const explain = signal<{ unit: number; text: string } | null>(null);
@@ -444,12 +446,13 @@ function UnitPanel({ s, u }: { s: BattleSession; u: Unit }) {
   const w = s.battle.weaponOf(u);
   const lead = u.soldiers.find((x) => x.alive);
   const fac = factionDef(u.faction);
+  const folded = panelFolded.value ?? SHORT;
   return (
-    <div class={`panel unit-panel ${panelFolded.value ? 'folded' : ''}`}>
+    <div class={`panel unit-panel ${folded ? 'folded' : ''}`}>
       <div class="spread">
         <div class="row" style={{ gap: '10px' }}>
-          <button class="btn small ghost panel-fold" onClick={() => (panelFolded.value = !panelFolded.value)} aria-expanded={!panelFolded.value} title={panelFolded.value ? 'Show stats and details' : 'Fold the panel to see more of the field'}>
-            {panelFolded.value ? '▸' : '▾'}
+          <button class="btn small ghost panel-fold" onClick={() => (panelFolded.value = !folded)} aria-expanded={!folded} title={folded ? 'Show stats and details' : 'Fold the panel to see more of the field'}>
+            {folded ? '▸' : '▾'}
           </button>
           <UnitIcon def={u.def} size={40} />
           <div>

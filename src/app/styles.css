@@ -2090,6 +2090,48 @@ button {
     display: none;
   }
 }
+/*
+ * Phones held sideways: the unit panel and the touch modes share a row above
+ * the cards, and the panel scrolls rather than reaching the top bar.
+ */
+@media (max-height: 480px) {
+  /* The top bar stays one short row: a small Rose without its text, a narrower power bar. */
+  .rose-text {
+    display: none;
+  }
+  .rose-wrap {
+    padding: 4px;
+  }
+  .rose-wrap svg {
+    width: 54px;
+    height: 54px;
+  }
+  .hud-top .power {
+    width: 110px;
+  }
+  .hud-bottom {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    column-gap: 6px;
+  }
+  .hud-bottom > .unit-panel {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: start;
+    width: min(460px, 100%);
+    max-height: calc(100dvh - 190px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    overflow-y: auto;
+  }
+  .hud-bottom > .touch-modes {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .hud-bottom > .cards {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
 /* Touch: what one finger does (pan, select, line), plus select-all. */
 .touch-modes {
   align-self: flex-end;
