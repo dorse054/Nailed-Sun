@@ -42,12 +42,14 @@ export interface Settings {
   edgeScroll: boolean;
   /** Let Claude make the AI factions' judgment calls (published artifact only). */
   claudeAI: boolean;
+  /** The battle minimap (large screens). */
+  minimap: boolean;
 }
 
 /** Phones start on small regiments: half the soldiers to draw, and they are tiny on a phone anyway. */
 const PHONE = typeof matchMedia === 'function' && matchMedia('(pointer: coarse) and (max-width: 900px)').matches;
 
-const DEFAULTS: Settings = { unitScale: PHONE ? 0.5 : 0.75, volume: 0.7, music: true, tips: true, edgeScroll: false, claudeAI: false };
+const DEFAULTS: Settings = { unitScale: PHONE ? 0.5 : 0.75, volume: 0.7, music: true, tips: true, edgeScroll: false, claudeAI: false, minimap: true };
 
 export const settings = signal<Settings>(load('nailedsun.settings', DEFAULTS));
 

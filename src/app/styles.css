@@ -2132,6 +2132,37 @@ button {
     grid-row: 2;
   }
 }
+/* The battle minimap sits on the cards row's left end, above it. */
+.cards-row {
+  position: relative;
+}
+.minimap {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  padding: 4px;
+}
+.minimap canvas {
+  display: block;
+  width: 200px;
+  border-radius: 4px;
+  cursor: crosshair;
+  touch-action: none;
+}
+.minimap-hide {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  min-width: 0;
+  padding: 0 6px;
+  line-height: 18px;
+  background: rgba(10, 8, 18, 0.6);
+}
+@media (max-width: 900px), (max-height: 600px) {
+  .minimap {
+    display: none;
+  }
+}
 /* Touch: what one finger does (pan, select, line), plus select-all. */
 .touch-modes {
   align-self: flex-end;

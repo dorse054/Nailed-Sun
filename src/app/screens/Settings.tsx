@@ -69,6 +69,14 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             heroes and engines adjust their strength so battles play alike at
             every size.
           </p>
+          <label class="check">
+            <input
+              type="checkbox"
+              checked={s.minimap}
+              onChange={(e) => set({ minimap: (e.target as HTMLInputElement).checked })}
+            />
+            Battle minimap (on larger screens)
+          </label>
         </section>
         <section>
           <label class="label" for="vol">

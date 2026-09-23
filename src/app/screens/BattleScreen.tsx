@@ -4,7 +4,8 @@ import { LIGHT_NAMES, WIND_NAMES } from '../../data/schema';
 import { factionDef } from '../../data/index';
 import { LIGHT_RULES, WIND_RULES } from '../../data/rules';
 import { BattleSession } from '../battle/session';
-import { go, type BattleRequest } from '../store';
+import { go, settings, type BattleRequest } from '../store';
+import { Minimap } from '../battle/Minimap';
 import { Rose, roseLines } from '../../ui/Rose';
 import { UnitIcon } from '../../ui/UnitIcon';
 import type { Unit } from '../../sim/types';
@@ -58,7 +59,10 @@ function Hud({ s }: { s: BattleSession }) {
         {sel.length === 1 && <UnitPanel s={s} u={sel[0]!} />}
         {sel.length > 1 && <GroupPanel s={s} units={sel} />}
         {TOUCH && s.req.mode !== 'replay' && s.req.mode !== 'demo' && <TouchModes s={s} />}
-        <UnitCards s={s} />
+        <div class="cards-row">
+          {settings.value.minimap && !TOUCH && <Minimap s={s} />}
+          <UnitCards s={s} />
+        </div>
       </div>
       {s.message.value && (
         <div class="panel hud-flash" style={{ position: 'absolute', left: '50%', top: '96px', transform: 'translateX(-50%)', padding: '6px 12px', fontSize: '13px' }}>

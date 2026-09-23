@@ -171,7 +171,8 @@ export class BattleRenderer {
     return out;
   }
 
-  private shouldDraw(u: Unit): boolean {
+  /** Whether the viewer sees this unit (the minimap asks too). */
+  shouldDraw(u: Unit): boolean {
     if (u.alive <= 0 || u.state === 'dead' || u.state === 'fled') return false;
     if (u.state === 'embarked') return false;
     if (u.side === this.viewer || this.showAll) return true;
