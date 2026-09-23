@@ -6,8 +6,8 @@ import { factionDef } from '../../data/index';
 import { claudeStatus, findClaude } from '../claude';
 
 const SIZES: { value: number; label: string; note: string }[] = [
-  { value: 0.5, label: 'Small', note: 'About half-size regiments. Fastest.' },
-  { value: 0.75, label: 'Medium', note: 'The default.' },
+  { value: 0.5, label: 'Small', note: 'About half-size regiments. Fastest; the default on phones.' },
+  { value: 0.75, label: 'Medium', note: 'The default on larger screens.' },
   { value: 1, label: 'Large', note: 'Full regiments: 1,000–2,500 soldiers a battle.' },
 ];
 

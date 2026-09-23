@@ -41,7 +41,10 @@ export interface Settings {
   claudeAI: boolean;
 }
 
-const DEFAULTS: Settings = { unitScale: 0.75, volume: 0.7, music: true, tips: true, edgeScroll: false, claudeAI: false };
+/** Phones start on small regiments: half the soldiers to draw, and they are tiny on a phone anyway. */
+const PHONE = typeof matchMedia === 'function' && matchMedia('(pointer: coarse) and (max-width: 900px)').matches;
+
+const DEFAULTS: Settings = { unitScale: PHONE ? 0.5 : 0.75, volume: 0.7, music: true, tips: true, edgeScroll: false, claudeAI: false };
 
 export const settings = signal<Settings>(load('nailedsun.settings', DEFAULTS));
 
