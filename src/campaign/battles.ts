@@ -437,7 +437,7 @@ export function captureRegion(s: CampaignState, region: string, f: FactionId): v
   });
   r.owner = f;
   r.takenTurn = s.turn;
-  r.order = -4;
+  r.order = 0;
   r.garrisonLoss = 0.5;
   r.raidedBy = undefined;
   if (r.mooring && f !== 'drift' && relation(s, f, 'drift').stance === 'war') r.mooring = false;

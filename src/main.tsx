@@ -1,9 +1,12 @@
 import { render } from 'preact';
 import './app/styles.css';
 import './app/screens.css';
+import './app/campaign/campaign.css';
 import { App } from './app/App';
 import { go } from './app/store';
 import { demoBattle, quickBattle } from './app/quick';
+import { startCampaign } from './app/campaign/session';
+import type { FactionId } from './data/schema';
 
 render(<App />, document.getElementById('app')!);
 
@@ -27,3 +30,9 @@ if (hash.startsWith('demo')) {
 } else if (hash === 'quick') quickBattle();
 else if (hash === 'codex') go({ name: 'codex' });
 else if (hash === 'custom') go({ name: 'custom' });
+else if (hash === 'campaign') go({ name: 'campaign' });
+else if (hash.startsWith('camp:')) {
+  // #camp:vesperate starts a fresh campaign straight away (for testing).
+  startCampaign(hash.slice(5) as FactionId, 'normal', 7);
+  go({ name: 'campaign' });
+}

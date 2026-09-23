@@ -236,7 +236,7 @@ export function orderLines(s: CampaignState, id: string): OrderLine[] {
   add('City size', -(r.level - 1));
   if (armiesIn(s, id, f).length > 0) add('Garrisoned army', 2);
   const since = s.turn - r.takenTurn;
-  if (since < 8) add('Recently conquered', -Math.ceil((8 - since) / 2));
+  if (since < 8) add('Recently conquered', -Math.ceil((8 - since) / 3));
   if (r.culture !== f) add('Foreign people', -1);
   if (f !== 'hush' && s.factions.hush.alive && s.factions.hush.res >= 50) {
     const near = neighbors(id).some((n) => s.regions[n]!.owner === 'hush' || armiesIn(s, n, 'hush').length > 0) || armiesIn(s, id, 'hush').length > 0;

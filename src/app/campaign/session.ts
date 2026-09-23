@@ -232,11 +232,17 @@ export class CampaignSession {
 
 export let active: CampaignSession | null = null;
 
+function expose(): void {
+  // For automated checks in the browser.
+  (globalThis as unknown as { __camp?: CampaignSession | null }).__camp = active;
+}
+
 export function startCampaign(faction: FactionId, difficulty: CampaignState['difficulty'], seed: number): CampaignSession {
   const s = newCampaign({ faction, difficulty, seed });
   active = new CampaignSession(s);
   active.save();
   active.prompt.value = { kind: 'summary', turn: 1 };
+  expose();
   return active;
 }
 
@@ -249,6 +255,7 @@ export function continueCampaign(): CampaignSession | null {
   const s = savedCampaign();
   if (!s) return null;
   active = new CampaignSession(s);
+  expose();
   return active;
 }
 

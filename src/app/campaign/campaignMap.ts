@@ -77,7 +77,7 @@ export class CampaignMap {
 
   clamp(): void {
     const minZ = this.fitZoom() * 0.9;
-    this.zoom = Math.max(minZ, Math.min(minZ * 5, this.zoom));
+    this.zoom = Math.max(minZ, Math.min(Math.max(minZ * 5, 2), this.zoom));
     const hw = this.W / 2 / this.zoom;
     const hh = this.H / 2 / this.zoom;
     this.x = hw * 2 >= MAP_W ? MAP_W / 2 : Math.max(hw, Math.min(MAP_W - hw, this.x));
@@ -287,9 +287,12 @@ export class CampaignMap {
         ctx.fillStyle = st.owner === 'free' ? '#e8e2d4' : OWNER_COLOR[st.owner];
         ctx.fillText(r.settlement, sx, sy + 4);
       }
-      if (showRegion || !r.settlement) {
+      if ((showRegion || !r.settlement) && r.name !== r.settlement) {
         const sh = SHAPES[r.id]!;
-        const [sx, sy] = this.toScreen(sh.cx, sh.cy - 26);
+        // Keep the region's name clear of its settlement's marker and label.
+        let ly = sh.cy - 26;
+        if (r.settlement && Math.abs(sh.cx - r.x) < 70 && Math.abs(ly - r.y) < 34) ly = r.y - 40;
+        const [sx, sy] = this.toScreen(sh.cx, ly);
         ctx.font = `italic ${Math.max(10, Math.min(14, 8 + z * 3))}px "Cormorant SC", Georgia, serif`;
         ctx.lineWidth = 3;
         ctx.strokeStyle = 'rgba(8,6,14,0.6)';
