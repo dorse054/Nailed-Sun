@@ -183,9 +183,9 @@ export function MainMenu() {
             <b>Campaign</b>
             <span>{saved ? 'A new campaign, or your saved one' : 'Thirty regions and the Tilt'}</span>
           </button>
-          <button class="menu-item" onClick={click(() => go({ name: 'custom' }))}>
-            <b>Custom Battle</b>
-            <span>Your armies, your sun and wind</span>
+          <button class={`menu-item ${fresh ? 'fresh' : ''}`} onClick={click(() => go({ name: 'tutorials' }))}>
+            <b>Tutorials</b>
+            <span>{fresh ? 'New here? Start here' : 'One core idea per faction'}</span>
           </button>
           <button class="menu-item" onClick={click(() => quickBattle())}>
             <b>Quick Battle</b>
@@ -195,9 +195,13 @@ export function MainMenu() {
             <b>Legends</b>
             <span>{legendLine()}</span>
           </button>
-          <button class={`menu-item ${fresh ? 'fresh' : ''}`} onClick={click(() => go({ name: 'tutorials' }))}>
-            <b>Tutorials</b>
-            <span>{fresh ? 'New here? Start here' : 'One core idea per faction'}</span>
+          <button class="menu-item" onClick={click(() => go({ name: 'custom' }))}>
+            <b>Custom Battle</b>
+            <span>Your armies, sun and wind</span>
+          </button>
+          <button class="menu-item" onClick={click(() => demoBattle())}>
+            <b>Watch a Battle</b>
+            <span>{settings.value.claudeAI && claudeStatus.value === 'ready' ? 'Two generals, advised by Claude' : 'Two scripted generals'}</span>
           </button>
           <button class="menu-item" onClick={click(() => go({ name: 'codex' }))}>
             <b>Codex</b>
@@ -213,10 +217,6 @@ export function MainMenu() {
               <span>Run the balance simulator</span>
             </button>
           )}
-          <button class="menu-item" onClick={click(() => demoBattle())}>
-            <b>Watch a Battle</b>
-            <span>{settings.value.claudeAI && claudeStatus.value === 'ready' ? 'Two generals, advised by Claude' : 'Two scripted generals'}</span>
-          </button>
           <button class="menu-item" onClick={click(() => setSettingsOpen(true))}>
             <b>Settings</b>
             <span>{claudeStatus.value === 'ready' && !settings.value.claudeAI ? '✦ Let Claude play your rivals' : 'Sound, unit size and AI'}</span>
