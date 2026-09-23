@@ -318,3 +318,10 @@
   width: 16px;
   height: 16px;
 }
+
+/* Custom battle: open a saved replay. */
+.replay-open {
+  text-align: center;
+  font-size: 13px;
+  margin: 4px 16px 24px;
+}

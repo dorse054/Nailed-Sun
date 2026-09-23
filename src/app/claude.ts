@@ -63,3 +63,39 @@ export async function askClaudeJson<T>(prompt: string, options: SampleOptions = 
     throw new Error(code);
   }
 }
+
+interface DownloadsNs {
+  save(request: { filename: string; data: string }): Promise<{ status: string }>;
+}
+
+/**
+ * Offer a file to the player. On claude.ai the viewer confirms the save;
+ * elsewhere it is an ordinary browser download.
+ */
+export async function saveFile(filename: string, data: string): Promise<'saved' | 'declined' | 'failed'> {
+  const c = (globalThis as { claude?: { use?: (name: string) => Promise<unknown> } }).claude;
+  if (typeof c?.use === 'function') {
+    const d = (await c.use('downloads').catch(() => null)) as DownloadsNs | null;
+    if (d) {
+      try {
+        await d.save({ filename, data });
+        return 'saved';
+      } catch (e) {
+        return (e as { code?: string })?.code === 'declined' ? 'declined' : 'failed';
+      }
+    }
+  }
+  try {
+    const url = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    return 'saved';
+  } catch {
+    return 'failed';
+  }
+}

@@ -13,6 +13,7 @@ import { Rose, roseLines } from '../../ui/Rose';
 import { UnitIcon } from '../../ui/UnitIcon';
 import { audio } from '../../audio/audio';
 import { matchupNote } from '../../data/lore';
+import { parseReplay } from '../replayFile';
 
 type SunChoice = 'eyes' | 'back' | 'left' | 'right' | 'random';
 type Preset = NonNullable<MapSetup['preset']>;
@@ -323,7 +324,36 @@ export function CustomBattle() {
           <span class="muted num">{cost(enemy).toLocaleString()} points</span>
         </section>
       </div>
+      <ReplayOpener />
     </div>
+  );
+}
+
+/** Open a saved replay file: it plays back exactly, for bug reports and balance reviews. */
+function ReplayOpener() {
+  const [note, setNote] = useState<string | null>(null);
+  const input = useRef<HTMLInputElement>(null);
+  const open = async (f: File | undefined) => {
+    if (!f) return;
+    const r = parseReplay(await f.text());
+    if ('error' in r) {
+      setNote(r.error);
+      return;
+    }
+    const { file, sameBuild } = r;
+    const start = () => go({ name: 'battle', req: { setup: file.setup, playerSide: file.playerSide, mode: 'replay', skipDeploy: true, replay: file.log, title: 'Replay' } });
+    if (sameBuild) start();
+    else setNote('This replay was saved by another version of the game, so it may play out differently. Opening it anyway…'), setTimeout(start, 1800);
+  };
+  return (
+    <p class="replay-open muted">
+      Have a replay file?{' '}
+      <button class="btn small ghost" onClick={() => input.current?.click()}>
+        Open replay
+      </button>
+      <input ref={input} type="file" accept=".json,application/json" hidden onChange={(e) => void open((e.target as HTMLInputElement).files?.[0])} />
+      {note && <span role="status"> {note}</span>}
+    </p>
   );
 }
 
