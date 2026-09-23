@@ -20,6 +20,18 @@ import {
   WIND_RULES,
 } from '../../data/rules';
 import { ANTI_FRUSTRATION, COUNTERS, PILLARS, SIGNATURE_MOMENTS } from '../../data/lore';
+import { legendById, legendRequest } from '../legends';
+import { go, settings } from '../store';
+
+/** Which Legend plays each signature moment. */
+const MOMENT_LEGEND: Record<string, string> = {
+  'Deployment as a puzzle': 'mirrorTrap',
+  'Light wars': 'lightWars',
+  'The bell charge': 'bellCharge',
+  'The downwind run': 'downwindRun',
+  'Colossus duels': 'colossusDuel',
+  'The silent charge': 'silentCharge',
+};
 import { ZONES } from '../../data/zones';
 import { GATE_HP, WALL_CLIMB, WALL_HP } from '../../sim/terrain';
 import { DOCK_REACH, TOWER_BOLT, TOWER_SHOTS } from '../../sim/fort';
@@ -90,7 +102,25 @@ export function BattlefieldPage({ nav }: { nav: Nav }) {
         </TableWrap>
       </Section>
       <Section id="cx-b-moments" title="Signature moments">
-        <Items items={SIGNATURE_MOMENTS} />
+        <p class="cx-text">Each one is a Legend you can fight.</p>
+        <ul class="cx-items">
+          {SIGNATURE_MOMENTS.map((m, i) => {
+            const l = legendById(MOMENT_LEGEND[m.name] ?? '');
+            return (
+              <li key={i}>
+                <b>{m.name}</b>
+                <span>
+                  {m.desc}{' '}
+                  {l && (
+                    <button type="button" class="cx-link" onClick={() => go({ name: 'battle', req: legendRequest(l, settings.value.unitScale) })}>
+                      Fight {l.title} →
+                    </button>
+                  )}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
       </Section>
       <Section id="cx-b-fair" title="Anti-frustration rules">
         <ul class="cx-bullets">
