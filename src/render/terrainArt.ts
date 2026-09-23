@@ -391,6 +391,7 @@ function paintGround(t: Terrain, ctx: CanvasRenderingContext2D, W: number, H: nu
     }
   }
   ctx.putImageData(img, 0, 0);
+  if (t.landmark === 'umbralVale') paintVale(t, ctx);
   // Dimmark: a red rim of hidden sun along the sunward edge; Evernight: a cold vignette.
   if (t.light === 1) {
     const g = ctx.createLinearGradient(W / 2 + Math.cos(t.sunBearing) * W * 0.6, H / 2 + Math.sin(t.sunBearing) * H * 0.6, W / 2, H / 2);
@@ -405,6 +406,53 @@ function paintGround(t: Terrain, ctx: CanvasRenderingContext2D, W: number, H: nu
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
   }
+}
+
+/**
+ * An Umbral Vale: a canyon in permanent shadow inside the day. Cold shade over
+ * the floor, dark banded walls on both flanks, and the walls' shadow on the
+ * ground below them.
+ */
+function paintVale(t: Terrain, ctx: CanvasRenderingContext2D): void {
+  // In meters, whatever transform the bake has at this point.
+  const S = ctx.canvas.width / t.width;
+  ctx.save();
+  ctx.setTransform(S, 0, 0, S, 0, 0);
+  ctx.fillStyle = 'rgba(34, 26, 70, 0.34)';
+  ctx.fillRect(0, 0, t.width, t.height);
+  const step = t.cell;
+  for (let y = 0; y < t.height; y += step) {
+    for (const side of [0, 1] as const) {
+      // How far the wall reaches in on this row.
+      let reach = 0;
+      for (let d = 0; d < t.width / 2; d += step) {
+        const x = side === 0 ? d : t.width - d - 1;
+        if (t.cover[t.idx(x, y)] !== COVER.Cliff) break;
+        reach = d + step;
+      }
+      if (!reach) continue;
+      const x0 = side === 0 ? 0 : t.width - reach;
+      const g = ctx.createLinearGradient(side === 0 ? 0 : t.width, 0, side === 0 ? reach : t.width - reach, 0);
+      g.addColorStop(0, '#120e1c');
+      g.addColorStop(0.75, '#2b2436');
+      g.addColorStop(1, '#4a3f55');
+      ctx.fillStyle = g;
+      ctx.fillRect(x0, y, reach, step + 0.5);
+      // Strata along the canyon.
+      if (Math.floor(y / step) % 3 === 0) {
+        ctx.fillStyle = 'rgba(120, 100, 140, 0.18)';
+        ctx.fillRect(x0, y, reach, 0.8);
+      }
+      // The wall's shade on the floor below it.
+      const sx = side === 0 ? reach : t.width - reach;
+      const sg = ctx.createLinearGradient(sx, 0, side === 0 ? sx + 70 : sx - 70, 0);
+      sg.addColorStop(0, 'rgba(10, 6, 24, 0.45)');
+      sg.addColorStop(1, 'rgba(10, 6, 24, 0)');
+      ctx.fillStyle = sg;
+      ctx.fillRect(side === 0 ? sx : sx - 70, y, 70, step + 0.5);
+    }
+  }
+  ctx.restore();
 }
 
 function paintRivers(t: Terrain, ctx: CanvasRenderingContext2D, art: BandArt): void {
@@ -754,6 +802,9 @@ function paintRects(t: Terrain, ctx: CanvasRenderingContext2D, art: BandArt): vo
         ctx.stroke();
         break;
       }
+      case 'spire':
+        drawMonument(ctx, t, w / 2);
+        break;
       default: {
         ctx.fillStyle = art.rock;
         roundRect(ctx, -w / 2, -h / 2, w, h, 2);
@@ -882,6 +933,142 @@ function paintWalls(t: Terrain, ctx: CanvasRenderingContext2D): void {
     ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
+  }
+}
+
+/** A landmark's monument seen from above, radius R, lit from the sun's side. */
+function drawMonument(ctx: CanvasRenderingContext2D, t: Terrain, R: number): void {
+  const sx = Math.cos(t.sunBearing);
+  const sy = Math.sin(t.sunBearing);
+  const lit = (inner: string, outer: string) => {
+    const g = ctx.createRadialGradient(sx * R * 0.35, sy * R * 0.35, R * 0.1, 0, 0, R);
+    g.addColorStop(0, inner);
+    g.addColorStop(1, outer);
+    return g;
+  };
+  switch (t.landmark) {
+    case 'nailSpire': {
+      // The Nail: an iron head on a shaft driven into the glass, the glass
+      // fused and cracked around it.
+      ctx.strokeStyle = 'rgba(120, 90, 60, 0.55)';
+      ctx.lineWidth = 0.7;
+      for (let i = 0; i < 18; i++) {
+        const a = (i / 18) * Math.PI * 2 + (i % 3) * 0.13;
+        const len = R * (1.9 + (i % 4) * 0.35);
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * R, Math.sin(a) * R);
+        ctx.lineTo(Math.cos(a + 0.08) * len * 0.7, Math.sin(a + 0.08) * len * 0.7);
+        ctx.lineTo(Math.cos(a - 0.05) * len, Math.sin(a - 0.05) * len);
+        ctx.stroke();
+      }
+      const ring = ctx.createRadialGradient(0, 0, R, 0, 0, R * 1.7);
+      ring.addColorStop(0, 'rgba(90, 70, 50, 0.55)');
+      ring.addColorStop(1, 'rgba(90, 70, 50, 0)');
+      ctx.fillStyle = ring;
+      ctx.beginPath();
+      ctx.arc(0, 0, R * 1.7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = lit('#8d8a86', '#1c1a1f');
+      ctx.beginPath();
+      ctx.arc(0, 0, R, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255, 236, 190, 0.8)';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.arc(0, 0, R - 0.6, t.sunBearing - 1.2, t.sunBearing + 1.2);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
+      ctx.lineWidth = 0.5;
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * R * 0.25, Math.sin(a) * R * 0.25);
+        ctx.lineTo(Math.cos(a) * R * 0.9, Math.sin(a) * R * 0.9);
+        ctx.stroke();
+      }
+      ctx.fillStyle = '#fff4d0';
+      ctx.beginPath();
+      ctx.arc(sx * R * 0.2, sy * R * 0.2, R * 0.16, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    }
+    case 'candle': {
+      // A peak climbing out of the dark, its summit catching the sun.
+      for (let k = 5; k >= 1; k--) {
+        const rr = (R * k) / 5;
+        ctx.fillStyle = `rgb(${92 + (5 - k) * 26}, ${84 + (5 - k) * 22}, ${104 + (5 - k) * 16})`;
+        ctx.beginPath();
+        ctx.ellipse(sx * (R - rr) * 0.15, sy * (R - rr) * 0.15, rr, rr * 0.92, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      if (t.setup.glow) {
+        const g = ctx.createRadialGradient(0, 0, 0, 0, 0, R * 0.55);
+        g.addColorStop(0, 'rgba(255, 244, 200, 1)');
+        g.addColorStop(0.35, 'rgba(255, 196, 90, 0.9)');
+        g.addColorStop(1, 'rgba(255, 150, 40, 0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(0, 0, R * 0.55, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.fillStyle = '#16131c';
+        ctx.beginPath();
+        ctx.arc(0, 0, R * 0.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      break;
+    }
+    case 'stoppedDial': {
+      // The great sundial: bronze face, hour marks, and a shadow that moved one notch.
+      ctx.fillStyle = lit('#c9a263', '#6d4f2a');
+      ctx.beginPath();
+      ctx.arc(0, 0, R, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#3d2b16';
+      ctx.lineWidth = 0.6;
+      for (let i = 0; i < 24; i++) {
+        const a = (i / 24) * Math.PI * 2;
+        const r0 = i % 6 === 0 ? R * 0.72 : R * 0.82;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * r0, Math.sin(a) * r0);
+        ctx.lineTo(Math.cos(a) * R * 0.95, Math.sin(a) * R * 0.95);
+        ctx.stroke();
+      }
+      const shadow = t.sunBearing + Math.PI + Math.PI / 12;
+      ctx.strokeStyle = 'rgba(20, 12, 6, 0.75)';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(Math.cos(shadow) * R * 0.9, Math.sin(shadow) * R * 0.9);
+      ctx.stroke();
+      ctx.strokeStyle = '#f3dca0';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(sx * R * 0.35, sy * R * 0.35);
+      ctx.stroke();
+      break;
+    }
+    default: {
+      // The Pole of Night: a black obelisk cut with glowing runes.
+      ctx.fillStyle = '#0b0a10';
+      ctx.beginPath();
+      ctx.moveTo(0, -R);
+      ctx.lineTo(R, 0);
+      ctx.lineTo(0, R);
+      ctx.lineTo(-R, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(90, 240, 220, 0.75)';
+      ctx.lineWidth = 0.5;
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(90, 240, 220, 0.8)';
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        ctx.fillRect(Math.cos(a) * R * 0.4 - 0.4, Math.sin(a) * R * 0.4 - 0.4, 0.8, 0.8);
+      }
+      break;
+    }
   }
 }
 

@@ -130,6 +130,12 @@ export function WorldPage({ nav }: { nav: Nav }) {
             </tbody>
           </table>
         </TableWrap>
+        <p class="cx-note">
+          Battles fought at a landmark are fought on its ground: the Nail Spire, a Candle, the Stopped Dial and the Pole of Night stand at the heart of the field; a lit Candle
+          holds the light at Dusk around its peak for both armies, and draws creatures that follow flame; an Umbral Vale is a canyon walled on both flanks where the light never
+          rises above Dim; the Mistfalls always cut the field with a river, the Leaning Wood is nearly all forest and the Rime Sea is broken by ice. Custom Battle can fight at
+          any of them.
+        </p>
       </Section>
 
       <Section id="cx-w-pillars" title="Design pillars">

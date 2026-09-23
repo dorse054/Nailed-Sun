@@ -5,6 +5,14 @@
 import type { ZoneDef } from './schema';
 
 export const ZONES: Record<string, ZoneDef> = {
+  // A lit Candle's peak catches the sun above the Evernight: it belongs to no one.
+  candleGlow: {
+    id: 'candleGlow',
+    name: 'Candlelight',
+    radius: 170,
+    light: { mode: 'floor', level: 2, intensity: 2 },
+    visual: 'sunpatch',
+  },
   lantern: {
     id: 'lantern',
     name: 'Lantern light',

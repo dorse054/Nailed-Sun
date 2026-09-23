@@ -17,6 +17,7 @@ import { parseReplay } from '../replayFile';
 
 type SunChoice = 'eyes' | 'back' | 'left' | 'right' | 'random';
 type Preset = NonNullable<MapSetup['preset']>;
+type Place = 'anywhere' | 'deadCandle' | NonNullable<MapSetup['landmark']>;
 
 interface Config {
   band: BandId;
@@ -24,6 +25,7 @@ interface Config {
   wind: WindLevel;
   sun: SunChoice;
   preset: Preset;
+  place: Place;
   seed: number;
   budget: number;
   scale: number;
@@ -50,6 +52,26 @@ const PRESETS: { id: Preset; label: string }[] = [
   { id: 'river', label: 'River' },
 ];
 
+/** Landmarks of the world, each with the band it lies in. */
+const PLACES: { id: Place; label: string; band?: BandId }[] = [
+  { id: 'anywhere', label: 'Anywhere' },
+  { id: 'nailSpire', label: 'The Nail Spire', band: 'glare' },
+  { id: 'candle', label: 'A lit Candle', band: 'evernight' },
+  { id: 'deadCandle', label: 'A dead Candle', band: 'evernight' },
+  { id: 'pole', label: 'The Pole of Night', band: 'evernight' },
+  { id: 'stoppedDial', label: 'The Stopped Dial', band: 'gloaming' },
+  { id: 'umbralVale', label: 'An Umbral Vale', band: 'longAfternoon' },
+  { id: 'mistfalls', label: 'The Mistfalls', band: 'gloaming' },
+  { id: 'leaningWood', label: 'The Leaning Wood', band: 'gloaming' },
+  { id: 'rimeSea', label: 'The Rime Sea', band: 'evernight' },
+];
+
+function placeMap(p: Place): Pick<MapSetup, 'landmark' | 'glow'> {
+  if (p === 'anywhere') return {};
+  if (p === 'deadCandle') return { landmark: 'candle', glow: false };
+  return p === 'candle' ? { landmark: 'candle', glow: true } : { landmark: p };
+}
+
 const BUDGETS = [6000, 9000, 12000, 18000];
 
 type BattleKind = 'field' | 'assault' | 'defend';
@@ -75,6 +97,7 @@ function defaults(): Config {
     wind: 1,
     sun: 'left',
     preset: 'default',
+    place: 'anywhere',
     seed,
     budget: ARMY.customBudget,
     scale: settings.value.unitScale,
@@ -151,7 +174,7 @@ export function CustomBattle() {
     const fort = fortFor(c.kind);
     const setup: BattleSetup = {
       seed: c.seed,
-      map: { seed: c.seed, band: c.band, wind: c.wind, sunBearing: bearing, steppe: c.steppe, preset: c.preset, fort },
+      map: { seed: c.seed, band: c.band, wind: c.wind, sunBearing: bearing, steppe: c.steppe, preset: c.preset, fort, ...placeMap(c.place) },
       armies: [
         { faction: c.me, controller: 'player', units: specs(c.mine) },
         { faction: c.foe, controller: 'ai', units: specs(enemy) },
@@ -180,7 +203,7 @@ export function CustomBattle() {
         <section class="panel setup-col">
           <h2>The field</h2>
           <div class="field-top">
-            <MapPreview band={c.band} steppe={c.steppe} wind={c.wind} bearing={bearing} preset={c.preset} seed={c.seed} kind={c.kind ?? 'field'} />
+            <MapPreview band={c.band} steppe={c.steppe} wind={c.wind} bearing={bearing} preset={c.preset} seed={c.seed} kind={c.kind ?? 'field'} place={c.place} />
             <div class="field-rose">
               <Rose sunBearing={bearing} light={light} wind={c.wind} facing={-Math.PI / 2} size={96} />
               <div class="rose-text" style={{ display: 'grid' }}>
@@ -240,6 +263,14 @@ export function CustomBattle() {
             <button class="btn small" onClick={() => set({ seed: Math.floor(Math.random() * 1e6) })} title="New map">
               New map
             </button>
+          </div>
+          <div class="label">place</div>
+          <div class="seg">
+            {PLACES.map((p) => (
+              <button key={p.id} class={`btn small ${c.place === p.id ? 'on' : ''}`} onClick={() => set(p.band ? { place: p.id, band: p.band, steppe: false } : { place: p.id })}>
+                {p.label}
+              </button>
+            ))}
           </div>
           <div class="label">unit size</div>
           <div class="seg">
@@ -392,11 +423,11 @@ function ArmyRow({ def, onRemove, note, side = 0 }: { def: UnitDef; onRemove?: (
 }
 
 /** A small baked preview of the actual map, shadows and all. */
-function MapPreview({ band, steppe, wind, bearing, preset, seed, kind }: { band: BandId; steppe: boolean; wind: WindLevel; bearing: number; preset: Preset; seed: number; kind: BattleKind }) {
+function MapPreview({ band, steppe, wind, bearing, preset, seed, kind, place }: { band: BandId; steppe: boolean; wind: WindLevel; bearing: number; preset: Preset; seed: number; kind: BattleKind; place: Place }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const id = setTimeout(() => {
-      const t = new Terrain({ seed, band, wind, sunBearing: bearing, steppe, preset, fort: fortFor(kind) });
+      const t = new Terrain({ seed, band, wind, sunBearing: bearing, steppe, preset, fort: fortFor(kind), ...placeMap(place) });
       const art = bakeTerrain(t, 0.3);
       const c = ref.current;
       if (!c) return;
@@ -414,6 +445,6 @@ function MapPreview({ band, steppe, wind, bearing, preset, seed, kind }: { band:
       }
     }, 60);
     return () => clearTimeout(id);
-  }, [band, steppe, wind, bearing, preset, seed, kind]);
+  }, [band, steppe, wind, bearing, preset, seed, kind, place]);
   return <canvas ref={ref} class="map-preview" aria-label="Map preview: your deployment zone is blue, the enemy's red" />;
 }

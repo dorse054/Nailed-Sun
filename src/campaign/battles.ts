@@ -194,6 +194,8 @@ export function prepareBattle(s: CampaignState, pb: PendingBattle, opts: { auto:
       sunBearing: sunBearing(pb.from, pb.region, attackerSide),
       steppe: !!def.galeRoad,
       preset: def.preset ?? 'default',
+      landmark: def.landmark,
+      glow: def.landmark === 'candle' && s.regions[pb.region]!.lit !== false,
     },
     armies: armies as [ArmySetup, ArmySetup],
     unitScale: opts.unitScale,

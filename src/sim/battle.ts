@@ -44,6 +44,9 @@ import { hasMechanic, mechanic } from './mechanics';
 import { applyDamage } from './combat';
 import { fortTick } from './fort';
 
+/** The side of zones that belong to the field itself, not to either army. */
+const NEUTRAL = 2 as Side;
+
 export interface SideState {
   faction: FactionId;
   controller: 'player' | 'ai';
@@ -150,6 +153,8 @@ export class Battle {
     // Nobody starts inside a building, a cliff or deep water.
     for (const u of this.units) settleSoldiers(this, u);
     for (const u of this.units) this.attachMechanicZones(u);
+    // A lit Candle glows over its field for everyone alike.
+    if (setup.map.glow && this.terrain.landmark === 'candle') addZone(this, 'candleGlow', NEUTRAL, this.terrain.width / 2, this.terrain.height / 2, Infinity);
     for (const u of this.units) {
       computeStats(this, u);
       u.morale = u.maxMorale;

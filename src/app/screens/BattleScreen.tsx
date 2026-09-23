@@ -186,6 +186,38 @@ export function bandName(band: string, steppe: boolean): string {
   return steppe ? `Gale Roads, ${n}` : n;
 }
 
+/** What a landmark's ground means for the battle, said at deployment. */
+function landmarkTip(t: BattleSession['battle']['terrain']): string | null {
+  switch (t.landmark) {
+    case 'nailSpire':
+      return 'The Nail Spire stands at the heart of the field, said to pin the sun. Nothing passes through it.';
+    case 'candle':
+      return t.setup.glow
+        ? 'A lit Candle burns at the heart of the field: within 170 m the light is at least Dusk, for friend and foe. Creatures drawn to flame will go to it.'
+        : 'A dead Candle stands at the heart of the field, dark since the Hush put it out.';
+    case 'stoppedDial':
+      return 'The Stopped Dial stands at the heart of the field. Its shadow has moved one notch.';
+    case 'pole':
+      return 'The Pole of Night: the darkest place in the world, its black obelisk at the heart of the field.';
+    case 'umbralVale':
+      return 'An Umbral Vale: canyon walls close both flanks, and inside the light never rises above Dim.';
+    case 'mistfalls':
+      return 'The Mistfalls: a river cuts across the field. Cross at the fords.';
+    case 'leaningWood':
+      return 'The Leaning Wood: colossal trees bowed sunward, and deep cover almost everywhere.';
+    case 'rimeSea':
+      return 'The Rime Sea: frozen ocean, broken by ridges of ice.';
+    case 'kiteFields':
+      return 'The Kite Fields, where the Drift gather for their moots.';
+    case 'vents':
+      return 'Steam vents crack the ground across the field.';
+    case 'furnaces':
+      return 'Glass furnaces and their chimneys stand across the field.';
+    default:
+      return null;
+  }
+}
+
 /** Deployment is the first decision of every battle: read the sun and the wind. */
 function DeployPanel({ s }: { s: BattleSession }) {
   // Reading a signal memoizes this panel by props, so follow the HUD ticks too.
@@ -206,6 +238,8 @@ function DeployPanel({ s }: { s: BattleSession }) {
   const L = LIGHT_RULES[t.light];
   const W = WIND_RULES[t.wind];
   const tips: string[] = [];
+  const place = landmarkTip(t);
+  if (place) tips.push(place);
   const glareBand = t.light === 2 || t.light === 3;
   if (glareBand) {
     if (rel < Math.PI / 4)

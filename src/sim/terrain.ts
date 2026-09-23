@@ -69,7 +69,23 @@ export interface MapSetup {
   /** Terrain density preset. */
   preset?: 'default' | 'open' | 'wooded' | 'hilly' | 'river';
   fort?: FortSetup;
+  /** A campaign landmark the battle is fought at: it shapes the ground. */
+  landmark?: LandmarkId;
+  /** A lit Candle: its glow holds the light at Dusk around the peak. */
+  glow?: boolean;
 }
+
+export type LandmarkId = 'nailSpire' | 'pole' | 'candle' | 'umbralVale' | 'mistfalls' | 'leaningWood' | 'stoppedDial' | 'rimeSea' | 'kiteFields' | 'vents' | 'furnaces';
+
+/** Landmarks with a monument at the field's heart (none inside town walls, where the square is). */
+const MONUMENTS: Partial<Record<LandmarkId, { d: number; height: number }>> = {
+  nailSpire: { d: 34, height: 60 },
+  candle: { d: 46, height: 40 },
+  stoppedDial: { d: 40, height: 12 },
+  pole: { d: 26, height: 30 },
+};
+/** The Umbral Vales: canyon walls along both flanks, the light never above Dim. */
+const VALE_WALL = 110;
 
 export interface WallSegment {
   x1: number;
@@ -106,6 +122,7 @@ export class Terrain {
   readonly steppe: boolean;
   capturePoint: { x: number; y: number; r: number } | null = null;
   readonly fort: FortSetup | null;
+  readonly landmark: LandmarkId | null;
   private readonly rng: Rng;
 
   constructor(readonly setup: MapSetup) {
@@ -119,7 +136,9 @@ export class Terrain {
     this.shadow = new Uint8Array(n);
     this.flammable = new Uint8Array(n);
     this.band = setup.band;
-    this.light = setup.light ?? BANDS[setup.band].light;
+    this.landmark = setup.landmark ?? null;
+    const light = setup.light ?? BANDS[setup.band].light;
+    this.light = this.landmark === 'umbralVale' ? (Math.min(light, 1) as LightLevel) : light;
     this.wind = setup.wind;
     this.sunBearing = setup.sunBearing;
     this.steppe = !!setup.steppe;
@@ -291,12 +310,17 @@ export class Terrain {
       water = 1;
     }
     if (this.steppe) hills *= 0.6;
+    const lm = this.landmark;
+    if (lm === 'mistfalls') water = 1;
+    if (lm === 'leaningWood') forest = Math.min(1, forest * 1.8 + 0.3);
+    const obstacles = lm === 'rimeSea' || lm === 'vents' || lm === 'furnaces' ? Math.min(1.6, rocks * 1.8 + 0.2) : rocks;
 
     this.genHeights(hills);
     if (this.fort) this.genFort();
     if (r.next() < water) this.genRiver();
     this.genForests(forest);
-    this.genObstacles(rocks);
+    this.genObstacles(obstacles);
+    if (lm) this.genLandmark(lm);
     this.genFields();
     this.genDecor();
     this.clearDeployZones();
@@ -501,6 +525,30 @@ export class Terrain {
       this.stampRect(rect, kind === 'mesa' ? COVER.Cliff : COVER.Building);
       if (kind === 'mesa') this.raise(rect, 18);
     }
+  }
+
+  /** A landmark's own ground: the Vale's canyon walls, or a monument at the heart of the field. */
+  private genLandmark(lm: LandmarkId): void {
+    if (lm === 'umbralVale') {
+      const r = this.rng;
+      for (let y = 0; y < this.height; y += this.cell) {
+        // Ragged walls: a slow wobble along the canyon.
+        const wob = 18 * dsin(y / 70 + r.range(-0.2, 0.2)) + 10 * dsin(y / 23);
+        for (let x = 0; x < this.width; x += this.cell) {
+          const d = Math.min(x, this.width - x);
+          if (d > VALE_WALL + wob) continue;
+          const i = this.idx(x, y);
+          this.cover[i] = COVER.Cliff;
+          this.heights[i] = Math.max(this.heights[i]!, 26 + (VALE_WALL - d) * 0.2);
+        }
+      }
+      return;
+    }
+    const m = MONUMENTS[lm];
+    if (!m || this.fort) return;
+    const rect: Rect = { x: this.width / 2, y: this.height / 2, w: m.d, h: m.d, angle: 0, kind: 'spire', height: m.height };
+    this.rects.push(rect);
+    this.stampRect(rect, COVER.Building);
   }
 
   private genFields(): void {
