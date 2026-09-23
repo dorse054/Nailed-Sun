@@ -454,6 +454,24 @@ button {
   flex-wrap: wrap;
   gap: 4px;
 }
+/* Chips are buttons so touch screens can read their exact numbers. */
+.mods .chip {
+  background: none;
+  cursor: help;
+  line-height: 1.5;
+}
+.mods .chip.on {
+  background: rgba(255, 255, 255, 0.08);
+}
+.chip-why {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+  border-left: 2px solid var(--gold);
+  padding: 4px 8px;
+  border-radius: 3px;
+}
 
 .center-banner {
   position: absolute;
@@ -519,11 +537,43 @@ button {
 }
 
 @media (max-width: 720px) {
+  /* The top bar must fit a phone: small Rose, no 0.5x, power bar on its own row. */
+  .hud-top {
+    gap: 4px;
+  }
+  .rose-wrap {
+    padding: 4px;
+  }
+  .rose-wrap svg {
+    width: 54px;
+    height: 54px;
+  }
+  .hud-cluster {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 4px;
+    padding: 4px 6px;
+    min-width: 0;
+  }
+  .hud-cluster .btn.small {
+    padding: 4px 7px;
+  }
+  .hud-cluster .btn.small:nth-of-type(2):not(:last-child) {
+    display: none;
+  }
+  .clock {
+    font-size: 14px;
+    min-width: 40px;
+  }
   .power {
-    width: 90px;
+    width: auto;
+    flex: 1 0 100%;
   }
   .rose-text {
     display: none;
+  }
+  .center-banner {
+    top: calc(100px + env(safe-area-inset-top, 0px));
   }
   .unit-panel {
     width: 100%;

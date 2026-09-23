@@ -10,7 +10,9 @@ import { UnitIcon } from '../../ui/UnitIcon';
 import type { Unit } from '../../sim/types';
 import { moraleState } from '../../sim/morale';
 import { hasMechanic } from '../../sim/mechanics';
-import { tollActive } from '../../sim/stats';
+import { activePassives, tollActive } from '../../sim/stats';
+import { modsText, zoneName } from '../codex/format';
+import { signal } from '@preact/signals';
 import { formationSize } from '../../sim/army';
 import { audio } from '../../audio/audio';
 import { matchupNote } from '../../data/lore';
@@ -286,11 +288,46 @@ function UnitCards({ s }: { s: BattleSession }) {
 function modifierChips(s: BattleSession, u: Unit): { text: string; tone: string; title: string }[] {
   const b = s.battle;
   const out: { text: string; tone: string; title: string }[] = [];
-  out.push({ text: LIGHT_NAMES[u.light], tone: u.light >= 3 ? 'gold' : u.light <= 1 ? '' : 'gold', title: 'Light here (natural light plus light and dark zones)' });
-  out.push({ text: `${WIND_NAMES[u.wind]} wind`, tone: '', title: 'Wind here. It always blows sunward.' });
-  if (u.stats.glareAcc < 0) out.push({ text: `Glare ${u.stats.glareAcc}%${u.stats.glareMa ? ` / ${u.stats.glareMa} MA` : ''}`, tone: 'bad', title: `Glare from ${u.stats.glareSource === 'sun' ? 'facing the sun' : u.stats.glareSource === 'noon' ? 'Walking Noon' : u.stats.glareSource === 'mirror' ? 'Mirrorflash' : 'mirror dazzle'}` });
+  const passives = activePassives(b, u);
+  const effects = (keys: ('lightMin' | 'lightMax' | 'windMin' | 'windMax')[]) =>
+    passives.filter((p) => p.when && keys.some((k) => p.when![k] !== undefined)).map((p) => `${p.name}: ${modsText(p.mods).join(', ')}.`);
+  const L = LIGHT_RULES[u.light];
+  const lightFx = [`${L.name} light here. ${L.note}`, ...effects(['lightMin', 'lightMax'])];
+  // Light-gated bonuses this light switches off: the reason to move into (or out of) the dark.
+  const seenLight = u.stats.ignoreDarkness ? Math.max(u.light, 2) : u.light;
+  for (const p of [...factionDef(u.faction).traits, ...(u.def.passives ?? [])]) {
+    const c = p.when;
+    if (!c || (c.lightMin === undefined && c.lightMax === undefined)) continue;
+    if ((c.lightMin === undefined || seenLight >= c.lightMin) && (c.lightMax === undefined || seenLight <= c.lightMax)) continue;
+    // A penalty that is switched off is not worth a line.
+    if (modsText(p.mods).some((t) => /^[-−]/.test(t))) continue;
+    const span = c.lightMin !== undefined && c.lightMax !== undefined ? (c.lightMin === c.lightMax ? LIGHT_NAMES[c.lightMin] : `${LIGHT_NAMES[c.lightMin]} to ${LIGHT_NAMES[c.lightMax]}`) : c.lightMax !== undefined ? `${LIGHT_NAMES[c.lightMax]} or darker` : `${LIGHT_NAMES[c.lightMin!]} or brighter`;
+    lightFx.push(`${p.name} is off here (needs ${span}).`);
+  }
+  out.push({ text: LIGHT_NAMES[u.light], tone: u.light >= 3 ? 'gold' : u.light <= 1 ? '' : 'gold', title: lightFx.join(' ') });
+  const W = WIND_RULES[u.wind];
+  const windFx = [`${W.name} here, blowing sunward.`];
+  if (s.battle.weaponOf(u) && W.rangePct) windFx.push(`Shots downwind +${W.rangePct}% range, upwind -${W.rangePct}%.`);
+  windFx.push(W.note, ...effects(['windMin', 'windMax']));
+  out.push({ text: `${WIND_NAMES[u.wind]} wind`, tone: '', title: windFx.join(' ') });
+  if (u.stats.glareAcc < 0) out.push({ text: `Glare ${u.stats.glareAcc}%${u.stats.glareMa ? ` / ${u.stats.glareMa} MA` : ''}`, tone: 'bad', title: `Glare from ${u.stats.glareSource === 'sun' ? 'facing the sun' : u.stats.glareSource === 'noon' ? 'Walking Noon' : u.stats.glareSource === 'mirror' ? 'Mirrorflash' : 'mirror dazzle'}: ${u.stats.glareAcc}% missile accuracy${u.stats.glareMa ? `, ${u.stats.glareMa} melee attack` : ''}.` });
   if (u.concealed) out.push({ text: 'Hidden', tone: 'good', title: 'The enemy cannot see this unit.' });
-  if (tollActive(b, u)) out.push({ text: 'Toll', tone: 'gold', title: 'The Hour is in effect.' });
+  if (tollActive(b, u)) {
+    const hour = factionDef(u.faction).hours?.find((h) => h.id === b.sides[u.side].hour);
+    out.push({ text: 'Toll', tone: 'gold', title: hour ? `${hour.name}, for 6 s after the bell: ${modsText(hour.mods).join(', ')}.` : 'The Hour is in effect.' });
+  }
+  // Zone auras over this unit: light and dark zones, bells, spores.
+  const seen = new Set<string>();
+  for (const z of b.zones) {
+    if (!z.enabled || seen.has(z.def.id)) continue;
+    if ((u.x - z.x) ** 2 + (u.y - z.y) ** 2 > z.radius * z.radius) continue;
+    if (z.def.affects && !z.def.affects.includes(u.def.category)) continue;
+    const mods = z.side === u.side ? z.def.allyMods : z.def.enemyMods;
+    const fx = [...(mods ? modsText(mods) : []), ...(z.side !== u.side && z.def.drain ? [`-${z.def.drain} morale/s`] : []), ...(z.side !== u.side && z.def.reveals ? ['revealed'] : [])];
+    if (!fx.length) continue;
+    seen.add(z.def.id);
+    out.push({ text: zoneName(z.def.id), tone: z.side === u.side ? 'good' : 'bad', title: `${zoneName(z.def.id)}: ${fx.join(', ')}.` });
+  }
   if (u.chill > 0) out.push({ text: 'Chilled', tone: 'bad', title: '-20% speed and attack speed' });
   if (u.slow > 0) out.push({ text: `Slowed ${u.slowPct}%`, tone: 'bad', title: 'Tethered or entangled' });
   if (u.marked > 0) out.push({ text: 'Marked', tone: 'bad', title: 'Revealed; +10% damage from Hush stealth units' });
@@ -304,7 +341,15 @@ function modifierChips(s: BattleSession, u: Unit): { text: string; tone: string;
   return out;
 }
 
+/** The chip the player tapped for its exact numbers (touch screens have no hover). */
+const explain = signal<{ unit: number; text: string } | null>(null);
+
 function UnitPanel({ s, u }: { s: BattleSession; u: Unit }) {
+  // Reading a signal memoizes this panel by props, so follow the HUD ticks too.
+  void s.hud.value;
+  const chips = modifierChips(s, u);
+  const shown = explain.value?.unit === u.id ? explain.value.text : null;
+  const why = shown ? chips.find((c) => c.text === shown) : undefined;
   const ms = moraleState(u);
   const w = s.battle.weaponOf(u);
   const lead = u.soldiers.find((x) => x.alive);
@@ -367,12 +412,19 @@ function UnitPanel({ s, u }: { s: BattleSession; u: Unit }) {
         )}
       </div>
       <div class="mods">
-        {modifierChips(s, u).map((c) => (
-          <span key={c.text} class={`chip ${c.tone}`} title={c.title}>
+        {chips.map((c) => (
+          <button
+            type="button"
+            key={c.text}
+            class={`chip ${c.tone} ${shown === c.text ? 'on' : ''}`}
+            title={c.title}
+            onClick={() => (explain.value = shown === c.text ? null : { unit: u.id, text: c.text })}
+          >
             {c.text}
-          </span>
+          </button>
         ))}
       </div>
+      {why && <div class="chip-why">{why.title}</div>}
       <div class="abilities">
         {(u.def.abilities ?? []).map((a, i) => {
           const st = u.abilities.find((x) => x.def.id === a.id)!;
