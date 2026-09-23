@@ -61,6 +61,7 @@ export function Minimap({ s }: { s: BattleSession }) {
     const box = c.getBoundingClientRect();
     const t = s.battle.terrain;
     const cam = s.renderer.camera;
+    s.userCamAt = performance.now();
     cam.x = Math.max(0, Math.min(t.width, ((e.clientX - box.left) / box.width) * t.width));
     cam.y = Math.max(0, Math.min(t.height, ((e.clientY - box.top) / box.height) * t.height));
   };

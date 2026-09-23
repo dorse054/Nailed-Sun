@@ -422,6 +422,7 @@ export class BattleSession {
     // The drums fall quiet while the battle waits.
     if (this.paused || this.phase !== 'battle') audio.setHeat(0);
     this.panCamera(dt);
+    this.followCamera(dt, now);
     const alpha = this.phase === 'battle' && !this.paused ? Math.min(1, this.acc / DT) : 1;
     // A still scene (paused, deploying, over) with no input and no camera
     // movement redraws at about 15 fps instead of 60: phones keep their battery.
@@ -444,9 +445,55 @@ export class BattleSession {
     this.raf = requestAnimationFrame(this.loop);
   };
 
+  /** When the viewer last moved the view themselves: a following camera leaves them be for a while. */
+  userCamAt = -1e9;
+
+  /**
+   * Watched battles: the camera drifts to where the fighting is (melee
+   * counts most, then shooting, then everyone) and zooms to take it in,
+   * until the viewer takes the view themselves; it picks up again after a
+   * few quiet seconds.
+   */
+  private followCamera(dt: number, now: number): void {
+    if (this.req.mode !== 'demo' || this.phase !== 'battle' || now - this.userCamAt < 8000) return;
+    const b = this.battle;
+    let sx = 0;
+    let sy = 0;
+    let sw = 0;
+    let x0 = Infinity;
+    let x1 = -Infinity;
+    let y0 = Infinity;
+    let y1 = -Infinity;
+    const hot = b.units.some((u) => u.state === 'ready' && u.alive > 0 && (u.engaged > 0 || b.time - u.lastFireTime < 2));
+    for (const u of b.units) {
+      if (u.alive <= 0 || u.state !== 'ready') continue;
+      const k = u.engaged > 0 ? 4 : b.time - u.lastFireTime < 2 ? 2 : hot ? 0.15 : 1;
+      sx += u.x * k * u.alive;
+      sy += u.y * k * u.alive;
+      sw += k * u.alive;
+      if (hot && k < 2) continue;
+      x0 = Math.min(x0, u.x);
+      x1 = Math.max(x1, u.x);
+      y0 = Math.min(y0, u.y);
+      y1 = Math.max(y1, u.y);
+    }
+    if (!sw) return;
+    const cam = this.renderer.camera;
+    const t = b.terrain;
+    const fit = Math.min(cam.width / t.width, cam.height / t.height);
+    const span = Math.max(260, x1 - x0 + 160, ((y1 - y0 + 160) * cam.width) / Math.max(1, cam.height));
+    const zoom = Math.max(fit, Math.min(2.2, cam.width / span));
+    const k = Math.min(1, dt * 0.9);
+    cam.x += (sx / sw - cam.x) * k;
+    cam.y += (sy / sw - cam.y) * k;
+    cam.zoom *= Math.pow(zoom / cam.zoom, Math.min(1, dt * 0.6));
+    cam.clamp(t.width, t.height);
+  }
+
   private panCamera(dt: number): void {
     const cam = this.renderer.camera;
     const sp = (700 / cam.zoom) * dt;
+    if (['KeyW', 'KeyS', 'KeyA', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].some((k) => this.keys.has(k))) this.userCamAt = performance.now();
     if (this.keys.has('KeyW') || this.keys.has('ArrowUp')) cam.y -= sp;
     if (this.keys.has('KeyS') || this.keys.has('ArrowDown')) cam.y += sp;
     if (this.keys.has('KeyA') || this.keys.has('ArrowLeft')) cam.x -= sp;
@@ -679,6 +726,7 @@ export class BattleSession {
 
   private onWheel = (e: WheelEvent): void => {
     this.lastInput = performance.now();
+    this.userCamAt = this.lastInput;
     e.preventDefault();
     const p = this.local(e);
     this.renderer.camera.zoomAt(p.x, p.y, Math.exp(-e.deltaY * 0.0015));
@@ -686,6 +734,7 @@ export class BattleSession {
 
   private onDown = (e: PointerEvent): void => {
     this.lastInput = performance.now();
+    this.userCamAt = this.lastInput;
     const p = this.local(e);
     if (e.pointerType === 'touch') {
       this.touches.set(e.pointerId, p);
@@ -1037,6 +1086,7 @@ export class BattleSession {
         const c = this.renderer.unitCenter(next, 1);
         this.renderer.camera.x = c.x;
         this.renderer.camera.y = c.y;
+        this.userCamAt = performance.now();
         break;
       }
       default:
