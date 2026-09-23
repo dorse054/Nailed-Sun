@@ -31,7 +31,7 @@ Shortcuts for development: `#campaign`, `#custom`, `#codex`, `#lab`, `#quick`, `
 
 ### Controls
 
-Battle: left-click selects, drag a box to select many, right-click moves or attacks, right-drag lays out a line and its facing. Wheel zooms, WASD or arrows pan. Space pauses, R run, F fire at will, H halt, M melee, 1–3 abilities, +/− speed.
+Battle: left-click selects, drag a box to select many, right-click moves or attacks, right-drag lays out a line and its facing. Wheel zooms, WASD or arrows pan, and the minimap (larger screens) moves the view. Space pauses, R run, F fire at will, H halt, M melee, 1–3 abilities, +/− speed.
 
 Battle by touch: tap a unit to select it, tap the ground or an enemy to order it, drag to pan, pinch to zoom. The bar above the unit cards switches what one finger does: Pan, Select (taps add units, a drag draws a box) or Line (a drag lays the selection out along a line). All selects every unit.
 
