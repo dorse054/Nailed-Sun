@@ -66,6 +66,8 @@ export function Results({ req, result, log, setup, moments = [] }: { req: Battle
       delete u.facing;
     }
     s.seed = Math.floor(Math.random() * 1e9);
+    // A new battle: the enemy general thinks it over again.
+    for (const a of s.armies) delete a.plan;
     go({ name: 'battle', req: { setup: s, playerSide: me, mode: req.mode === 'demo' ? 'demo' : 'custom', skipDeploy: req.mode === 'demo', ...(req.briefing ? { title: req.title, briefing: req.briefing } : {}), ...(req.legend ? { legend: req.legend } : {}) } });
   };
   return (
