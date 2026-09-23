@@ -13,7 +13,7 @@ import { askAdvice, askCounsel, askGeneral, askGeneralMid, strengthRatio } from 
 import { MomentLog, type Moment } from './moments';
 import { noteBattle, noteLegend } from '../book';
 import { legendById, medalFor, type Medal } from '../legends';
-import { claudeStatus } from '../claude';
+import { claudeStatus, saveFile } from '../claude';
 import { layoutSlots, placeInFormation } from '../../sim/army';
 import { castBlocker, casterPos, findAbility } from '../../sim/abilities';
 import { BattleRenderer, emptyOverlay, type Overlay } from '../../render/battleRenderer';
@@ -526,6 +526,38 @@ export class BattleSession {
     this.flash(`${ability.name}: ${ability.target === 'enemy' ? 'click an enemy unit' : ability.target === 'ally' ? 'click a friendly unit' : 'click a point'}. Right-click cancels.`);
   }
 
+  /**
+   * Save the field as it looks now as a picture, with a line naming the
+   * battle in the corner. The interface is drawn apart, so it isn't in it.
+   */
+  async savePicture(): Promise<void> {
+    const src = this.canvas;
+    const c = document.createElement('canvas');
+    c.width = src.width;
+    c.height = src.height;
+    const ctx = c.getContext('2d');
+    if (!ctx) return this.flash('No picture could be made here.');
+    ctx.drawImage(src, 0, 0);
+    const b = this.battle;
+    const [a, z] = b.sides.map((x) => factionDef(x.faction).name);
+    const t = Math.floor(b.time);
+    const line = `Nailed Sun · ${this.req.title ?? `${a} against ${z}`} · ${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+    const px = Math.max(12, Math.round(c.height / 60));
+    ctx.font = `600 ${px}px Georgia, serif`;
+    ctx.textBaseline = 'bottom';
+    const w = ctx.measureText(line).width;
+    ctx.fillStyle = 'rgba(10, 8, 20, 0.55)';
+    ctx.fillRect(px * 0.6, c.height - px * 2.4, w + px * 1.2, px * 1.8);
+    ctx.fillStyle = '#ffd27a';
+    ctx.fillText(line, px * 1.2, c.height - px * 0.9);
+    const blob = await new Promise<Blob | null>((res) => c.toBlob(res, 'image/png'));
+    if (!blob) return this.flash('No picture could be made here.');
+    const name = `nailed-sun-${b.sides.map((x) => x.faction).join('-vs-')}-${t}s.png`;
+    const r = await saveFile(name, blob);
+    if (r === 'saved') this.flash('Picture saved.');
+    else if (r === 'failed') this.flash('The picture could not be saved here.');
+  }
+
   flash(msg: string): void {
     this.message.value = msg;
     setTimeout(() => {
@@ -956,6 +988,9 @@ export class BattleSession {
         break;
       case 'KeyM':
         this.toggleMelee();
+        break;
+      case 'KeyP':
+        void this.savePicture();
         break;
       case 'Equal':
       case 'NumpadAdd':

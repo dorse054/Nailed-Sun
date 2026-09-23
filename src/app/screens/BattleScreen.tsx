@@ -713,7 +713,7 @@ function PauseMenu({ s, onClose }: { s: BattleSession; onClose: () => void }) {
         <div class="muted">
           {TOUCH
             ? 'Touch: tap a unit to select it, then tap the ground or an enemy to order it. Drag to pan, pinch to zoom. The Select button makes taps add units and a drag draw a box; Line makes a drag lay the selection out along a line. All selects every unit.'
-            : 'Mouse: left-click selects, drag a box to select many, right-click moves or attacks, right-drag lays out a line. Wheel zooms, WASD or arrows pan. Keys: Space pause, Esc menu, R run, F fire at will, H halt, M melee, 1-3 abilities, +/- speed, Tab next unit.'}
+            : 'Mouse: left-click selects, drag a box to select many, right-click moves or attacks, right-drag lays out a line. Wheel zooms, WASD or arrows pan. Keys: Space pause, Esc menu, R run, F fire at will, H halt, M melee, 1-3 abilities, +/- speed, Tab next unit, P picture.'}
         </div>
         <div class="row">
           <button class="btn primary" onClick={onClose}>
@@ -742,6 +742,9 @@ function PauseMenu({ s, onClose }: { s: BattleSession; onClose: () => void }) {
               Concede the field
             </button>
           )}
+          <button class="btn" onClick={() => void s.savePicture()} title="Save the field as it looks now as a picture (P)">
+            Save a picture
+          </button>
           <button class="btn" onClick={() => go({ name: 'menu' })}>
             Quit to menu
           </button>
