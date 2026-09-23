@@ -1,15 +1,29 @@
-import { useRef, useState } from 'preact/hooks';
-import { saveSettings, settings } from '../store';
-import { audio } from '../../audio/audio';
-import { abandonCampaign, campaignFile, importCampaign, readCampaignFile, savedCampaign } from '../campaign/session';
-import type { CampaignState } from '../../campaign/types';
-import { factionDef } from '../../data/index';
-import { claudeStatus, findClaude, saveFile } from '../claude';
+import { useRef, useState } from "preact/hooks";
+import { saveSettings, settings } from "../store";
+import { audio } from "../../audio/audio";
+import {
+  abandonCampaign,
+  campaignFile,
+  importCampaign,
+  readCampaignFile,
+  savedCampaign,
+} from "../campaign/session";
+import type { CampaignState } from "../../campaign/types";
+import { factionDef } from "../../data/index";
+import { claudeStatus, findClaude, saveFile } from "../claude";
 
 const SIZES: { value: number; label: string; note: string }[] = [
-  { value: 0.5, label: 'Small', note: 'About half-size regiments. Fastest; the default on phones.' },
-  { value: 0.75, label: 'Medium', note: 'The default on larger screens.' },
-  { value: 1, label: 'Large', note: 'Full regiments: 1,000–2,500 soldiers a battle.' },
+  {
+    value: 0.5,
+    label: "Small",
+    note: "About half-size regiments. Fastest; the default on phones.",
+  },
+  { value: 0.75, label: "Medium", note: "The default on larger screens." },
+  {
+    value: 1,
+    label: "Large",
+    note: "Full regiments: 1,000–2,500 soldiers a battle.",
+  },
 ];
 
 /** Sound, unit size, the AI and the saved campaign. */
@@ -25,7 +39,12 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const claude = claudeStatus.value;
   return (
     <div class="modal-veil" onClick={onClose}>
-      <div class="panel modal settings" role="dialog" aria-label="Settings" onClick={(e) => e.stopPropagation()}>
+      <div
+        class="panel modal settings"
+        role="dialog"
+        aria-label="Settings"
+        onClick={(e) => e.stopPropagation()}
+      >
         <h2>Settings</h2>
         <section>
           <span class="label" id="size-label">
@@ -33,12 +52,23 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           </span>
           <div class="seg" role="radiogroup" aria-labelledby="size-label">
             {SIZES.map((z) => (
-              <button key={z.value} role="radio" aria-checked={s.unitScale === z.value} class={`btn small ${s.unitScale === z.value ? 'on' : ''}`} onClick={() => set({ unitScale: z.value })} title={z.note}>
+              <button
+                key={z.value}
+                role="radio"
+                aria-checked={s.unitScale === z.value}
+                class={`btn small ${s.unitScale === z.value ? "on" : ""}`}
+                onClick={() => set({ unitScale: z.value })}
+                title={z.note}
+              >
                 {z.label}
               </button>
             ))}
           </div>
-          <p class="muted small">{SIZES.find((z) => z.value === s.unitScale)?.note ?? ''} Colossi, heroes and engines adjust their strength so battles play alike at every size.</p>
+          <p class="muted small">
+            {SIZES.find((z) => z.value === s.unitScale)?.note ?? ""} Colossi,
+            heroes and engines adjust their strength so battles play alike at
+            every size.
+          </p>
         </section>
         <section>
           <label class="label" for="vol">
@@ -71,26 +101,37 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             Ambient drones and bells
           </label>
         </section>
-        <section>
-          <span class="label" id="ai-label">
-            AI factions
-          </span>
-          <div class="seg" role="radiogroup" aria-labelledby="ai-label">
-            <button role="radio" aria-checked={!s.claudeAI} class={`btn small ${!s.claudeAI ? 'on' : ''}`} onClick={() => set({ claudeAI: false })}>
-              Scripted
-            </button>
-            <button role="radio" aria-checked={s.claudeAI} class={`btn small ${s.claudeAI ? 'on' : ''}`} disabled={claude === 'absent' || claude === 'refused'} onClick={() => set({ claudeAI: true })}>
-              Advised by Claude
-            </button>
-          </div>
-          <p class="muted small">
-            {claude === 'absent'
-              ? 'Claude can advise the AI factions when the game runs on claude.ai. Here the scripted AI plays.'
-              : claude === 'refused'
-                ? 'Claude is not allowed for this page right now, so the scripted AI plays.'
-                : 'In a campaign, each AI faction asks Claude once per Toll to choose its wars, treaties and plans, in character. It uses your Claude usage, and the scripted AI takes over whenever Claude is slow or unavailable.'}
-          </p>
-        </section>
+        {(claude === "ready" || claude === "refused") && (
+          <section>
+            <span class="label" id="ai-label">
+              AI factions
+            </span>
+            <div class="seg" role="radiogroup" aria-labelledby="ai-label">
+              <button
+                role="radio"
+                aria-checked={!s.claudeAI}
+                class={`btn small ${!s.claudeAI ? "on" : ""}`}
+                onClick={() => set({ claudeAI: false })}
+              >
+                Scripted
+              </button>
+              <button
+                role="radio"
+                aria-checked={s.claudeAI}
+                class={`btn small ${s.claudeAI ? "on" : ""}`}
+                disabled={claude === "refused"}
+                onClick={() => set({ claudeAI: true })}
+              >
+                Advised by Claude
+              </button>
+            </div>
+            <p class="muted small">
+              {claude === "refused"
+                ? "Claude is not allowed for this page right now, so the scripted AI plays."
+                : "In a campaign, each AI faction asks Claude once per Toll to choose its wars, treaties and plans, in character. It uses your Claude usage, and the scripted AI takes over whenever Claude is slow or unavailable."}
+            </p>
+          </section>
+        )}
         <section>
           <span class="label">Saved campaign</span>
           {saved ? (
@@ -108,14 +149,24 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                   const f = campaignFile();
                   if (!f) return;
                   const r = await saveFile(f.name, f.json);
-                  setNote(r === 'saved' ? 'Save file written.' : r === 'declined' ? null : 'The save file could not be written here.');
+                  setNote(
+                    r === "saved"
+                      ? "Save file written."
+                      : r === "declined"
+                        ? null
+                        : "The save file could not be written here.",
+                  );
                 }}
                 title="Keep a copy, or carry the campaign to another device"
               >
                 Download save
               </button>
             )}
-            <button class="btn small" onClick={() => fileRef.current?.click()} title="Continue a campaign from a save file">
+            <button
+              class="btn small"
+              onClick={() => fileRef.current?.click()}
+              title="Continue a campaign from a save file"
+            >
               Load a save file
             </button>
             <input
@@ -126,24 +177,34 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
               onChange={async (e) => {
                 const input = e.target as HTMLInputElement;
                 const file = input.files?.[0];
-                input.value = '';
+                input.value = "";
                 if (!file) return;
                 const r = readCampaignFile(await file.text());
-                if ('error' in r) setNote(r.error);
+                if ("error" in r) setNote(r.error);
                 else if (saved) setPending(r.state);
-                else setNote(importCampaign(r.state) ? `Loaded: ${factionDef(r.state.player).name}, Toll ${r.state.turn}. Continue it from Campaign.` : 'This browser would not store the save.');
+                else
+                  setNote(
+                    importCampaign(r.state)
+                      ? `Loaded: ${factionDef(r.state.player).name}, Toll ${r.state.turn}. Continue it from Campaign.`
+                      : "This browser would not store the save.",
+                  );
               }}
             />
           </div>
           {pending && (
             <div class="row">
               <span class="warn small">
-                Replace your {factionDef(saved!.player).short} campaign with {factionDef(pending.player).name}, Toll {pending.turn}?
+                Replace your {factionDef(saved!.player).short} campaign with{" "}
+                {factionDef(pending.player).name}, Toll {pending.turn}?
               </span>
               <button
                 class="btn small danger"
                 onClick={() => {
-                  setNote(importCampaign(pending) ? `Loaded: ${factionDef(pending.player).name}, Toll ${pending.turn}. Continue it from Campaign.` : 'This browser would not store the save.');
+                  setNote(
+                    importCampaign(pending)
+                      ? `Loaded: ${factionDef(pending.player).name}, Toll ${pending.turn}. Continue it from Campaign.`
+                      : "This browser would not store the save.",
+                  );
                   setPending(null);
                 }}
               >
@@ -174,7 +235,10 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                 >
                   Delete
                 </button>
-                <button class="btn small ghost" onClick={() => setConfirm(false)}>
+                <button
+                  class="btn small ghost"
+                  onClick={() => setConfirm(false)}
+                >
                   Keep it
                 </button>
               </div>
@@ -185,7 +249,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             )}
           </section>
         )}
-        <div class="row" style={{ justifyContent: 'flex-end' }}>
+        <div class="row" style={{ justifyContent: "flex-end" }}>
           <button class="btn primary" onClick={onClose}>
             Done
           </button>
