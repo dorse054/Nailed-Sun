@@ -7,6 +7,7 @@ import type { FactionId } from '../data/schema';
 import type { BattleResult, BattleSetup, Side, UnitSpec } from '../sim/types';
 import type { MapSetup } from '../sim/terrain';
 import type { BattleRequest } from './store';
+import { dailyDay, dailyLegend } from './daily';
 
 export type Medal = 'bronze' | 'silver' | 'gold';
 
@@ -28,6 +29,8 @@ export interface Legend {
   silver: number;
   gold: number;
   timeLimit?: number;
+  /** A fixed field (the Daily Battle); otherwise each attempt draws its own. */
+  seed?: number;
 }
 
 const N = Math.PI / 2;
@@ -127,7 +130,8 @@ export const LEGENDS: Legend[] = [
 ];
 
 export function legendById(id: string): Legend | undefined {
-  return LEGENDS.find((l) => l.id === id);
+  const day = dailyDay(id);
+  return day ? dailyLegend(day) : LEGENDS.find((l) => l.id === id);
 }
 
 /** A legend's battle, the player on side 0. Lords lead, so they are placed first. */
@@ -148,7 +152,7 @@ export function legendSetup(l: Legend, seed: number, unitScale: number): BattleS
 }
 
 export function legendRequest(l: Legend, unitScale: number): BattleRequest {
-  const seed = Math.floor(Math.random() * 1e9);
+  const seed = l.seed ?? Math.floor(Math.random() * 1e9);
   return { setup: legendSetup(l, seed, unitScale), playerSide: 0, mode: 'custom', title: l.title, briefing: { title: l.title, text: l.story }, legend: l.id };
 }
 

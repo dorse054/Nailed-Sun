@@ -8,6 +8,7 @@ import { unitDef } from '../data/index';
 import type { BattleResult, BattleSetup, Side } from '../sim/types';
 import { book, earnFeat } from './book';
 import { LEGENDS } from './legends';
+import { dailyStreak } from './daily';
 
 export interface FeatDef {
   id: string;
@@ -27,6 +28,7 @@ export const FEATS: FeatDef[] = [
   { id: 'allFactions', name: 'Four Banners', how: 'Win a battle with each of the four factions.' },
   { id: 'legendary', name: 'Legendary', how: 'Win all six Legends.' },
   { id: 'golden', name: 'The Golden Age', how: 'Win gold in all six Legends.' },
+  { id: 'sevenDays', name: 'Seven Days Running', how: 'Win the Daily Battle seven days in a row.' },
   { id: 'victor', name: 'The Shudder Ends', how: 'Win a campaign.' },
   { id: 'fourRoads', name: 'Every Road', how: 'Win a campaign with each of the four factions.' },
   { id: 'toldInSong', name: 'Told in Song', how: 'Have Claude tell the tale of one of your battles.' },
@@ -57,12 +59,13 @@ export function battleFeats(setup: BattleSetup, r: BattleResult, side: Side): Fe
   return out;
 }
 
-/** Feats from the Legends medals won so far. */
+/** Feats from the Legends and Daily Battle medals won so far. */
 export function legendFeats(): FeatDef[] {
   const won = book.value.legends ?? {};
   const out: FeatDef[] = [];
   if (LEGENDS.every((l) => won[l.id]) && earnFeat('legendary')) out.push(featDef('legendary')!);
   if (LEGENDS.every((l) => won[l.id] === 'gold') && earnFeat('golden')) out.push(featDef('golden')!);
+  if (dailyStreak(book.value.daily) >= 7 && earnFeat('sevenDays')) out.push(featDef('sevenDays')!);
   return out;
 }
 

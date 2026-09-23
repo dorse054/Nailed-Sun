@@ -519,6 +519,24 @@
 .legend-card .btn {
   justify-self: start;
 }
+/* Today's battle: a wider card above the six, lit a little warmer. */
+.legend-card.daily {
+  border: 1px solid color-mix(in srgb, var(--gold) 45%, var(--line));
+  border-top: 3px solid color-mix(in srgb, var(--fc, var(--accent)) 70%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--gold) 7%, var(--panel)), var(--panel));
+}
+.legend-card.daily .legend-hook {
+  font-size: 16px;
+}
+.daily-label {
+  display: block;
+  font-family: var(--label);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
 .medal {
   display: inline-block;
   padding: 1px 9px;

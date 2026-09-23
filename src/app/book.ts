@@ -7,6 +7,7 @@ import { signal } from '@preact/signals';
 import { FACTION_IDS, type FactionId } from '../data/schema';
 import { loadRaw, save } from './store';
 import { MEDAL_RANK, type Medal } from './legends';
+import { dailyDay } from './daily';
 
 export interface BookTale {
   /** When it was told (ms since 1970). */
@@ -41,6 +42,8 @@ export interface Book {
   counted: string[];
   /** The best medal won in each Legend. */
   legends?: Record<string, Medal>;
+  /** The best medal won in each day's Daily Battle, by day (2026-09-23). */
+  daily?: Record<string, Medal>;
   /** Feats earned, and when (ms since 1970). */
   feats?: Record<string, number>;
 }
@@ -59,7 +62,7 @@ function read(): Book {
   if (!b || b.version !== 1 || !Array.isArray(b.tales) || !b.records) return empty();
   const e = empty();
   for (const f of FACTION_IDS) e.records[f] = { ...e.records[f], ...b.records[f] };
-  return { version: 1, tales: b.tales.slice(0, MAX_TALES), records: e.records, counted: Array.isArray(b.counted) ? b.counted.slice(-200) : [], legends: b.legends && typeof b.legends === 'object' ? b.legends : {}, feats: b.feats && typeof b.feats === 'object' ? b.feats : {} };
+  return { version: 1, tales: b.tales.slice(0, MAX_TALES), records: e.records, counted: Array.isArray(b.counted) ? b.counted.slice(-200) : [], legends: b.legends && typeof b.legends === 'object' ? b.legends : {}, daily: b.daily && typeof b.daily === 'object' ? b.daily : {}, feats: b.feats && typeof b.feats === 'object' ? b.feats : {} };
 }
 
 /** The book as it stands; screens re-render when it changes. */
@@ -96,13 +99,20 @@ export function noteCampaign(key: string, faction: FactionId, won: boolean, toll
   write({ ...b, records: { ...b.records, [faction]: next }, counted: [...b.counted, key].slice(-200) });
 }
 
-/** A Legend won: keep its medal if it beats the best so far. Returns whether it did. */
+/** A Legend or a Daily Battle won: keep its medal if it beats the best so far. Returns whether it did. */
 export function noteLegend(id: string, medal: Medal): boolean {
   const b = book.value;
-  const best = b.legends?.[id];
+  const best = bestMedal(id);
   if (best && MEDAL_RANK[best] >= MEDAL_RANK[medal]) return false;
-  write({ ...b, legends: { ...b.legends, [id]: medal } });
+  const day = dailyDay(id);
+  write(day ? { ...b, daily: { ...b.daily, [day]: medal } } : { ...b, legends: { ...b.legends, [id]: medal } });
   return true;
+}
+
+/** The best medal won so far in a Legend or a Daily Battle. */
+export function bestMedal(id: string): Medal | undefined {
+  const day = dailyDay(id);
+  return day ? book.value.daily?.[day] : book.value.legends?.[id];
 }
 
 /** Earn a feat, once. Returns whether it is new. */

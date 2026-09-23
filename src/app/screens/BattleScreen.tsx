@@ -21,6 +21,7 @@ import { matchupNote } from '../../data/lore';
 import { TutorialLayer } from '../tutorial/TutorialLayer';
 import { claudeStatus } from '../claude';
 import { legendById } from '../legends';
+import { dailyDay } from '../daily';
 import { MedalChip, medalTerms } from './Legends';
 
 export function BattleScreen({ req }: { req: BattleRequest }) {
@@ -849,8 +850,10 @@ function EndOverlay({ s }: { s: BattleSession }) {
           <div class="legend-medal">
             {s.medal ? (
               <>
-                <MedalChip medal={s.medal} /> {s.medalBest ? 'Your best yet in this Legend.' : 'Not better than your best.'}
+                <MedalChip medal={s.medal} /> {s.medalBest ? (dailyDay(legend.id) ? 'Your best yet today.' : 'Your best yet in this Legend.') : 'Not better than your best.'}
               </>
+            ) : dailyDay(legend.id) ? (
+              'No medal: the battle must be won.'
             ) : (
               'No medal: the Legend must be won.'
             )}

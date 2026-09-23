@@ -11,7 +11,8 @@ import { replayJson, replayName } from '../replayFile';
 import type { Moment } from '../battle/moments';
 import { Moments, StrengthChart, TaleOf } from '../battle/Tale';
 import { legendById, medalFor } from '../legends';
-import { book } from '../book';
+import { lowerThe } from '../daily';
+import { bestMedal } from '../book';
 import { MEDAL_WORDS, MedalChip } from './Legends';
 
 /** What happened to the last "Save replay". */
@@ -76,12 +77,12 @@ export function Results({ req, result, log, setup, moments = [], strength = [] }
         <div class="panel results-hero">
           <h1 style={{ color: won ? 'var(--gold)' : draw ? 'var(--text)' : 'var(--bad)' }}>{draw ? 'Stalemate' : won ? 'Victory' : 'Defeat'}</h1>
           <div class="muted">
-            {factionDef(mine.faction).name} against {factionDef(theirs.faction).name}
+            {factionDef(mine.faction).name} against {lowerThe(factionDef(theirs.faction).name)}
             {placeName(setup.map) ? ` at ${placeName(setup.map)}` : ''} · {fmt(result.time)} · {result.reason === 'rout' ? 'decided by rout' : result.reason === 'timeout' ? 'time ran out' : result.reason === 'capture' ? 'the settlement fell' : 'the field was conceded'}
           </div>
           {legend && (
             <div class="legend-medal">
-              <b>{legend.title}</b>: {medalFor(legend, result, me) ? <MedalChip medal={medalFor(legend, result, me)} /> : <span class="medal none">No medal this time</span>} <span class="muted">Best: {book.value.legends?.[legend.id] ? MEDAL_WORDS[book.value.legends[legend.id]!] : 'none yet'}.</span>
+              <b>{legend.title}</b>: {medalFor(legend, result, me) ? <MedalChip medal={medalFor(legend, result, me)} /> : <span class="medal none">No medal this time</span>} <span class="muted">Best: {bestMedal(legend.id) ? MEDAL_WORDS[bestMedal(legend.id)!] : 'none yet'}.</span>
               <div class="muted">{legend.lesson}</div>
             </div>
           )}

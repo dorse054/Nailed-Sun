@@ -7,8 +7,11 @@ import { LEGENDS } from '../legends';
 /** The Legends item's line: what they are, or how many are won. */
 function legendLine(): string {
   const won = Object.keys(book.value.legends ?? {}).length;
-  return won ? `${won} of ${LEGENDS.length} won` : 'Six battles the world remembers';
+  const todayWon = !!book.value.daily?.[dayKey()];
+  if (!won) return todayWon ? 'Today’s battle won · six Legends wait' : 'Six great battles, and one each day';
+  return `${won} of ${LEGENDS.length} won${todayWon ? '' : ' · today’s battle'}`;
 }
+import { dayKey } from '../daily';
 import { claudeStatus } from '../claude';
 import { TAGLINE } from '../../data/lore';
 import { audio } from '../../audio/audio';

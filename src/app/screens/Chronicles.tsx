@@ -8,6 +8,7 @@ import { factionDef } from '../../data/index';
 import { book, forgetBook, type BookTale } from '../book';
 import { go } from '../store';
 import { LEGENDS } from '../legends';
+import { dailyStreak } from '../daily';
 import { FEATS } from '../feats';
 
 const pct = (a: number, b: number) => (b ? `${Math.round((a / b) * 100)}%` : '–');
@@ -66,6 +67,8 @@ function LegendsLine() {
   const won = book.value.legends ?? {};
   const n = (m: string) => Object.values(won).filter((x) => x === m).length;
   const count = Object.keys(won).length;
+  const daily = Object.keys(book.value.daily ?? {}).length;
+  const streak = dailyStreak(book.value.daily);
   return (
     <p class="chron-legends">
       <b>Legends</b>{' '}
@@ -75,6 +78,13 @@ function LegendsLine() {
         </span>
       ) : (
         <span class="muted">none won yet</span>
+      )}{' '}
+      {daily > 0 && (
+        <span class="num">
+          {' '}
+          · Daily Battles won: {daily}
+          {streak > 1 ? `, ${streak} days running` : ''}
+        </span>
       )}{' '}
       <button class="btn small ghost" onClick={() => go({ name: 'legends' })}>
         Legends →
