@@ -5,7 +5,8 @@ import { factionDef } from '../../data/index';
 import type { CampaignState } from '../../campaign/types';
 import { active, continueCampaign, savedCampaign, startCampaign } from './session';
 import { CampaignScreen } from './CampaignScreen';
-import { go } from '../store';
+import { go, saveSettings, settings } from '../store';
+import { claudeStatus, findClaude } from '../claude';
 import { audio } from '../../audio/audio';
 import { OWNER_COLOR } from './campaignMap';
 
@@ -91,12 +92,15 @@ function CampaignStart({ onStart }: { onStart: () => void }) {
           <h3>Victory: {fd.victory.name}</h3>
           <p>{fd.victory.desc}</p>
           <div class="spread cs-go">
-            <div class="seg" role="radiogroup" aria-label="Difficulty">
-              {(['easy', 'normal', 'hard'] as const).map((d) => (
-                <button key={d} role="radio" aria-checked={diff === d} class={`btn small ${diff === d ? 'on' : ''}`} onClick={() => setDiff(d)} title={DIFFICULTY[d]}>
-                  {d[0]!.toUpperCase() + d.slice(1)}
-                </button>
-              ))}
+            <div class="row">
+              <div class="seg" role="radiogroup" aria-label="Difficulty">
+                {(['easy', 'normal', 'hard'] as const).map((d) => (
+                  <button key={d} role="radio" aria-checked={diff === d} class={`btn small ${diff === d ? 'on' : ''}`} onClick={() => setDiff(d)} title={DIFFICULTY[d]}>
+                    {d[0]!.toUpperCase() + d.slice(1)}
+                  </button>
+                ))}
+              </div>
+              <ClaudeChoice />
             </div>
             <button class="btn primary big" onClick={begin}>
               {saved ? 'Begin a new campaign' : 'Begin the campaign'}
@@ -105,6 +109,26 @@ function CampaignStart({ onStart }: { onStart: () => void }) {
           {saved && <p class="small muted">Beginning a new campaign replaces your saved one when you next save.</p>}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Where Claude can be asked, the AI factions' counsel is chosen here as well as in Settings. */
+function ClaudeChoice() {
+  void findClaude();
+  const status = claudeStatus.value;
+  const on = settings.value.claudeAI;
+  if (status !== 'ready') return null;
+  const set = (claudeAI: boolean) => saveSettings({ ...settings.value, claudeAI });
+  const why = 'Rival factions take Claude’s counsel on wars and treaties, envoys answer in their own words, enemy generals speak before battle, and the war ends with its saga. Uses your Claude usage.';
+  return (
+    <div class="seg" role="radiogroup" aria-label="AI factions">
+      <button role="radio" aria-checked={!on} class={`btn small ${!on ? 'on' : ''}`} onClick={() => set(false)} title="Rival factions follow the scripted AI">
+        Scripted AI
+      </button>
+      <button role="radio" aria-checked={on} class={`btn small ${on ? 'on' : ''}`} onClick={() => set(true)} title={why}>
+        ✦ Advised by Claude
+      </button>
     </div>
   );
 }
