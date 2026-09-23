@@ -3,6 +3,7 @@ import { saveSettings, settings } from '../store';
 import { audio } from '../../audio/audio';
 import { abandonCampaign, savedCampaign } from '../campaign/session';
 import { factionDef } from '../../data/index';
+import { claudeStatus, findClaude } from '../claude';
 
 const SIZES: { value: number; label: string; note: string }[] = [
   { value: 0.5, label: 'Small', note: 'About half-size regiments. Fastest.' },
@@ -16,6 +17,8 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const [confirm, setConfirm] = useState(false);
   const saved = savedCampaign();
   const set = (patch: Partial<typeof s>) => saveSettings({ ...s, ...patch });
+  void findClaude();
+  const claude = claudeStatus.value;
   return (
     <div class="modal-veil" onClick={onClose}>
       <div class="panel modal settings" role="dialog" aria-label="Settings" onClick={(e) => e.stopPropagation()}>
@@ -63,6 +66,26 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             />
             Ambient drones and bells
           </label>
+        </section>
+        <section>
+          <span class="label" id="ai-label">
+            AI factions
+          </span>
+          <div class="seg" role="radiogroup" aria-labelledby="ai-label">
+            <button role="radio" aria-checked={!s.claudeAI} class={`btn small ${!s.claudeAI ? 'on' : ''}`} onClick={() => set({ claudeAI: false })}>
+              Scripted
+            </button>
+            <button role="radio" aria-checked={s.claudeAI} class={`btn small ${s.claudeAI ? 'on' : ''}`} disabled={claude === 'absent' || claude === 'refused'} onClick={() => set({ claudeAI: true })}>
+              Advised by Claude
+            </button>
+          </div>
+          <p class="muted small">
+            {claude === 'absent'
+              ? 'Claude can advise the AI factions when the game runs on claude.ai. Here the scripted AI plays.'
+              : claude === 'refused'
+                ? 'Claude is not allowed for this page right now, so the scripted AI plays.'
+                : 'In a campaign, each AI faction asks Claude once per Toll to choose its wars, treaties and plans, in character. It uses your Claude usage, and the scripted AI takes over whenever Claude is slow or unavailable.'}
+          </p>
         </section>
         {saved && (
           <section>

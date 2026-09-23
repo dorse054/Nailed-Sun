@@ -37,9 +37,11 @@ export interface Settings {
   music: boolean;
   tips: boolean;
   edgeScroll: boolean;
+  /** Let Claude make the AI factions' judgment calls (published artifact only). */
+  claudeAI: boolean;
 }
 
-const DEFAULTS: Settings = { unitScale: 0.75, volume: 0.7, music: true, tips: true, edgeScroll: false };
+const DEFAULTS: Settings = { unitScale: 0.75, volume: 0.7, music: true, tips: true, edgeScroll: false, claudeAI: false };
 
 export const settings = signal<Settings>(load('nailedsun.settings', DEFAULTS));
 
