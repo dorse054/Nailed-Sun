@@ -297,3 +297,24 @@
     display: grid !important;
   }
 }
+
+/* Settings */
+.settings section {
+  display: grid;
+  gap: 6px;
+}
+.settings input[type='range'] {
+  width: 100%;
+  accent-color: var(--gold);
+}
+.check {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  cursor: pointer;
+}
+.check input {
+  accent-color: var(--gold);
+  width: 16px;
+  height: 16px;
+}

@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
+import { SettingsPanel } from './Settings';
 import { go } from '../store';
 import { TAGLINE } from '../../data/lore';
 import { audio } from '../../audio/audio';
@@ -129,6 +130,7 @@ function Backdrop() {
 }
 
 export function MainMenu() {
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const click = (f: () => void) => () => {
     audio.unlock();
     audio.ui('click');
@@ -169,9 +171,14 @@ export function MainMenu() {
             <b>Watch a Battle</b>
             <span>Two scripted generals</span>
           </button>
+          <button class="menu-item" onClick={click(() => setSettingsOpen(true))}>
+            <b>Settings</b>
+            <span>Sound and unit size</span>
+          </button>
         </div>
       </div>
       <div class="menu-foot">A Total War-style strategy prototype. Deterministic 20-tick battles; every battle can be replayed exactly.</div>
+      {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
     </div>
   );
 }
