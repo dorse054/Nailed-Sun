@@ -77,6 +77,11 @@ export class BattleSession {
   private attachControllers(): void {
     const b = this.battle;
     for (const s of [0, 1] as Side[]) {
+      const custom = this.req.controller?.(s);
+      if (custom !== undefined) {
+        b.setController(s, custom);
+        continue;
+      }
       const ctrl = b.setup.armies[s].controller;
       const auto = this.req.mode === 'demo' || (ctrl === 'ai' && s !== this.side) || (this.req.mode === 'replay' && s !== this.side);
       if (auto) b.setController(s, new BattleAI());
@@ -156,9 +161,13 @@ export class BattleSession {
 
   // ------------------------------------------------------------- commands
 
+  /** Sees every order the player gives (the tutorials watch them). */
+  onIssue: ((cmd: Command) => void) | null = null;
+
   issue(cmd: Command): void {
     if (this.phase !== 'battle' || this.req.mode === 'replay' || this.req.mode === 'demo') return;
     this.battle.issue(this.side, cmd);
+    this.onIssue?.(cmd);
   }
 
   own(): Unit[] {

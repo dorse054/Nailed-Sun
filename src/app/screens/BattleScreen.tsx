@@ -14,6 +14,7 @@ import { tollActive } from '../../sim/stats';
 import { formationSize } from '../../sim/army';
 import { audio } from '../../audio/audio';
 import { matchupNote } from '../../data/lore';
+import { TutorialLayer } from '../tutorial/TutorialLayer';
 
 export function BattleScreen({ req }: { req: BattleRequest }) {
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -33,6 +34,7 @@ export function BattleScreen({ req }: { req: BattleRequest }) {
         <canvas ref={canvas} class="backdrop" style={{ touchAction: 'none', cursor: 'crosshair' }} />
       </div>
       {session && <Hud s={session} />}
+      {session && req.tutorial && <TutorialLayer s={session} />}
     </div>
   );
 }
@@ -55,7 +57,7 @@ function Hud({ s }: { s: BattleSession }) {
         <UnitCards s={s} />
       </div>
       {s.message.value && (
-        <div class="panel" style={{ position: 'absolute', left: '50%', top: '96px', transform: 'translateX(-50%)', padding: '6px 12px', fontSize: '13px' }}>
+        <div class="panel hud-flash" style={{ position: 'absolute', left: '50%', top: '96px', transform: 'translateX(-50%)', padding: '6px 12px', fontSize: '13px' }}>
           {s.message.value}
         </div>
       )}
@@ -66,7 +68,7 @@ function Hud({ s }: { s: BattleSession }) {
         </div>
       )}
       {menu && <PauseMenu s={s} onClose={() => setMenu(false)} />}
-      {s.phase === 'over' && <EndOverlay s={s} />}
+      {s.phase === 'over' && !s.req.tutorial && <EndOverlay s={s} />}
     </>
   );
 }
@@ -112,11 +114,11 @@ function TopBar({ s, onMenu }: { s: BattleSession; onMenu: () => void }) {
         <span class="clock num">{fmtTime(b.time)}</span>
         {s.phase === 'battle' && (
           <>
-            <button class={`btn small ${s.paused ? 'on' : ''}`} onClick={() => (s.paused = !s.paused)} title="Pause (Space)" aria-label="Pause">
+            <button class={`btn small ${s.paused ? 'on' : ''}`} onClick={() => (s.paused = !s.paused)} title="Pause (Space)" aria-label="Pause" data-tut="pause">
               {s.paused ? '▶' : '❚❚'}
             </button>
             {speeds.map((sp) => (
-              <button key={sp} class={`btn small ${s.speed === sp && !s.paused ? 'on' : ''}`} onClick={() => ((s.speed = sp), (s.paused = false))}>
+              <button key={sp} class={`btn small ${s.speed === sp && !s.paused ? 'on' : ''}`} onClick={() => ((s.speed = sp), (s.paused = false))} data-tut={`speed-${sp}`}>
                 {sp}×
               </button>
             ))}
@@ -211,7 +213,7 @@ function HourPicker({ s }: { s: BattleSession }) {
   const left = Number.isFinite(iv) ? Math.max(0, iv - st.tollTimer) : null;
   const active = b.time - st.lastToll < 6;
   return (
-    <div class="panel" style={{ position: 'absolute', right: '8px', top: 'calc(104px + env(safe-area-inset-top, 0px))', padding: '8px 10px', display: 'grid', gap: '6px', width: '210px' }}>
+    <div class="panel" data-tut="hours" style={{ position: 'absolute', right: '8px', top: 'calc(104px + env(safe-area-inset-top, 0px))', padding: '8px 10px', display: 'grid', gap: '6px', width: '210px' }}>
       <div class="spread">
         <b style={{ fontFamily: 'var(--display)', fontSize: '18px', color: 'var(--gold)' }}>The Toll</b>
         <span class={`chip ${active ? 'gold' : ''} num`}>{left === null ? 'silenced' : active ? 'ringing' : `${left.toFixed(0)} s`}</span>
@@ -223,7 +225,7 @@ function HourPicker({ s }: { s: BattleSession }) {
       )}
       <div style={{ display: 'grid', gap: '4px' }}>
         {fac.hours!.map((h) => (
-          <button key={h.id} class={`btn small ${st.hour === h.id ? 'on' : ''}`} style={{ justifyContent: 'space-between' }} onClick={() => s.setHour(h.id as HourId)} title={h.desc}>
+          <button key={h.id} class={`btn small ${st.hour === h.id ? 'on' : ''}`} style={{ justifyContent: 'space-between' }} onClick={() => s.setHour(h.id as HourId)} title={h.desc} data-tut={`hour-${h.id}`}>
             <span>{h.name.replace('Hour of ', '')}</span>
             <span class="muted" style={{ fontSize: '11px' }}>
               {h.desc.replace('.', '')}
@@ -249,6 +251,7 @@ function UnitCards({ s }: { s: BattleSession }) {
             key={u.id}
             role="listitem"
             class={`card ${sel ? 'sel' : ''} ${gone ? 'gone' : ''} ${u.state === 'routing' ? 'routing' : ''}`}
+            data-unit={u.id}
             title={`${u.def.name} · ${u.def.roleLabel}`}
             onClick={(e) => {
               if (gone) return;
@@ -382,6 +385,7 @@ function UnitPanel({ s, u }: { s: BattleSession; u: Unit }) {
             <button
               key={a.id}
               class={`btn small ability ${st.on ? 'on' : ''} ${s.targeting?.ability.id === a.id ? 'on' : ''}`}
+              data-ability={a.id}
               disabled={used || s.phase !== 'battle' || u.state !== 'ready'}
               onClick={() => s.useAbility(u, a)}
               title={`${a.name}: ${a.desc}${a.cooldown ? ` (cooldown ${a.cooldown} s)` : ''}`}
