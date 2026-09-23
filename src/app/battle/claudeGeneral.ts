@@ -74,7 +74,7 @@ export function fieldReport(b: Battle, side: Side): string {
   lines.push(`You are ${band(ratio, [0.7, 0.9, 1.12, 1.4], ['far weaker than', 'weaker than', 'about even with', 'stronger than', 'far stronger than'])} them.`);
   const mr = missiles(mine) / Math.max(1, value(mine));
   const tr = missiles(theirs) / Math.max(1, value(theirs));
-  lines.push(mr > tr + 0.08 ? 'Your missiles outshoot theirs: standing off favours you.' : tr > mr + 0.08 ? 'Their missiles outshoot yours: waiting under their arrows costs you.' : 'Missiles are about even.');
+  lines.push(mr > tr + 0.08 ? 'Your missiles outshoot theirs: standing off favors you.' : tr > mr + 0.08 ? 'Their missiles outshoot yours: waiting under their arrows costs you.' : 'Missiles are about even.');
   // The enemy deploys across the field: facing them, where do the sun and the wind stand?
   const facing = side === 1 ? Math.PI / 2 : -Math.PI / 2;
   const rel = Math.abs(Math.atan2(Math.sin(t.sunBearing - facing), Math.cos(t.sunBearing - facing)));

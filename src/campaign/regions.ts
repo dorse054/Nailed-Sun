@@ -260,7 +260,7 @@ export const REGIONS: RegionDef[] = [
     wind: 1,
     resource: 'iron',
     preset: 'hilly',
-    desc: 'Grey hills of iron ore, dug by free miners who pay no one.',
+    desc: 'Gray hills of iron ore, dug by free miners who pay no one.',
   },
   {
     id: 'redRim',

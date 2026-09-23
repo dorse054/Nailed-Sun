@@ -127,7 +127,7 @@ function name(f: FactionId): string {
 export function situationFor(s: CampaignState, f: FactionId): string {
   const fs = s.factions[f];
   const lines: string[] = [];
-  const phase = s.turn < 26 ? 'early days: expanding and meeting the neighbours' : s.turn < 61 ? 'the middle years: the wars over the Gloaming' : 'the last years: the race to victory';
+  const phase = s.turn < 26 ? 'early days: expanding and meeting the neighbors' : s.turn < 61 ? 'the middle years: the wars over the Gloaming' : 'the last years: the race to victory';
   lines.push(`Toll ${s.turn}, ${phase}. The Tilt stands ${tiltWord(s.tilt)}${s.turn >= 70 ? ', and the Great Shudder shakes the world' : ''}.`);
   const me = factionStrength(s, f);
   const regions = ownedRegions(s, f).length;
