@@ -61,3 +61,29 @@ describe('the book', () => {
     expect(book.value.records.hush.fought).toBe(0);
   });
 });
+
+describe('feats', () => {
+  it('are earned once, from what a won battle shows', async () => {
+    const { battleFeats, legendFeats } = await import('../src/app/feats');
+    const { noteLegend } = await import('../src/app/book');
+    forgetBook();
+    const unit = (def: string, state: string) => ({ id: 0, def, name: def, start: 10, alive: 10, kills: 0, damageDealt: 0, valueDealt: 0, state, cost: 100, hp: 1 });
+    const setup = { seed: 1, map: { seed: 1, band: 'gloaming', wind: 1, sunBearing: 0, fort: { defender: 0, radius: 170 } }, armies: [] } as never;
+    const result = {
+      winner: 0,
+      reason: 'timeout',
+      time: 600,
+      sides: [
+        { faction: 'hush', soldiersStart: 100, soldiersLost: 5, costStart: 5000, costLost: 500, units: [unit('hush.theUnlit', 'ready')] },
+        { faction: 'choir', soldiersStart: 100, soldiersLost: 90, costStart: 9000, costLost: 8000, units: [unit('choir.nailbearer', 'dead')] },
+      ],
+    } as never;
+    const ids = battleFeats(setup, result, 0).map((f) => f.id);
+    expect(ids).toEqual(expect.arrayContaining(['firstBlood', 'flawless', 'heroic', 'odds', 'giantSlayer', 'hold']));
+    expect(ids).not.toContain('storm');
+    expect(battleFeats(setup, result, 0)).toEqual([]);
+    for (const id of ['bellCharge', 'silentCharge', 'downwindRun', 'colossusDuel', 'lightWars', 'mirrorTrap']) noteLegend(id, 'gold');
+    expect(legendFeats().map((f) => f.id)).toEqual(['legendary', 'golden']);
+    forgetBook();
+  });
+});

@@ -41,6 +41,8 @@ export interface Book {
   counted: string[];
   /** The best medal won in each Legend. */
   legends?: Record<string, Medal>;
+  /** Feats earned, and when (ms since 1970). */
+  feats?: Record<string, number>;
 }
 
 const KEY = 'nailedsun.book';
@@ -57,7 +59,7 @@ function read(): Book {
   if (!b || b.version !== 1 || !Array.isArray(b.tales) || !b.records) return empty();
   const e = empty();
   for (const f of FACTION_IDS) e.records[f] = { ...e.records[f], ...b.records[f] };
-  return { version: 1, tales: b.tales.slice(0, MAX_TALES), records: e.records, counted: Array.isArray(b.counted) ? b.counted.slice(-200) : [], legends: b.legends && typeof b.legends === 'object' ? b.legends : {} };
+  return { version: 1, tales: b.tales.slice(0, MAX_TALES), records: e.records, counted: Array.isArray(b.counted) ? b.counted.slice(-200) : [], legends: b.legends && typeof b.legends === 'object' ? b.legends : {}, feats: b.feats && typeof b.feats === 'object' ? b.feats : {} };
 }
 
 /** The book as it stands; screens re-render when it changes. */
@@ -73,6 +75,7 @@ export function addTale(t: Omit<BookTale, 'at'>): void {
   // The same tale told twice (a reloaded report) is kept once.
   if (b.tales.some((x) => x.title === t.title && x.text === t.text)) return;
   write({ ...b, tales: [{ ...t, at: Date.now() }, ...b.tales].slice(0, MAX_TALES) });
+  earnFeat(t.kind === 'saga' ? 'saga' : 'toldInSong');
 }
 
 /** A battle the player fought to its end. */
@@ -99,6 +102,14 @@ export function noteLegend(id: string, medal: Medal): boolean {
   const best = b.legends?.[id];
   if (best && MEDAL_RANK[best] >= MEDAL_RANK[medal]) return false;
   write({ ...b, legends: { ...b.legends, [id]: medal } });
+  return true;
+}
+
+/** Earn a feat, once. Returns whether it is new. */
+export function earnFeat(id: string): boolean {
+  const b = book.value;
+  if (b.feats?.[id]) return false;
+  write({ ...b, feats: { ...b.feats, [id]: Date.now() } });
   return true;
 }
 

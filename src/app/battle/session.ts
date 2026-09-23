@@ -13,6 +13,7 @@ import { askAdvice, askCounsel, askGeneral, askGeneralMid, strengthRatio } from 
 import { MomentLog, type Moment } from './moments';
 import { noteBattle, noteLegend } from '../book';
 import { legendById, medalFor, type Medal } from '../legends';
+import { battleFeats, legendFeats, type FeatDef } from '../feats';
 import { claudeStatus, saveFile } from '../claude';
 import { layoutSlots, placeInFormation } from '../../sim/army';
 import { castBlocker, casterPos, findAbility } from '../../sim/abilities';
@@ -261,6 +262,8 @@ export class BattleSession {
   /** A Legend's medal for this battle, once it is over, and whether it is the best yet. */
   medal: Medal | null = null;
   medalBest = false;
+  /** Feats this battle earned. */
+  feats: FeatDef[] = [];
 
   /** When the war drums last heard how hot the fighting is. */
   private heatTick = 0;
@@ -426,6 +429,7 @@ export class BattleSession {
           this.medal = medalFor(legend, b.result!, this.side);
           this.medalBest = this.medal ? noteLegend(legend.id, this.medal) : false;
         }
+        if (this.req.mode === 'custom' || this.req.mode === 'campaign') this.feats = [...battleFeats(this.req.setup, b.result!, this.side), ...(legend ? legendFeats() : [])];
         this.hud.value++;
       }
     }

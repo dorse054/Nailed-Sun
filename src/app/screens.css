@@ -614,3 +614,45 @@
 .strength-chart figcaption .theirs {
   color: var(--team-1);
 }
+
+/* Feats. */
+.chron-feats {
+  padding: 14px 16px;
+  display: grid;
+  gap: 10px;
+}
+.feat-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 8px 14px;
+}
+.feat-list li {
+  display: grid;
+  grid-template-columns: 1.4em 1fr;
+  gap: 6px;
+  opacity: 0.55;
+  font-size: 13.5px;
+}
+.feat-list li.got {
+  opacity: 1;
+}
+.feat-list li {
+  align-items: start;
+}
+.feat-list li > span:last-child {
+  display: grid;
+  align-content: start;
+}
+.feat-star {
+  color: var(--gold);
+  font-size: 16px;
+  line-height: 1.2;
+}
+.feats-earned {
+  display: grid;
+  gap: 4px;
+  font-size: 14px;
+}

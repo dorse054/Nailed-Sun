@@ -812,6 +812,15 @@ function EndOverlay({ s }: { s: BattleSession }) {
       <div class="panel modal" style={{ textAlign: 'center' }}>
         <h2 style={{ fontSize: '44px', color: won ? 'var(--gold)' : draw ? 'var(--text)' : 'var(--bad)' }}>{title}</h2>
         <div>{reason}</div>
+        {s.feats.length > 0 && (
+          <div class="feats-earned" role="status">
+            {s.feats.map((f) => (
+              <div key={f.id}>
+                <span class="feat-star">★</span> Feat: <b>{f.name}</b> <span class="muted">{f.how}</span>
+              </div>
+            ))}
+          </div>
+        )}
         {legend && (
           <div class="legend-medal">
             {s.medal ? (

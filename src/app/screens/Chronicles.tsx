@@ -8,6 +8,7 @@ import { factionDef } from '../../data/index';
 import { book, forgetBook, type BookTale } from '../book';
 import { go } from '../store';
 import { LEGENDS } from '../legends';
+import { FEATS } from '../feats';
 
 const pct = (a: number, b: number) => (b ? `${Math.round((a / b) * 100)}%` : '–');
 
@@ -29,6 +30,35 @@ function meta(t: BookTale): string {
     // An odd locale is no reason to hide the tale.
   }
   return parts.join(' · ');
+}
+
+/** Feats earned, with when, and those still to earn, with how. */
+function Feats() {
+  const got = book.value.feats ?? {};
+  const n = FEATS.filter((f) => got[f.id]).length;
+  return (
+    <section class="panel chron-feats">
+      <div class="spread">
+        <h2>Feats</h2>
+        <span class="chip num">
+          {n} of {FEATS.length}
+        </span>
+      </div>
+      <ul class="feat-list">
+        {FEATS.map((f) => (
+          <li key={f.id} class={got[f.id] ? 'got' : ''}>
+            <span class="feat-star" aria-hidden="true">
+              {got[f.id] ? '★' : '☆'}
+            </span>
+            <span>
+              <b>{f.name}</b>
+              <span class="muted">{f.how}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
 }
 
 /** The Legends won, by medal, with the way to them. */
@@ -109,6 +139,7 @@ export function Chronicles() {
           )}
           <LegendsLine />
         </section>
+        <Feats />
         <section class="panel chron-book">
           <div class="spread">
             <h2>The book of tales</h2>

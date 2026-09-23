@@ -4,6 +4,7 @@ import { abandonCampaign, leaveCampaign } from './session';
 import type { ArmyState, BattleReport, Owner, PendingBattle } from '../../campaign/types';
 import { Moments, StrengthChart, TaleOf, ToldTale } from '../battle/Tale';
 import { noteCampaign } from '../book';
+import { campaignFeats } from '../feats';
 import { factionDef, unitDef } from '../../data/index';
 import { BANDS } from '../../data/rules';
 import { FACTION_IDS, WIND_NAMES, type FactionId } from '../../data/schema';
@@ -468,6 +469,7 @@ function End({ session }: { session: CampaignSession }) {
     void session.saga();
     const s = session.s;
     noteCampaign(`${s.seed}:${s.player}:${s.difficulty}`, s.player, s.winner?.faction === s.player, s.winner?.turn ?? s.turn);
+    campaignFeats();
   }, [session]);
   const s = session.s;
   const w = s.winner;
