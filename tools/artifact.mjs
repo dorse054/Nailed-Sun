@@ -22,6 +22,8 @@ const styles = pick(/<style[^>]*>[\s\S]*?<\/style>/g, 'style');
 const scripts = pick(/<script type="module"[^>]*>[\s\S]*?<\/script>/g, 'script');
 
 const page = [
+  // The host declares UTF-8 itself; this keeps any other server from misreading the page.
+  '<meta charset="utf-8">',
   title,
   '<meta name="description" content="A Total War-style strategy game under a sun that stopped moving a thousand years ago.">',
   ...fonts,
