@@ -150,8 +150,11 @@ export class BattleSession {
     const s = ([0, 1] as Side[]).find((x) => x !== this.side && this.req.setup.armies[x].controller === 'ai' && !this.req.setup.armies[x].plan);
     if (s === undefined || !settings.value.claudeAI || claudeStatus.value !== 'ready') return;
     const abort = new AbortController();
+    // A general who hasn't answered in 15 s never will: the scripted one decides.
+    const timer = setTimeout(() => abort.abort(), 15000);
     Object.assign(this.general, { abort, waiting: true, faction: this.battle.sides[s].faction });
     void askGeneral(this.battle, s, abort.signal).then((plan) => {
+      clearTimeout(timer);
       this.general.waiting = false;
       if (plan && this.phase === 'deploy' && !this.disposed) {
         this.req.setup.armies[s].plan = plan;
