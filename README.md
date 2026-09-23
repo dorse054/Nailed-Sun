@@ -47,6 +47,7 @@ Campaign: click an army, then click a region to march (right-click also marches)
 | `npm run stats:csv` | Every unit's stats as a spreadsheet (`reports/unit-stats.csv`). |
 | `npm run artifact` | Builds the single-file page (`dist-single/`) and the hosted page fragment (`dist-artifact/`). |
 | `node tools/shot.mjs <url> <out.png>` | Screenshots a page with Playwright. |
+| `node tools/reach.mjs [url]` | Opens every screen and campaign panel at phone, landscape-phone and desktop sizes (against a running `npm run dev`) and lists any button that is off screen with no way to scroll to it, or covered. |
 
 ## How it's built
 
