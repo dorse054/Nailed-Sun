@@ -6,20 +6,36 @@ import { BAND_IDS, FACTION_IDS } from '../data/schema';
 import { Rng } from '../core/rng';
 import { generateArmy } from '../game/armyGen';
 import type { BattleSetup } from '../sim/types';
+import type { MapSetup } from '../sim/terrain';
 import { go, settings } from './store';
+
+/** Landmarks a random battle can be fought at, by band. */
+const PLACES: Partial<Record<BandId, { landmark: NonNullable<MapSetup['landmark']>; glow?: boolean }[]>> = {
+  evernight: [{ landmark: 'candle', glow: true }, { landmark: 'candle', glow: false }, { landmark: 'pole' }, { landmark: 'rimeSea' }],
+  gloaming: [{ landmark: 'stoppedDial' }, { landmark: 'mistfalls' }, { landmark: 'leaningWood' }, { landmark: 'umbralVale' }],
+  longAfternoon: [{ landmark: 'umbralVale' }, { landmark: 'furnaces' }],
+  glare: [{ landmark: 'nailSpire' }],
+};
+/** Share of random battles fought at a landmark. */
+const PLACE_CHANCE = 0.2;
 
 export function randomSetup(seed: number, a: FactionId, b: FactionId, budget = 9000, opts: { band?: BandId; wind?: WindLevel; sun?: number; steppe?: boolean } = {}): BattleSetup {
   const rng = new Rng(seed);
   const band = opts.band ?? rng.pick(BAND_IDS.filter((x) => x !== 'glare' || rng.chance(0.3)));
   const wind = opts.wind ?? (rng.int(3) as WindLevel);
   const sun = opts.sun ?? rng.pick([-Math.PI / 2, Math.PI / 2, 0, Math.PI, -Math.PI / 4, (Math.PI * 3) / 4]);
+  const steppe = opts.steppe ?? (a === 'drift' || b === 'drift' ? rng.chance(0.4) : false);
+  const armies: BattleSetup['armies'] = [
+    { faction: a, controller: 'player', units: generateArmy(a, budget, rng) },
+    { faction: b, controller: 'ai', units: generateArmy(b, budget, rng) },
+  ];
+  // Now and then, a famous field (drawn last, so a seed's armies stay the same).
+  const places = steppe ? undefined : PLACES[band];
+  const place = places && rng.chance(PLACE_CHANCE) ? rng.pick(places) : null;
   return {
     seed,
-    map: { seed, band, wind, sunBearing: sun, steppe: opts.steppe ?? (a === 'drift' || b === 'drift' ? rng.chance(0.4) : false) },
-    armies: [
-      { faction: a, controller: 'player', units: generateArmy(a, budget, rng) },
-      { faction: b, controller: 'ai', units: generateArmy(b, budget, rng) },
-    ],
+    map: { seed, band, wind, sunBearing: sun, steppe, ...(place ?? {}) },
+    armies,
     unitScale: settings.value.unitScale,
   };
 }
