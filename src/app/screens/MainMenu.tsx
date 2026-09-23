@@ -208,7 +208,7 @@ export function MainMenu() {
           </button>
           <button class="menu-item" onClick={click(() => setSettingsOpen(true))}>
             <b>Settings</b>
-            <span>Sound, unit size and AI</span>
+            <span>{claudeStatus.value === 'ready' && !settings.value.claudeAI ? '✦ Let Claude play your rivals' : 'Sound, unit size and AI'}</span>
           </button>
         </div>
         <div class="menu-foot">A strategy prototype: a turn-based campaign and real-time battles under a sun that never moves. Every battle can be replayed exactly.</div>
