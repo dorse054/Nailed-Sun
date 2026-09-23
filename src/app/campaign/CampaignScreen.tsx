@@ -34,6 +34,12 @@ export function CampaignScreen({ session }: { session: CampaignSession }) {
     const size = () => {
       const r = c.getBoundingClientRect();
       map.resize(r.width, r.height, Math.min(2, window.devicePixelRatio || 1));
+      // Let the map scroll clear of the top bar and the End Toll button.
+      const top = document.querySelector('.camp-top')?.getBoundingClientRect();
+      const end = document.querySelector('.camp-end')?.getBoundingClientRect();
+      map.insetTop = top ? Math.max(0, top.bottom - r.top) : 0;
+      // On wide screens End Toll only covers a corner: no need to scroll past the map's edge for it.
+      map.insetBottom = end && r.width < 720 ? Math.max(0, r.bottom - end.top) : 0;
     };
     size();
     map.fit();

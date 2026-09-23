@@ -68,10 +68,18 @@ export class CampaignMap {
     this.y = MAP_H / 2;
   }
 
+  /**
+   * Screen pixels hidden under the top bar and the bottom controls. The map
+   * may scroll that far past its edges, so nothing is stuck beneath them.
+   */
+  insetTop = 0;
+  insetBottom = 0;
+
+  /** Center a map point in the part of the screen the overlays leave clear. */
   centerOn(x: number, y: number, zoom?: number): void {
-    this.x = x;
-    this.y = y;
     if (zoom) this.zoom = zoom;
+    this.x = x;
+    this.y = y - (this.insetTop - this.insetBottom) / 2 / this.zoom;
     this.clamp();
   }
 
@@ -80,8 +88,10 @@ export class CampaignMap {
     this.zoom = Math.max(minZ, Math.min(Math.max(minZ * 5, 2), this.zoom));
     const hw = this.W / 2 / this.zoom;
     const hh = this.H / 2 / this.zoom;
+    const top = this.insetTop / this.zoom;
+    const bottom = this.insetBottom / this.zoom;
     this.x = hw * 2 >= MAP_W ? MAP_W / 2 : Math.max(hw, Math.min(MAP_W - hw, this.x));
-    this.y = hh * 2 >= MAP_H ? MAP_H / 2 : Math.max(hh, Math.min(MAP_H - hh, this.y));
+    this.y = hh * 2 - top - bottom >= MAP_H ? MAP_H / 2 + (bottom - top) / 2 : Math.max(hh - top, Math.min(MAP_H - hh + bottom, this.y));
   }
 
   toMap(sx: number, sy: number): P {
