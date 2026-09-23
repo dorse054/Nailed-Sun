@@ -130,7 +130,7 @@ export class BattleSession {
         const ev = b.takeEvents();
         if (ev.length) {
           this.renderer.effects.consume(ev, (id) => b.units[id]?.def.name ?? '', this.side);
-          audio.events(ev, this.renderer.camera, this.side);
+          audio.events(ev, this.renderer.camera, this.side, (id) => b.units[id]);
         }
         this.acc -= DT;
         n++;
@@ -277,7 +277,7 @@ export class BattleSession {
     this.phase = 'battle';
     this.overlay.deployZone = null;
     this.overlay.preview = [];
-    audio.battleStart(this.battle.sides[this.side].faction);
+    audio.battleStart(this.battle.sides[this.side].faction, [this.battle.sides[0].faction, this.battle.sides[1].faction]);
     this.hud.value++;
   }
 
