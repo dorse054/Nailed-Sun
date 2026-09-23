@@ -107,8 +107,13 @@ export function Results({ req, result, log, setup }: { req: BattleRequest; resul
   );
 }
 
+/** Enemy value a unit destroyed, as a multiple of its own cost. */
+const worth = (u: SideSummary['units'][number]): number | null => (u.valueDealt === undefined || !u.cost ? null : u.valueDealt / u.cost);
+
 function SideTable({ title, s, side }: { title: string; s: SideSummary; side: 0 | 1 }) {
   const lostPct = Math.round((s.soldiersLost / Math.max(1, s.soldiersStart)) * 100);
+  // The side's best performer: most enemy value destroyed for its cost, if it earned its keep.
+  const best = s.units.reduce<SideSummary['units'][number] | null>((b, u) => ((worth(u) ?? 0) > (b ? worth(b) ?? 0 : 1) ? u : b), null);
   return (
     <section class="panel" style={{ padding: '12px' }}>
       <div class="spread">
@@ -125,6 +130,7 @@ function SideTable({ title, s, side }: { title: string; s: SideSummary; side: 0 
               <th class="r">Alive</th>
               <th class="r">Kills</th>
               <th class="r">Damage</th>
+              <th class="r" title="Enemy value destroyed, as a multiple of the unit's own cost">Worth</th>
               <th>State</th>
             </tr>
           </thead>
@@ -135,6 +141,11 @@ function SideTable({ title, s, side }: { title: string; s: SideSummary; side: 0 
                   <span class="row" style={{ gap: '6px', flexWrap: 'nowrap' }}>
                     <UnitIcon def={unitDef(u.def)} size={22} side={side} />
                     {u.name}
+                    {u === best && (
+                      <span class="mvp" title="Destroyed the most enemy value for its cost">
+                        ★
+                      </span>
+                    )}
                   </span>
                 </td>
                 <td class="r">
@@ -142,6 +153,7 @@ function SideTable({ title, s, side }: { title: string; s: SideSummary; side: 0 
                 </td>
                 <td class="r">{u.kills}</td>
                 <td class="r">{u.damageDealt.toLocaleString()}</td>
+                <td class="r num">{worth(u) === null ? '—' : `${worth(u)!.toFixed(1)}×`}</td>
                 <td class={`state-${u.state}`}>{STATE_LABEL[u.state] ?? u.state}</td>
               </tr>
             ))}

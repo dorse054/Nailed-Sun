@@ -325,3 +325,10 @@
   font-size: 13px;
   margin: 4px 16px 24px;
 }
+
+/* The side's best performer in the results. */
+.mvp {
+  color: var(--gold);
+  font-size: 13px;
+  text-shadow: 0 0 6px color-mix(in srgb, var(--gold) 60%, transparent);
+}
