@@ -5,7 +5,7 @@
  * (gated by light, wind, movement...), the Vesperate Hour during a Toll,
  * status effects, fatigue, then glare.
  */
-import type { Conditions, LightLevel, StatMods } from '../data/schema';
+import type { Conditions, LightLevel, PassiveDef, StatMods } from '../data/schema';
 import { ARTIFICIAL_GLARE, FATIGUE, GLARE_HALF_ANGLE_DEG, LIGHT_RULES } from '../data/rules';
 import { factionDef } from '../data/index';
 import { angleDiff, datan2, DEG } from '../core/dmath';
@@ -286,4 +286,13 @@ function computeGlare(b: Battle, u: Unit, px: number, py: number): void {
   s.glareAcc = acc;
   s.glareMa = ma;
   s.glareSource = source;
+}
+
+/** Faction traits and unit passives in effect on a unit right now, for the HUD. */
+export function activePassives(b: Battle, u: Unit): PassiveDef[] {
+  const light: LightLevel = u.stats.ignoreDarkness ? (Math.max(u.light, 2) as LightLevel) : u.light;
+  const out: PassiveDef[] = [];
+  for (const p of factionDef(u.faction).traits) if (conditionsHold(b, u, p.when, light)) out.push(p);
+  for (const p of u.def.passives ?? []) if (conditionsHold(b, u, p.when, light)) out.push(p);
+  return out;
 }

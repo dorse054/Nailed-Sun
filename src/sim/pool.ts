@@ -11,7 +11,12 @@ interface Job {
   setup: BattleSetup;
   resolve: (r: BattleResult) => void;
   reject: (e: Error) => void;
+  /** Fires if a worker never answers, so a campaign Toll can't hang on it. */
+  watchdog?: ReturnType<typeof setTimeout>;
 }
+
+/** A battle takes seconds in a worker; far longer means the worker is stuck. */
+const WORKER_TIMEOUT_MS = 90_000;
 
 type WorkerCtor = new () => Worker;
 
@@ -62,6 +67,7 @@ class SimPool {
       const w = this.idle.pop()!;
       const job = this.queue.shift()!;
       this.running.set(w, job);
+      job.watchdog = setTimeout(() => this.fail(w, 'timed out'), WORKER_TIMEOUT_MS);
       w.postMessage({ id: job.id, setup: job.setup });
     }
   }
@@ -71,6 +77,7 @@ class SimPool {
     this.running.delete(w);
     this.idle.push(w);
     if (job) {
+      clearTimeout(job.watchdog);
       if (msg.result) job.resolve(msg.result);
       else {
         // Retry on the main thread rather than lose the battle.
@@ -82,7 +89,9 @@ class SimPool {
 
   private fail(w: Worker, _why: string): void {
     const job = this.running.get(w);
+    if (job) clearTimeout(job.watchdog);
     this.running.delete(w);
+    this.idle = this.idle.filter((x) => x !== w);
     this.workers = this.workers.filter((x) => x !== w);
     w.terminate();
     if (!this.workers.length) this.broken = true;

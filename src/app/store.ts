@@ -2,6 +2,7 @@
  * App-level state: which screen is showing, and player settings.
  */
 import { signal } from '@preact/signals';
+import type { Controller } from '../sim/battle';
 import type { BattleResult, BattleSetup, Side, TimedCommand } from '../sim/types';
 
 export type BattleMode = 'custom' | 'campaign' | 'tutorial' | 'replay' | 'demo';
@@ -17,6 +18,8 @@ export interface BattleRequest {
   /** Called with the outcome; campaign and tutorials use it. */
   onDone?: (result: BattleResult, log: TimedCommand[], setup: BattleSetup) => void;
   tutorial?: string;
+  /** Who plays a side instead of the default (tutorials script their opponent). Undefined keeps the default. */
+  controller?: (side: Side) => Controller | null | undefined;
 }
 
 export type Screen =
@@ -37,9 +40,14 @@ export interface Settings {
   music: boolean;
   tips: boolean;
   edgeScroll: boolean;
+  /** Let Claude make the AI factions' judgment calls (published artifact only). */
+  claudeAI: boolean;
 }
 
-const DEFAULTS: Settings = { unitScale: 0.75, volume: 0.7, music: true, tips: true, edgeScroll: false };
+/** Phones start on small regiments: half the soldiers to draw, and they are tiny on a phone anyway. */
+const PHONE = typeof matchMedia === 'function' && matchMedia('(pointer: coarse) and (max-width: 900px)').matches;
+
+const DEFAULTS: Settings = { unitScale: PHONE ? 0.5 : 0.75, volume: 0.7, music: true, tips: true, edgeScroll: false, claudeAI: false };
 
 export const settings = signal<Settings>(load('nailedsun.settings', DEFAULTS));
 

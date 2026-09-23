@@ -82,10 +82,12 @@ export class BattleRenderer {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = voidColor(b.terrain.light);
     ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    // Big moments shake the view a little, less the further away they are.
+    const [sx, sy] = this.shakeOffset();
     // World transform: meters -> device pixels.
     const k = cam.zoom * dpr;
-    const tx = (cam.width / 2 - cam.x * cam.zoom) * dpr;
-    const ty = (cam.height / 2 - cam.y * cam.zoom) * dpr;
+    const tx = (cam.width / 2 - cam.x * cam.zoom + sx) * dpr;
+    const ty = (cam.height / 2 - cam.y * cam.zoom + sy) * dpr;
     ctx.setTransform(k, 0, 0, k, tx, ty);
     ctx.imageSmoothingEnabled = true;
     const S = this.art.scale;
@@ -127,11 +129,12 @@ export class BattleRenderer {
     this.drawWind(ctx, dt);
     if (ov.abilityPreview) this.drawAbilityPreview(ctx, ov.abilityPreview);
     this.drawPings(ctx, ov);
-    // Screen space.
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // Screen space: banners and texts shake with the world; the drag box stays under the pointer.
+    ctx.setTransform(dpr, 0, 0, dpr, sx * dpr, sy * dpr);
     this.drawSunGlow(ctx);
     this.drawBanners(ctx, ov, alpha);
     this.drawTexts(ctx, alpha);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     if (ov.dragBox) {
       const d = ov.dragBox;
       ctx.strokeStyle = 'rgba(255,230,160,0.9)';
@@ -141,6 +144,30 @@ export class BattleRenderer {
       ctx.strokeRect(Math.min(d.x0, d.x1), Math.min(d.y0, d.y1), Math.abs(d.x1 - d.x0), Math.abs(d.y1 - d.y0));
     }
     this.effects.update(dt);
+  }
+
+  private shake = 0;
+  private shakeClock = 0;
+  private readonly calm = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /** Screen offset for this frame, in CSS pixels. Decays in real time, so a pause never freezes it. */
+  private shakeOffset(): [number, number] {
+    const cam = this.camera;
+    for (const q of this.effects.shakes) {
+      const d = (Math.hypot(q.x - cam.x, q.y - cam.y) * cam.zoom) / Math.max(cam.width, cam.height);
+      this.shake = Math.max(this.shake, q.amp * Math.max(0, 1 - d));
+    }
+    this.effects.shakes.length = 0;
+    const now = performance.now() / 1000;
+    const dt = Math.min(0.1, Math.max(0, now - this.shakeClock));
+    this.shakeClock = now;
+    if (this.calm || this.shake < 0.05) {
+      this.shake = 0;
+      return [0, 0];
+    }
+    const out: [number, number] = [Math.sin(now * 83) * this.shake, Math.cos(now * 71) * this.shake];
+    this.shake *= Math.exp(-dt * 7);
+    return out;
   }
 
   private shouldDraw(u: Unit): boolean {
@@ -208,6 +235,7 @@ export class BattleRenderer {
         const y = s.py + (s.y - s.py) * alpha - (s.airborne ? alt * 0.3 : 0);
         ctx.fillRect(x - r, y - r, r * 2, r * 2);
       }
+      this.drawSignature(ctx, u, alpha, zoom);
       ctx.globalAlpha = 1;
       return;
     }
@@ -251,6 +279,44 @@ export class BattleRenderer {
     ctx.globalAlpha = 1;
   }
 
+  /**
+   * Light signatures seen from afar: the Choir flash and glint, the Hush
+   * show only glowing dots, the Vesperate carry amber lanterns, the Drift
+   * fly bright colors.
+   */
+  private drawSignature(ctx: CanvasRenderingContext2D, u: Unit, alpha: number, zoom: number): void {
+    const f = u.faction;
+    const t = this.time;
+    const every = f === 'choir' ? 6 : f === 'hush' ? 4 : f === 'vesperate' ? 9 : 5;
+    const size = 1.5 / zoom;
+    const prev = ctx.globalCompositeOperation;
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = u.id % every; i < u.soldiers.length; i += every) {
+      const s = u.soldiers[i]!;
+      if (!s.alive) continue;
+      const x = s.px + (s.x - s.px) * alpha;
+      const y = s.py + (s.y - s.py) * alpha - (s.airborne ? 3 : 0);
+      if (f === 'choir') {
+        const tw = Math.sin(t * 4.3 + s.id * 1.7);
+        if (tw < 0.55) continue;
+        ctx.fillStyle = `rgba(255,248,220,${(tw - 0.55) * 1.8})`;
+        ctx.fillRect(x - size, y - size * 0.25, size * 2, size * 0.5);
+        ctx.fillRect(x - size * 0.25, y - size, size * 0.5, size * 2);
+      } else if (f === 'hush') {
+        ctx.fillStyle = `rgba(79,240,224,${0.35 + 0.2 * Math.sin(t * 1.3 + s.id)})`;
+        ctx.fillRect(x - size * 0.5, y - size * 0.5, size, size);
+      } else if (f === 'vesperate') {
+        ctx.fillStyle = 'rgba(255,192,77,0.7)';
+        ctx.fillRect(x - size * 0.6, y - size * 0.6, size * 1.2, size * 1.2);
+      } else {
+        ctx.fillStyle = ['rgba(244,163,0,0.8)', 'rgba(31,163,163,0.8)', 'rgba(230,40,70,0.8)', 'rgba(255,210,74,0.8)'][s.id & 3]!;
+        const wave = Math.sin(t * 6 + s.id) * size * 0.4;
+        ctx.fillRect(x, y - size * 0.3 + wave, size * 2.2, size * 0.6);
+      }
+    }
+    ctx.globalCompositeOperation = prev;
+  }
+
   private drawColossusUnit(ctx: CanvasRenderingContext2D, u: Unit, alpha: number): void {
     const s = u.soldiers.find((x) => x.alive);
     if (!s) return;
@@ -260,10 +326,10 @@ export class BattleRenderer {
     ctx.globalAlpha = u.side !== this.viewer && !u.visible[this.viewer] ? 0.35 : 1;
     drawColossus(ctx, u, x, y - (flying ? 8 : 0), s.facing, this.time, flying ? 14 : 0);
     ctx.globalAlpha = 1;
-    // Health ring.
+    // Health ring, a constant thickness on screen at any zoom.
     const frac = s.hp / s.maxHp;
     ctx.strokeStyle = 'rgba(0,0,0,0.5)';
-    ctx.lineWidth = 1.2;
+    ctx.lineWidth = Math.max(0.25, 2.4 / this.camera.zoom);
     ctx.beginPath();
     ctx.arc(x, y, (u.def.radius ?? 8) + 5, -Math.PI / 2, Math.PI * 1.5);
     ctx.stroke();

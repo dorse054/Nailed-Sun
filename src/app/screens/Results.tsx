@@ -3,6 +3,13 @@ import { go } from '../store';
 import type { BattleResult, BattleSetup, SideSummary, TimedCommand } from '../../sim/types';
 import { factionDef, unitDef } from '../../data/index';
 import { UnitIcon } from '../../ui/UnitIcon';
+import { signal } from '@preact/signals';
+import { useEffect } from 'preact/hooks';
+import { saveFile } from '../claude';
+import { replayJson, replayName } from '../replayFile';
+
+/** What happened to the last "Save replay". */
+const saved = signal<string | null>(null);
 
 function fmt(t: number): string {
   return `${Math.floor(t / 60)}:${Math.floor(t % 60)
@@ -26,6 +33,10 @@ export function Results({ req, result, log, setup }: { req: BattleRequest; resul
   const mine = result.sides[me];
   const theirs = result.sides[(1 - me) as 0 | 1];
   const mvp = [...mine.units].sort((a, b) => b.kills - a.kills)[0];
+  // A new battle starts with no save notice.
+  useEffect(() => {
+    saved.value = null;
+  }, [result]);
   const replay = () =>
     go({
       name: 'battle',
@@ -58,6 +69,16 @@ export function Results({ req, result, log, setup }: { req: BattleRequest; resul
             <button class="btn primary" onClick={replay}>
               Watch the replay
             </button>
+            <button
+              class="btn"
+              onClick={async () => {
+                const r = await saveFile(replayName(setup), replayJson(setup, log, me));
+                saved.value = r === 'saved' ? 'Replay saved.' : r === 'declined' ? null : 'The replay could not be saved here.';
+              }}
+              title="A small file with the battle and your orders: share it in a bug report and it replays exactly."
+            >
+              Save replay
+            </button>
             <button class="btn" onClick={again}>
               Fight again
             </button>
@@ -73,6 +94,11 @@ export function Results({ req, result, log, setup }: { req: BattleRequest; resul
           <SideTable title="Your army" s={mine} side={me} />
           <SideTable title="The enemy" s={theirs} side={(1 - me) as 0 | 1} />
         </div>
+        {saved.value && (
+          <p class="muted" role="status" style={{ textAlign: 'center' }}>
+            {saved.value}
+          </p>
+        )}
         <p class="muted" style={{ textAlign: 'center', fontSize: '12.5px' }}>
           Every battle is a fixed 20-tick simulation with seeded randomness: the replay re-runs your {log.length} orders against the same seed and plays out exactly the same.
         </p>

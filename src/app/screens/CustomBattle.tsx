@@ -13,6 +13,7 @@ import { Rose, roseLines } from '../../ui/Rose';
 import { UnitIcon } from '../../ui/UnitIcon';
 import { audio } from '../../audio/audio';
 import { matchupNote } from '../../data/lore';
+import { parseReplay } from '../replayFile';
 
 type SunChoice = 'eyes' | 'back' | 'left' | 'right' | 'random';
 type Preset = NonNullable<MapSetup['preset']>;
@@ -30,6 +31,7 @@ interface Config {
   foe: FactionId;
   mine: string[];
   theirs: string[] | null;
+  kind: BattleKind;
 }
 
 const SUNS: { id: SunChoice; label: string; bearing: number }[] = [
@@ -50,6 +52,20 @@ const PRESETS: { id: Preset; label: string }[] = [
 
 const BUDGETS = [6000, 9000, 12000, 18000];
 
+type BattleKind = 'field' | 'assault' | 'defend';
+
+const KINDS: { id: BattleKind; label: string; note: string }[] = [
+  { id: 'field', label: 'Field battle', note: 'Open ground; rout the enemy.' },
+  { id: 'assault', label: 'Assault a town', note: 'The enemy holds walls. Climb, batter the gates, and hold the square for a minute.' },
+  { id: 'defend', label: 'Hold a town', note: 'You hold the walls and the square until time runs out.' },
+];
+
+/** Walls around the map's middle; side 0 is you. */
+function fortFor(kind: BattleKind): MapSetup['fort'] {
+  if (kind === 'field') return undefined;
+  return { defender: kind === 'assault' ? 1 : 0, radius: 170 };
+}
+
 function defaults(): Config {
   const seed = Math.floor(Math.random() * 1e6);
   const rng = new Rng(seed);
@@ -66,6 +82,7 @@ function defaults(): Config {
     foe: 'choir',
     mine: generateArmy('vesperate', ARMY.customBudget, rng).map((s) => s.def),
     theirs: null,
+    kind: 'field',
   };
 }
 
@@ -131,15 +148,20 @@ export function CustomBattle() {
       const rest = ids.filter((id) => unitDef(id).role !== 'lord');
       return [...l, ...rest].map((def) => ({ def }));
     };
+    const fort = fortFor(c.kind);
     const setup: BattleSetup = {
       seed: c.seed,
-      map: { seed: c.seed, band: c.band, wind: c.wind, sunBearing: bearing, steppe: c.steppe, preset: c.preset },
+      map: { seed: c.seed, band: c.band, wind: c.wind, sunBearing: bearing, steppe: c.steppe, preset: c.preset, fort },
       armies: [
         { faction: c.me, controller: 'player', units: specs(c.mine) },
         { faction: c.foe, controller: 'ai', units: specs(enemy) },
       ],
       unitScale: c.scale,
     };
+    if (fort) {
+      setup.attacker = fort.defender === 1 ? 0 : 1;
+      setup.timeLimit = 25 * 60;
+    }
     go({ name: 'battle', req: { setup, playerSide: 0, mode: 'custom' } });
   };
 
@@ -158,7 +180,7 @@ export function CustomBattle() {
         <section class="panel setup-col">
           <h2>The field</h2>
           <div class="field-top">
-            <MapPreview band={c.band} steppe={c.steppe} wind={c.wind} bearing={bearing} preset={c.preset} seed={c.seed} />
+            <MapPreview band={c.band} steppe={c.steppe} wind={c.wind} bearing={bearing} preset={c.preset} seed={c.seed} kind={c.kind ?? 'field'} />
             <div class="field-rose">
               <Rose sunBearing={bearing} light={light} wind={c.wind} facing={-Math.PI / 2} size={96} />
               <div class="rose-text" style={{ display: 'grid' }}>
@@ -169,6 +191,15 @@ export function CustomBattle() {
               </div>
             </div>
           </div>
+          <div class="label">battle</div>
+          <div class="seg" role="radiogroup" aria-label="Battle type">
+            {KINDS.map((k) => (
+              <button key={k.id} role="radio" aria-checked={(c.kind ?? 'field') === k.id} class={`btn small ${(c.kind ?? 'field') === k.id ? 'on' : ''}`} onClick={() => set({ kind: k.id })} title={k.note}>
+                {k.label}
+              </button>
+            ))}
+          </div>
+          <span class="muted small">{KINDS.find((k) => k.id === (c.kind ?? 'field'))!.note}</span>
           <div class="label">light band</div>
           <div class="seg">
             {BAND_IDS.map((b) => (
@@ -293,7 +324,36 @@ export function CustomBattle() {
           <span class="muted num">{cost(enemy).toLocaleString()} points</span>
         </section>
       </div>
+      <ReplayOpener />
     </div>
+  );
+}
+
+/** Open a saved replay file: it plays back exactly, for bug reports and balance reviews. */
+function ReplayOpener() {
+  const [note, setNote] = useState<string | null>(null);
+  const input = useRef<HTMLInputElement>(null);
+  const open = async (f: File | undefined) => {
+    if (!f) return;
+    const r = parseReplay(await f.text());
+    if ('error' in r) {
+      setNote(r.error);
+      return;
+    }
+    const { file, sameBuild } = r;
+    const start = () => go({ name: 'battle', req: { setup: file.setup, playerSide: file.playerSide, mode: 'replay', skipDeploy: true, replay: file.log, title: 'Replay' } });
+    if (sameBuild) start();
+    else setNote('This replay was saved by another version of the game, so it may play out differently. Opening it anyway…'), setTimeout(start, 1800);
+  };
+  return (
+    <p class="replay-open muted">
+      Have a replay file?{' '}
+      <button class="btn small ghost" onClick={() => input.current?.click()}>
+        Open replay
+      </button>
+      <input ref={input} type="file" accept=".json,application/json" hidden onChange={(e) => void open((e.target as HTMLInputElement).files?.[0])} />
+      {note && <span role="status"> {note}</span>}
+    </p>
   );
 }
 
@@ -332,11 +392,11 @@ function ArmyRow({ def, onRemove, note, side = 0 }: { def: UnitDef; onRemove?: (
 }
 
 /** A small baked preview of the actual map, shadows and all. */
-function MapPreview({ band, steppe, wind, bearing, preset, seed }: { band: BandId; steppe: boolean; wind: WindLevel; bearing: number; preset: Preset; seed: number }) {
+function MapPreview({ band, steppe, wind, bearing, preset, seed, kind }: { band: BandId; steppe: boolean; wind: WindLevel; bearing: number; preset: Preset; seed: number; kind: BattleKind }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const id = setTimeout(() => {
-      const t = new Terrain({ seed, band, wind, sunBearing: bearing, steppe, preset });
+      const t = new Terrain({ seed, band, wind, sunBearing: bearing, steppe, preset, fort: fortFor(kind) });
       const art = bakeTerrain(t, 0.3);
       const c = ref.current;
       if (!c) return;
@@ -354,6 +414,6 @@ function MapPreview({ band, steppe, wind, bearing, preset, seed }: { band: BandI
       }
     }, 60);
     return () => clearTimeout(id);
-  }, [band, steppe, wind, bearing, preset, seed]);
+  }, [band, steppe, wind, bearing, preset, seed, kind]);
   return <canvas ref={ref} class="map-preview" aria-label="Map preview: your deployment zone is blue, the enemy's red" />;
 }

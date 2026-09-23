@@ -1,8 +1,11 @@
-import { useEffect, useRef } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
+import { SettingsPanel } from './Settings';
 import { go } from '../store';
 import { TAGLINE } from '../../data/lore';
 import { audio } from '../../audio/audio';
 import { quickBattle, demoBattle } from '../quick';
+import { completedTutorials } from '../tutorial/progress';
+import { savedCampaign } from '../campaign/session';
 
 /**
  * The stopped sun: a horizon of eternal sunset with long, still shadows.
@@ -20,7 +23,14 @@ function Backdrop() {
       w: 0.006 + (Math.sin(i * 3.1) * 0.5 + 0.5) * 0.012,
     }));
     const start = performance.now();
+    let last = -1e9;
     const draw = (now: number) => {
+      // Slow twinkles and haze: 30 fps looks the same and costs half.
+      if (now - last < 30) {
+        raf = requestAnimationFrame(draw);
+        return;
+      }
+      last = now;
       const dpr = Math.min(2, window.devicePixelRatio || 1);
       const W = c.clientWidth;
       const H = c.clientHeight;
@@ -129,6 +139,9 @@ function Backdrop() {
 }
 
 export function MainMenu() {
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  // New players (no tutorial finished, no campaign begun) are pointed at the tutorials.
+  const fresh = completedTutorials().size === 0 && !savedCampaign();
   const click = (f: () => void) => () => {
     audio.unlock();
     audio.ui('click');
@@ -153,25 +166,32 @@ export function MainMenu() {
             <b>Quick Battle</b>
             <span>A random fight, right now</span>
           </button>
-          <button class="menu-item" onClick={click(() => go({ name: 'tutorials' }))}>
+          <button class={`menu-item ${fresh ? 'fresh' : ''}`} onClick={click(() => go({ name: 'tutorials' }))}>
             <b>Tutorials</b>
-            <span>One core idea per faction</span>
+            <span>{fresh ? 'New here? Start here' : 'One core idea per faction'}</span>
           </button>
           <button class="menu-item" onClick={click(() => go({ name: 'codex' }))}>
             <b>Codex</b>
-            <span>The world and every unit</span>
+            <span>How to play, the world and every unit</span>
           </button>
-          <button class="menu-item" onClick={click(() => go({ name: 'lab' }))}>
-            <b>Balance Lab</b>
-            <span>Run the balance simulator</span>
-          </button>
+          {import.meta.env.VITE_LAB !== 'off' && (
+            <button class="menu-item" onClick={click(() => go({ name: 'lab' }))}>
+              <b>Balance Lab</b>
+              <span>Run the balance simulator</span>
+            </button>
+          )}
           <button class="menu-item" onClick={click(() => demoBattle())}>
             <b>Watch a Battle</b>
             <span>Two scripted generals</span>
           </button>
+          <button class="menu-item" onClick={click(() => setSettingsOpen(true))}>
+            <b>Settings</b>
+            <span>Sound, unit size and AI</span>
+          </button>
         </div>
       </div>
-      <div class="menu-foot">A Total War-style strategy prototype. Deterministic 20-tick battles; every battle can be replayed exactly.</div>
+      <div class="menu-foot">A strategy prototype: a turn-based campaign and real-time battles under a sun that never moves. Every battle can be replayed exactly.</div>
+      {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
     </div>
   );
 }

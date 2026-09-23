@@ -68,10 +68,18 @@ export class CampaignMap {
     this.y = MAP_H / 2;
   }
 
+  /**
+   * Screen pixels hidden under the top bar and the bottom controls. The map
+   * may scroll that far past its edges, so nothing is stuck beneath them.
+   */
+  insetTop = 0;
+  insetBottom = 0;
+
+  /** Center a map point in the part of the screen the overlays leave clear. */
   centerOn(x: number, y: number, zoom?: number): void {
-    this.x = x;
-    this.y = y;
     if (zoom) this.zoom = zoom;
+    this.x = x;
+    this.y = y - (this.insetTop - this.insetBottom) / 2 / this.zoom;
     this.clamp();
   }
 
@@ -80,8 +88,10 @@ export class CampaignMap {
     this.zoom = Math.max(minZ, Math.min(Math.max(minZ * 5, 2), this.zoom));
     const hw = this.W / 2 / this.zoom;
     const hh = this.H / 2 / this.zoom;
+    const top = this.insetTop / this.zoom;
+    const bottom = this.insetBottom / this.zoom;
     this.x = hw * 2 >= MAP_W ? MAP_W / 2 : Math.max(hw, Math.min(MAP_W - hw, this.x));
-    this.y = hh * 2 >= MAP_H ? MAP_H / 2 : Math.max(hh, Math.min(MAP_H - hh, this.y));
+    this.y = hh * 2 - top - bottom >= MAP_H ? MAP_H / 2 + (bottom - top) / 2 : Math.max(hh - top, Math.min(MAP_H - hh + bottom, this.y));
   }
 
   toMap(sx: number, sy: number): P {
@@ -92,9 +102,36 @@ export class CampaignMap {
     return [(x - this.x) * this.zoom + this.W / 2, (y - this.y) * this.zoom + this.H / 2];
   }
 
+  /**
+   * Banners glide to their new spots instead of jumping, so marches read
+   * as movement. `dt` is seconds since the last frame (0 snaps).
+   */
+  private glide(s: CampaignState, dt: number): void {
+    this.layoutArmies(s, this.targets);
+    for (const id of [...this.positions.keys()]) if (!this.targets.has(id)) this.positions.delete(id);
+    const k = dt <= 0 ? 1 : Math.min(1, dt * 5);
+    let far = 0;
+    for (const [id, t] of this.targets) {
+      const p = this.positions.get(id);
+      if (!p) this.positions.set(id, [t[0], t[1]]);
+      else {
+        far = Math.max(far, Math.abs(t[0] - p[0]), Math.abs(t[1] - p[1]));
+        p[0] += (t[0] - p[0]) * k;
+        p[1] += (t[1] - p[1]) * k;
+      }
+    }
+    this.moving = far > 0.3;
+  }
+
+  /** Banners still gliding to their spots: keep drawing at full rate. */
+  moving = false;
+
+  private targets = new Map<string, P>();
+  private lastT = -1;
+
   /** Banner spots: armies stand beside their region's settlement. */
-  layoutArmies(s: CampaignState): void {
-    this.positions.clear();
+  layoutArmies(s: CampaignState, into: Map<string, P> = this.positions): void {
+    into.clear();
     const by = new Map<string, ArmyState[]>();
     for (const a of s.armies) {
       const l = by.get(a.region) ?? [];
@@ -110,7 +147,7 @@ export class CampaignMap {
       list.forEach((a, i) => {
         const ang = -0.6 + i * 0.9;
         const d = i === 0 ? 0 : 26;
-        this.positions.set(a.id, [bx + Math.cos(ang) * d, byy + Math.sin(ang) * d]);
+        into.set(a.id, [bx + Math.cos(ang) * d, byy + Math.sin(ang) * d]);
       });
     }
   }
@@ -144,7 +181,8 @@ export class CampaignMap {
       this.base = bakeBase(s);
       this.baseKey = key;
     }
-    this.layoutArmies(s);
+    this.glide(s, this.lastT < 0 ? 0 : Math.min(0.1, t - this.lastT));
+    this.lastT = t;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.fillStyle = '#07060d';
     ctx.fillRect(0, 0, this.W, this.H);

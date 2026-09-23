@@ -10,6 +10,9 @@ import { ArmyPanel } from './ArmyPanel';
 import { Prompts } from './Prompts';
 import { FactionPanel } from './FactionPanel';
 import { audio } from '../../audio/audio';
+import { factionDef } from '../../data/index';
+import { BANDS } from '../../data/rules';
+import { regionBand } from '../../campaign/rules';
 
 /**
  * The campaign map: pan by dragging, zoom with the wheel or a pinch, click
@@ -17,6 +20,7 @@ import { audio } from '../../audio/audio';
  */
 export function CampaignScreen({ session }: { session: CampaignSession }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  const tipRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<CampaignMap | null>(null);
   const v = session.version.value;
   void v;
@@ -30,6 +34,12 @@ export function CampaignScreen({ session }: { session: CampaignSession }) {
     const size = () => {
       const r = c.getBoundingClientRect();
       map.resize(r.width, r.height, Math.min(2, window.devicePixelRatio || 1));
+      // Let the map scroll clear of the top bar and the End Toll button.
+      const top = document.querySelector('.camp-top')?.getBoundingClientRect();
+      const end = document.querySelector('.camp-end')?.getBoundingClientRect();
+      map.insetTop = top ? Math.max(0, top.bottom - r.top) : 0;
+      // On wide screens End Toll only covers a corner: no need to scroll past the map's edge for it.
+      map.insetBottom = end && r.width < 720 ? Math.max(0, r.bottom - end.top) : 0;
     };
     size();
     map.fit();
@@ -65,6 +75,10 @@ export function CampaignScreen({ session }: { session: CampaignSession }) {
     };
     let cachedView: MapView | null = null;
     let viewVersion = -1;
+    // An unchanging map redraws at about 10 fps instead of 60, to spare phone batteries.
+    let lastChange = 0;
+    let lastDraw = 0;
+    let lastKey = '';
     const frame = (now: number) => {
       if (viewVersion !== session.version.value || !cachedView) {
         cachedView = view();
@@ -73,7 +87,15 @@ export function CampaignScreen({ session }: { session: CampaignSession }) {
       cachedView.hover = session.hover;
       cachedView.hoverArmy = session.hoverArmy;
       cachedView.path = session.path;
-      map.render(session.s, cachedView, now / 1000);
+      const key = `${map.x.toFixed(1)},${map.y.toFixed(1)},${map.zoom.toFixed(4)},${map.W},${map.H},${viewVersion},${session.hover},${session.hoverArmy},${session.path?.join() ?? ''}`;
+      if (key !== lastKey) {
+        lastKey = key;
+        lastChange = now;
+      }
+      if (map.moving || now - lastChange < 2000 || now - lastDraw > 100) {
+        lastDraw = now;
+        map.render(session.s, cachedView, now / 1000);
+      }
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
@@ -120,12 +142,23 @@ export function CampaignScreen({ session }: { session: CampaignSession }) {
         }
         return;
       }
+      if (e.target !== c) {
+        // Over a panel or button: no hover, tooltip or march preview for the map beneath it.
+        if (session.hover) {
+          session.hover = null;
+          session.previewPath(null);
+        }
+        session.hoverArmy = null;
+        if (tipRef.current) tipRef.current.hidden = true;
+        return;
+      }
       const hit = map.pick(session.s, cachedView ?? view(), p.x, p.y);
       if (hit.region !== session.hover) {
         session.hover = hit.region;
         session.previewPath(hit.region);
       }
       session.hoverArmy = hit.army;
+      showTip(tipRef.current, session, hit, p.x, p.y);
       c.style.cursor = hit.army ? 'pointer' : session.selArmy.value && hit.region ? 'crosshair' : 'default';
     };
     const up = (e: PointerEvent) => {
@@ -222,6 +255,7 @@ export function CampaignScreen({ session }: { session: CampaignSession }) {
   return (
     <div class="screen campaign">
       <canvas ref={ref} class="campaign-map" aria-label="Campaign map" />
+      <div ref={tipRef} class="camp-tip panel" aria-hidden="true" hidden />
       <TopBar session={session} />
       {(selArmy || selRegion) && (
         <aside class="camp-side panel scroll">
@@ -258,4 +292,42 @@ function cycleArmy(session: CampaignSession, map: CampaignMap): void {
   session.selectArmy(next.id);
   const r = regionDef(next.region);
   map.centerOn(r.x, r.y);
+}
+
+/** A light tooltip under the pointer: the region, its owner and light, or an army. */
+function showTip(el: HTMLDivElement | null, session: CampaignSession, hit: { army: string | null; region: string | null }, x: number, y: number): void {
+  if (!el) return;
+  const s = session.s;
+  if (session.prompt.value || (!hit.region && !hit.army) || window.matchMedia('(pointer: coarse)').matches) {
+    el.hidden = true;
+    return;
+  }
+  let title = '';
+  let sub = '';
+  if (hit.army) {
+    const a = armyById(s, hit.army);
+    if (!a) {
+      el.hidden = true;
+      return;
+    }
+    title = a.name;
+    sub = `${factionDef(a.faction).short} · ${a.lord.name} · ${a.units.length} units`;
+  } else if (hit.region) {
+    const def = regionDef(hit.region);
+    const st = s.regions[hit.region]!;
+    const owner = st.owner === 'free' ? (def.settlement ? 'Free' : 'Unclaimed') : factionDef(st.owner).short;
+    title = def.settlement ? `${def.settlement} · ${def.name}` : def.name;
+    sub = `${owner} · ${BANDS[regionBand(s, hit.region)].name.replace('The ', '')}${def.galeRoad ? ' · Gale Road' : ''}`;
+    const reach = session.reach();
+    if (reach && reach[hit.region] !== undefined && session.selArmy.value) sub += ' · in reach';
+  }
+  el.innerHTML = '';
+  const b = document.createElement('b');
+  b.textContent = title;
+  const small = document.createElement('small');
+  small.textContent = sub;
+  el.append(b, small);
+  el.style.left = `${x + 16}px`;
+  el.style.top = `${y + 14}px`;
+  el.hidden = false;
 }

@@ -473,7 +473,7 @@ function driftSettlement(s: CampaignState, region: string, choice: 'sack' | 'moo
     r.garrisonLoss = 0.5;
     d.coin += 150;
     d.res += 15;
-    log(s, 'capture', `The Drift free ${place} and tie a mooring to its walls.`, undefined, region);
+    log(s, 'capture', prev === 'free' ? `The Drift tie a mooring to the walls of ${place}.` : `The Drift free ${place} from ${factionDef(prev).name} and tie a mooring to its walls.`, undefined, region);
   }
 }
 

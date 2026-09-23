@@ -29,17 +29,18 @@ function cultureOf(id: string): FactionId {
   return 'choir';
 }
 
+// Every settlement starts with open plots, so the first Tolls hold real choices.
 const START_BUILDINGS: Record<string, [string, number][]> = {
-  aumsgate: [['choir.barracks', 1], ['choir.range', 1], ['choir.market', 1], ['choir.shrine', 1], ['choir.walls', 1]],
-  glassFurnace: [['choir.glassworks', 1], ['choir.farm', 1]],
-  oasis: [['choir.farm', 1], ['choir.tower', 1]],
-  pole: [['hush.barracks', 1], ['hush.range', 1], ['hush.stables', 1], ['hush.shrine', 1], ['hush.walls', 1]],
-  rimeCoast: [['hush.carvers', 1], ['hush.lodge', 1]],
-  glowgardens: [['hush.glowgarden', 1], ['hush.lodge', 1]],
-  vesper: [['vesperate.barracks', 1], ['vesperate.range', 1], ['vesperate.market', 1], ['vesperate.belltower', 1], ['vesperate.walls', 1]],
-  amberfields: [['vesperate.farm', 1], ['vesperate.stables', 1]],
-  canalReach: [['vesperate.canal', 1], ['vesperate.farm', 1]],
-  bellmarch: [['vesperate.belltower', 1], ['vesperate.walls', 1]],
+  aumsgate: [['choir.barracks', 1], ['choir.range', 1], ['choir.walls', 1]],
+  glassFurnace: [['choir.glassworks', 1]],
+  oasis: [['choir.farm', 1]],
+  pole: [['hush.barracks', 1], ['hush.range', 1], ['hush.walls', 1]],
+  rimeCoast: [['hush.carvers', 1]],
+  glowgardens: [['hush.glowgarden', 1]],
+  vesper: [['vesperate.barracks', 1], ['vesperate.range', 1], ['vesperate.walls', 1]],
+  amberfields: [['vesperate.farm', 1]],
+  canalReach: [['vesperate.canal', 1]],
+  bellmarch: [['vesperate.belltower', 1]],
   candleAum: [],
   candleVigil: [],
   candleEmber: [],

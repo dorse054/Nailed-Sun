@@ -15,6 +15,12 @@ export function scale(a: RGB, k: number): RGB {
   return [a[0] * k, a[1] * k, a[2] * k];
 }
 
+/** '#rrggbb', for palettes that other code parses back with hex(). */
+export function hexOf(c: RGB): string {
+  const h = (v: number) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0');
+  return `#${h(c[0])}${h(c[1])}${h(c[2])}`;
+}
+
 export function css(c: RGB, alpha = 1): string {
   const r = Math.max(0, Math.min(255, Math.round(c[0])));
   const g = Math.max(0, Math.min(255, Math.round(c[1])));

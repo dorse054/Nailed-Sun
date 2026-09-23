@@ -59,6 +59,8 @@ export class Effects {
   texts: FloatText[] = [];
   /** Deaths to stamp into the ground decal layer. */
   corpses: { x: number; y: number; big: boolean; unit: number }[] = [];
+  /** Screen shakes asked for by big moments; the renderer scales them by distance. */
+  shakes: { x: number; y: number; amp: number }[] = [];
   private seed = 1;
 
   private rand(): number {
@@ -86,6 +88,7 @@ export class Effects {
         case 'impact':
           if (e.kind === 'stone') {
             this.burst('dust', e.x, e.y, 10, 9, 1.1, 2.2, '#8a7a60');
+            if (e.splash > 6) this.shakes.push({ x: e.x, y: e.y, amp: 1.2 });
             this.rings.push({ x: e.x, y: e.y, r: e.splash, life: 0.4, max: 0.4, color: 'rgba(200,180,140,0.7)', width: 1 });
           } else if (e.kind === 'firebomb' || e.kind === 'glassPot' || e.kind === 'kite') {
             this.burst('flame', e.x, e.y, 14, 7, 0.8, 2.4, e.kind === 'glassPot' ? '#ffb040' : '#ff7a20');
@@ -114,6 +117,7 @@ export class Effects {
         case 'death':
           this.corpses.push({ x: e.x, y: e.y, big: e.big, unit: e.unit });
           if (e.big) {
+            this.shakes.push({ x: e.x, y: e.y, amp: 3 });
             this.burst('dust', e.x, e.y, 30, 10, 2, 4, '#8a7a60');
             this.burst('glass', e.x, e.y, 16, 12, 1.4, 0.8, '#f4efe0');
           }
@@ -123,6 +127,7 @@ export class Effects {
           this.rings.push({ x: e.x, y: e.y, r: 10 + e.power * 0.15, life: 0.5, max: 0.5, color: 'rgba(255,240,200,0.55)', width: 0.8 });
           break;
         case 'toll':
+          if (e.big) this.shakes.push({ x: e.x, y: e.y, amp: 6 });
           for (let k = 0; k < (e.big ? 3 : 2); k++) {
             this.rings.push({ x: e.x, y: e.y, r: (e.big ? 260 : 150) * (1 - k * 0.25), life: 1.6 + k * 0.3, max: 1.6 + k * 0.3, color: 'rgba(255,205,110,0.75)', width: e.big ? 3 : 2 });
           }
@@ -158,6 +163,8 @@ export class Effects {
                     : 'rgba(170,150,120,0.7)';
           this.rings.push({ x: e.x, y: e.y, r: e.r, life: e.kind === 'flash' ? 0.7 : 1.1, max: e.kind === 'flash' ? 0.7 : 1.1, color: col, width: e.kind === 'bell' ? 4 : 2, fill: e.kind === 'flash' ? 'rgba(255,255,235,0.5)' : undefined });
           if (e.kind === 'dust' || e.kind === 'ram') this.burst('dust', e.x, e.y, 24, 12, 1.6, 3.5, '#8a7a60');
+          if (e.kind === 'bell' || e.kind === 'ram') this.shakes.push({ x: e.x, y: e.y, amp: e.kind === 'bell' ? 7 : 5 });
+          else if (e.kind === 'knell' || e.kind === 'dust') this.shakes.push({ x: e.x, y: e.y, amp: 2 });
           break;
         }
         case 'beam':

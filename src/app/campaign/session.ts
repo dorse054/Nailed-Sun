@@ -7,6 +7,7 @@ import { signal } from '@preact/signals';
 import type { FactionId } from '../../data/schema';
 import type { BattleResult } from '../../sim/types';
 import type { BattleReport, CampaignState, PendingBattle } from '../../campaign/types';
+import type { Deal, DealValue } from '../../campaign/diplomacy';
 import { newCampaign } from '../../campaign/setup';
 import { endTurn, resolveBattles, type PlayerBattleOutcome, type TurnHooks } from '../../campaign/controller';
 import { scriptedAI } from '../../campaign/ai';
@@ -28,7 +29,11 @@ export type Prompt =
   | { kind: 'settlement'; army: string; region: string }
   | { kind: 'summary'; turn: number }
   | { kind: 'reports'; reports: BattleReport[] }
+  | { kind: 'offer'; deal: Offer; value: DealValue; resolve: (yes: boolean) => void }
   | { kind: 'end' };
+
+/** A deal an AI faction puts to the player; `demand` means the player would pay. */
+export type Offer = Deal & { demand?: boolean };
 
 export type Panel = 'none' | 'faction' | 'diplomacy' | 'log' | 'victory' | 'help';
 
@@ -146,6 +151,21 @@ export class CampaignSession {
     if (!a) return;
     const pb = makeBattle(this.s, a, a.from ?? a.region, a.region);
     await this.fightThrough([pb], true);
+  }
+
+  /** An AI faction puts a deal to the player: resolves true if they accept. */
+  askOffer(deal: Offer, value: DealValue): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
+      this.prompt.value = {
+        kind: 'offer',
+        deal,
+        value,
+        resolve: (yes) => {
+          this.prompt.value = null;
+          resolve(yes);
+        },
+      };
+    });
   }
 
   private hooks(attacking: boolean): TurnHooks {
@@ -271,6 +291,33 @@ export function resumeCampaign(s: CampaignState): CampaignSession {
   active = new CampaignSession(s);
   expose();
   return active;
+}
+
+/** The saved campaign as a file, to keep or to carry to another device. */
+export function campaignFile(): { name: string; json: string } | null {
+  const s = active?.s ?? savedCampaign();
+  if (!s) return null;
+  return { name: `nailed-sun-${s.player}-toll-${s.turn}.json`, json: JSON.stringify({ kind: 'nailed-sun-campaign', version: 1, state: s }) };
+}
+
+/** Read a campaign file: the state if it is one, or what is wrong with it. */
+export function readCampaignFile(text: string): { state: CampaignState } | { error: string } {
+  let j: { kind?: string; state?: CampaignState };
+  try {
+    j = JSON.parse(text) as typeof j;
+  } catch {
+    return { error: 'That file is not a campaign save.' };
+  }
+  const s = j?.kind === 'nailed-sun-campaign' ? j.state : undefined;
+  if (!s || s.version !== 1 || !s.factions || !s.regions || !s.player) return { error: 'That file is not a Nailed Sun campaign save.' };
+  return { state: s };
+}
+
+/** Make a campaign from a file the saved campaign. False if this browser would not store it. */
+export function importCampaign(s: CampaignState): boolean {
+  if (!save(SAVE_KEY, s)) return false;
+  active = null;
+  return true;
 }
 
 export function abandonCampaign(): void {

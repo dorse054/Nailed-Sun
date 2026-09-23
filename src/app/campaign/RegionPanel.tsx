@@ -52,7 +52,7 @@ export function RegionPanel({ session, region, focus }: { session: CampaignSessi
       <header class="rp-head">
         <div>
           <h2>{def.settlement || def.name}</h2>
-          {def.settlement && <div class="muted">{def.name}</div>}
+          {def.settlement && def.settlement !== def.name && <div class="muted">{def.name}</div>}
         </div>
         <button class="btn ghost small" onClick={() => session.selectRegion(null)} aria-label="Close">
           ✕

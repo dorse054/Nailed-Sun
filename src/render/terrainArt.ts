@@ -5,7 +5,7 @@
 import type { BandId } from '../data/schema';
 import { LIGHT_RULES } from '../data/rules';
 import { COVER, type Terrain } from '../sim/terrain';
-import { css, fbm, hash2, hex, mix, type RGB, vnoise } from './color';
+import { css, fbm, hash2, hex, hexOf, mix, type RGB, vnoise } from './color';
 
 interface BandArt {
   ground: string;
@@ -143,7 +143,8 @@ export function artFor(t: Terrain): BandArt {
     const base = BAND_ART.steppe;
     const band = BAND_ART[t.band];
     const k = t.band === 'evernight' ? 0.7 : t.band === 'dimmark' ? 0.5 : t.band === 'glare' ? 0.35 : 0.15;
-    const m = (a: string, b: string) => css(mix(hex(a), hex(b), k));
+    // Hex, not rgb(): the baker parses these colors back with hex().
+    const m = (a: string, b: string) => hexOf(mix(hex(a), hex(b), k));
     return { ...base, ground: m(base.ground, band.ground), ground2: m(base.ground2, band.ground2), high: m(base.high, band.high), low: m(base.low, band.low), shadow: band.shadow, ambient: band.ambient };
   }
   return BAND_ART[t.band];
@@ -300,6 +301,45 @@ function paintGround(t: Terrain, ctx: CanvasRenderingContext2D, W: number, H: nu
     return (arr[i]! * (1 - tx) + arr[i + 1]! * tx) * (1 - ty) + (arr[i + cols]! * (1 - tx) + arr[i + cols + 1]! * tx) * ty;
   };
   const shadowSoft = softShadows(t);
+  // Cover masks sampled bilinearly, so water, forest, field and cliff edges run
+  // smooth and irregular instead of following the square gameplay cells.
+  const n = cols * rows;
+  const wetM = new Float32Array(n);
+  const deepM = new Float32Array(n);
+  const forestM = new Float32Array(n);
+  const fieldM = new Float32Array(n);
+  const cliffM = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const cv = t.cover[i]!;
+    if (cv === COVER.Shallow || cv === COVER.Deep) wetM[i] = 1;
+    if (cv === COVER.Deep) deepM[i] = 1;
+    if (cv === COVER.Forest) forestM[i] = 1;
+    if (cv === COVER.Field) fieldM[i] = 1;
+    if (cv === COVER.Cliff) cliffM[i] = 1;
+  }
+  // Cells whose 2x2 sampling neighborhood is all open ground skip the masks.
+  const plain = new Uint8Array(n);
+  for (let cy = 0; cy < rows; cy++) {
+    for (let cx = 0; cx < cols; cx++) {
+      let any = false;
+      for (let oy = -1; oy <= 1 && !any; oy++) {
+        for (let ox = -1; ox <= 1; ox++) {
+          const xx = Math.max(0, Math.min(cols - 1, cx + ox));
+          const yy = Math.max(0, Math.min(rows - 1, cy + oy));
+          const cv = t.cover[yy * cols + xx]!;
+          if (cv === COVER.Shallow || cv === COVER.Deep || cv === COVER.Forest || cv === COVER.Field || cv === COVER.Cliff) {
+            any = true;
+            break;
+          }
+        }
+      }
+      plain[cy * cols + cx] = any ? 0 : 1;
+    }
+  }
+  const edge = (v: number, jitter: number): number => {
+    const x = Math.max(0, Math.min(1, (v + jitter - 0.3) / 0.4));
+    return x * x * (3 - 2 * x);
+  };
   const noiseScale = 0.045;
   for (let py = 0; py < H; py++) {
     const wy = py / S;
@@ -308,20 +348,30 @@ function paintGround(t: Terrain, ctx: CanvasRenderingContext2D, W: number, H: nu
       const wx = px / S;
       const fx = wx / cell - 0.5;
       const ci = Math.min(rows - 1, Math.floor(wy / cell)) * cols + Math.min(cols - 1, Math.floor(wx / cell));
-      const cov = t.cover[ci]!;
       const h = t.heights[ci]!;
       const n = fbm(wx * noiseScale, wy * noiseScale, 3);
       const grain = hash2(px, py) * 0.06 - 0.03;
       let c: RGB = mix(g1, g2, n);
       const hn = (h - hmin) / hr;
       c = hn > 0.55 ? mix(c, hi, (hn - 0.55) * 1.2) : mix(c, lo, (0.55 - hn) * 0.6);
-      if (cov === COVER.Shallow) c = mix(shallow, c, 0.15);
-      else if (cov === COVER.Deep) c = water;
-      else if (cov === COVER.Cliff) c = mix(rock, hi, 0.3);
-      else if (cov === COVER.Forest) c = mix(c, lo, 0.35);
-      else if (cov === COVER.Field) c = mix(c, fieldC, 0.55);
+      let wet = 0;
+      if (!plain[ci]) {
+        const j = (n - 0.5) * 0.35;
+        const fo = edge(soft(forestM, fx, fy), j);
+        if (fo > 0) c = mix(c, lo, 0.35 * fo);
+        const fi = edge(soft(fieldM, fx, fy), j);
+        if (fi > 0) c = mix(c, fieldC, 0.55 * fi);
+        const cl = edge(soft(cliffM, fx, fy), j);
+        if (cl > 0) c = mix(c, mix(rock, hi, 0.3), cl);
+        wet = edge(soft(wetM, fx, fy), j * 0.6);
+        if (wet > 0) {
+          c = mix(c, mix(shallow, c, 0.15), wet);
+          const dp = edge(soft(deepM, fx, fy), j * 0.6);
+          if (dp > 0) c = mix(c, water, dp);
+        }
+      }
       let shade = soft(shadeArr, fx, fy);
-      if (cov === COVER.Deep || cov === COVER.Shallow) shade = 1 + (shade - 1) * 0.3;
+      if (wet > 0) shade = 1 + (shade - 1) * (1 - 0.7 * wet);
       const k = art.ambient + (1 - art.ambient) * shade + grain;
       let r = c[0] * k;
       let g = c[1] * k;
@@ -358,6 +408,46 @@ function paintGround(t: Terrain, ctx: CanvasRenderingContext2D, W: number, H: nu
 }
 
 function paintRivers(t: Terrain, ctx: CanvasRenderingContext2D, art: BandArt): void {
+  // The water itself, as smooth strokes along the river's course: the cells
+  // underneath only know water or not, which reads as a staircase at 4 m.
+  if (t.rivers.length) {
+    const S = ctx.getTransform().a;
+    const layer = makeCanvas(ctx.canvas.width, ctx.canvas.height);
+    const l = layer.getContext('2d')!;
+    l.scale(S, S);
+    l.lineCap = 'round';
+    l.lineJoin = 'round';
+    const course = (r: Terrain['rivers'][number]) => {
+      l.beginPath();
+      r.pts.forEach((p, i) => (i ? l.lineTo(p.x, p.y) : l.moveTo(p.x, p.y)));
+    };
+    for (const r of t.rivers) {
+      course(r);
+      l.strokeStyle = css(mix(hex(art.shallow), hex(art.low), 0.5), 0.45);
+      l.lineWidth = r.width + 5;
+      l.stroke();
+      l.strokeStyle = art.shallow;
+      l.lineWidth = r.width;
+      l.stroke();
+      l.strokeStyle = art.water;
+      l.lineWidth = r.width * 0.64;
+      l.stroke();
+    }
+    // Fords stay shallow across the whole river.
+    l.globalCompositeOperation = 'source-atop';
+    l.fillStyle = art.shallow;
+    for (const r of t.rivers) {
+      for (const f of r.fords) {
+        l.beginPath();
+        l.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+        l.fill();
+      }
+    }
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(layer, 0, 0);
+    ctx.restore();
+  }
   for (const r of t.rivers) {
     // Glints on the water, catching the light.
     ctx.save();
@@ -382,6 +472,33 @@ function paintRivers(t: Terrain, ctx: CanvasRenderingContext2D, art: BandArt): v
       }
     }
     ctx.restore();
+    // Rivers run from the night's ice toward the day and boil into mist:
+    // thick over the Glare, and only on the sunward reaches under a high sun.
+    if (t.light >= 3) {
+      const sx = Math.cos(t.sunBearing);
+      const sy = Math.sin(t.sunBearing);
+      const half = Math.max(t.width, t.height) / 2;
+      for (let i = 0; i < r.pts.length - 1; i++) {
+        const a = r.pts[i]!;
+        const b = r.pts[i + 1]!;
+        for (let k = 0; k < 3; k++) {
+          const f = hash2(i * 5 + k, 57);
+          const x = a.x + (b.x - a.x) * f + (hash2(i, k * 7) - 0.5) * r.width;
+          const y = a.y + (b.y - a.y) * f + (hash2(k * 7, i) - 0.5) * r.width;
+          const sunward = ((x - t.width / 2) * sx + (y - t.height / 2) * sy) / half;
+          const amt = t.light === 4 ? 0.7 + 0.3 * sunward : Math.max(0, sunward) * 0.6;
+          if (amt <= 0.05) continue;
+          const rad = r.width * (1.4 + hash2(i * 3, k) * 1.4);
+          const g = ctx.createRadialGradient(x, y, 0, x, y, rad);
+          g.addColorStop(0, `rgba(255,255,250,${0.2 * amt})`);
+          g.addColorStop(1, 'rgba(255,255,250,0)');
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.arc(x, y, rad, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
     // Fords: pale gravel bars.
     for (const f of r.fords) {
       ctx.fillStyle = 'rgba(220,200,160,0.18)';
@@ -512,6 +629,13 @@ function paintDecor(t: Terrain, ctx: CanvasRenderingContext2D, art: BandArt): vo
         ctx.beginPath();
         ctx.arc(d.x, d.y, 0.8 * d.s, 0, Math.PI * 2);
         ctx.fill();
+        // Moss on the night side only, where the shadow never moves.
+        if (t.light === 2 || t.light === 3) {
+          ctx.fillStyle = 'rgba(62,92,38,0.55)';
+          ctx.beginPath();
+          ctx.arc(d.x - sx * 0.55 * d.s, d.y - sy * 0.55 * d.s, 0.45 * d.s, 0, Math.PI * 2);
+          ctx.fill();
+        }
         break;
       case 'vent': {
         const g = ctx.createRadialGradient(d.x, d.y, 0, d.x, d.y, d.s);
@@ -634,11 +758,35 @@ function paintRects(t: Terrain, ctx: CanvasRenderingContext2D, art: BandArt): vo
         ctx.fillStyle = art.rock;
         roundRect(ctx, -w / 2, -h / 2, w, h, 2);
         ctx.fill();
+        if (t.light >= 2) {
+          // The sunward face catches the light; the night face never does.
+          const lx = sx * Math.cos(r.angle) + sy * Math.sin(r.angle);
+          const ly = -sx * Math.sin(r.angle) + sy * Math.cos(r.angle);
+          const g = ctx.createLinearGradient((lx * w) / 2, (ly * h) / 2, (-lx * w) / 2, (-ly * h) / 2);
+          g.addColorStop(0, 'rgba(255,238,205,0.3)');
+          g.addColorStop(0.5, 'rgba(0,0,0,0)');
+          g.addColorStop(1, 'rgba(0,0,0,0.28)');
+          ctx.fillStyle = g;
+          roundRect(ctx, -w / 2, -h / 2, w, h, 2);
+          ctx.fill();
+          // Moss grows only where the permanent shadow falls.
+          if (t.light <= 3) mossPatches(ctx, -lx * (w / 2 - 0.8), -ly * (h / 2 - 0.8), ly, -lx, Math.max(w, h) * 0.45, hash2(r.x, r.y), t.band === 'gloaming' ? 0.6 : 0.45);
+        }
       }
     }
     ctx.restore();
-    void sx;
-    void sy;
+  }
+}
+
+/** A few dark-green moss blobs strung along a line (the night side of a stone). */
+function mossPatches(ctx: CanvasRenderingContext2D, x: number, y: number, dx: number, dy: number, spread: number, seed: number, alpha: number): void {
+  ctx.fillStyle = `rgba(62,92,38,${alpha})`;
+  for (let k = 0; k < 5; k++) {
+    const f = (hash2(seed * 977 + k, 31) - 0.5) * 2 * spread;
+    const rr = 0.5 + hash2(k, seed * 311) * 0.9;
+    ctx.beginPath();
+    ctx.arc(x + dx * f, y + dy * f, rr, 0, Math.PI * 2);
+    ctx.fill();
   }
 }
 

@@ -47,11 +47,22 @@ export class BattleSession {
     wy: number;
     moved: boolean;
     onOwn: boolean;
+    /** A touch in Select mode: taps add or remove units, a drag draws a box. */
+    touchSelect?: boolean;
     startPositions?: Map<number, { x: number; y: number }>;
   } | null = null;
+  /**
+   * What one finger does on a touch screen, which has no Shift key or right
+   * button: pan the view, select several units, or lay out a line.
+   */
+  touchMode: 'pan' | 'select' | 'line' = 'pan';
   private touches = new Map<number, { x: number; y: number }>();
   private pinch: { d: number; zoom: number; cx: number; cy: number; camX: number; camY: number } | null = null;
   private lastClick = { t: 0, unit: -1 };
+  /** When the player last touched anything, for idle frame skipping. */
+  private lastInput = 0;
+  private lastDraw = 0;
+  private lastCam = '';
   private disposed = false;
   private readonly canvas: HTMLCanvasElement;
   readonly req: BattleRequest;
@@ -77,8 +88,14 @@ export class BattleSession {
   private attachControllers(): void {
     const b = this.battle;
     for (const s of [0, 1] as Side[]) {
+      const custom = this.req.controller?.(s);
+      if (custom !== undefined) {
+        b.setController(s, custom);
+        continue;
+      }
       const ctrl = b.setup.armies[s].controller;
-      const auto = this.req.mode === 'demo' || (ctrl === 'ai' && s !== this.side) || (this.req.mode === 'replay' && s !== this.side);
+      // Replays re-run the AI wherever it played, including both sides of a watched battle.
+      const auto = this.req.mode === 'demo' || (ctrl === 'ai' && s !== this.side) || (this.req.mode === 'replay' && (s !== this.side || ctrl === 'ai'));
       if (auto) b.setController(s, new BattleAI());
     }
   }
@@ -87,11 +104,20 @@ export class BattleSession {
     const t = this.battle.terrain;
     const cam = this.renderer.camera;
     cam.fit(t.width, t.height);
+    const portrait = cam.height > cam.width * 1.1;
     if (this.phase === 'deploy') {
       const z = t.deployZone(this.side);
       cam.x = z.x + z.w / 2;
       cam.y = z.y + z.h / 2 + (this.side === 0 ? -140 : 140);
-      cam.zoom = Math.min(cam.width / 1000, cam.height / 620);
+      cam.zoom = portrait ? Math.max(cam.width / 1000, cam.height / 1000) : Math.min(cam.width / 1000, cam.height / 620);
+    } else if (portrait) {
+      // Phones: fill the height instead of letterboxing, centered on our army.
+      cam.zoom = Math.max(cam.width / t.width, cam.height / t.height);
+      const own = this.battle.units.filter((u) => u.side === this.side && u.alive > 0);
+      if (own.length) {
+        cam.x = own.reduce((s, u) => s + u.x, 0) / own.length;
+        cam.y = own.reduce((s, u) => s + u.y, 0) / own.length - 120;
+      }
     }
   }
 
@@ -121,7 +147,7 @@ export class BattleSession {
         const ev = b.takeEvents();
         if (ev.length) {
           this.renderer.effects.consume(ev, (id) => b.units[id]?.def.name ?? '', this.side);
-          audio.events(ev, this.renderer.camera, this.side);
+          audio.events(ev, this.renderer.camera, this.side, (id) => b.units[id]);
         }
         this.acc -= DT;
         n++;
@@ -136,7 +162,20 @@ export class BattleSession {
     }
     this.panCamera(dt);
     const alpha = this.phase === 'battle' && !this.paused ? Math.min(1, this.acc / DT) : 1;
-    this.renderer.frame(alpha, this.paused ? 0 : dt * (this.phase === 'battle' ? this.speed : 1), this.overlay);
+    // A still scene (paused, deploying, over) with no input and no camera
+    // movement redraws at about 15 fps instead of 60: phones keep their battery.
+    const cam = this.renderer.camera;
+    const camKey = `${cam.x.toFixed(2)},${cam.y.toFixed(2)},${cam.zoom.toFixed(4)},${cam.width},${cam.height}`;
+    if (camKey !== this.lastCam) {
+      this.lastCam = camKey;
+      this.lastInput = now;
+    }
+    const still = this.phase !== 'battle' || this.paused;
+    const idle = still && now - this.lastInput > 1500 && this.overlay.pings.length === 0 && this.keys.size === 0;
+    if (!idle || now - this.lastDraw > 66) {
+      this.lastDraw = now;
+      this.renderer.frame(alpha, this.paused ? 0 : dt * (this.phase === 'battle' ? this.speed : 1), this.overlay);
+    }
     if (now - this.lastHud > 150) {
       this.lastHud = now;
       this.hud.value++;
@@ -156,9 +195,13 @@ export class BattleSession {
 
   // ------------------------------------------------------------- commands
 
+  /** Sees every order the player gives (the tutorials watch them). */
+  onIssue: ((cmd: Command) => void) | null = null;
+
   issue(cmd: Command): void {
     if (this.phase !== 'battle' || this.req.mode === 'replay' || this.req.mode === 'demo') return;
     this.battle.issue(this.side, cmd);
+    this.onIssue?.(cmd);
   }
 
   own(): Unit[] {
@@ -170,6 +213,7 @@ export class BattleSession {
   }
 
   select(ids: number[], add = false): void {
+    this.lastInput = performance.now();
     if (!add) this.overlay.selected.clear();
     for (const id of ids) {
       const u = this.battle.units[id];
@@ -268,7 +312,7 @@ export class BattleSession {
     this.phase = 'battle';
     this.overlay.deployZone = null;
     this.overlay.preview = [];
-    audio.battleStart(this.battle.sides[this.side].faction);
+    audio.battleStart(this.battle.sides[this.side].faction, [this.battle.sides[0].faction, this.battle.sides[1].faction]);
     this.hud.value++;
   }
 
@@ -322,12 +366,14 @@ export class BattleSession {
   }
 
   private onWheel = (e: WheelEvent): void => {
+    this.lastInput = performance.now();
     e.preventDefault();
     const p = this.local(e);
     this.renderer.camera.zoomAt(p.x, p.y, Math.exp(-e.deltaY * 0.0015));
   };
 
   private onDown = (e: PointerEvent): void => {
+    this.lastInput = performance.now();
     const p = this.local(e);
     if (e.pointerType === 'touch') {
       this.touches.set(e.pointerId, p);
@@ -339,10 +385,17 @@ export class BattleSession {
         return;
       }
     }
-    this.canvas.setPointerCapture?.(e.pointerId);
+    try {
+      this.canvas.setPointerCapture?.(e.pointerId);
+    } catch {
+      // The pointer can already be gone (a very quick tap); nothing to capture.
+    }
     const w = this.renderer.camera.toWorld(p.x, p.y);
     const own = this.renderer.pick(p.x, p.y, (u) => u.side === this.side);
-    this.drag = { button: e.pointerType === 'touch' ? 0 : e.button, sx: p.x, sy: p.y, wx: w.x, wy: w.y, moved: false, onOwn: !!own && this.overlay.selected.has(own.id) };
+    const touch = e.pointerType === 'touch';
+    // In Line mode a finger acts as the right button.
+    const button = touch ? (this.touchMode === 'line' ? 2 : 0) : e.button;
+    this.drag = { button, sx: p.x, sy: p.y, wx: w.x, wy: w.y, moved: false, onOwn: !!own && this.overlay.selected.has(own.id), touchSelect: touch && this.touchMode === 'select' };
     if (this.phase === 'deploy' && this.drag.button === 0 && own) {
       if (!this.overlay.selected.has(own.id)) this.select([own.id], e.shiftKey);
       this.drag.onOwn = true;
@@ -351,6 +404,7 @@ export class BattleSession {
   };
 
   private onMove = (e: PointerEvent): void => {
+    this.lastInput = performance.now();
     const p = this.local(e);
     this.hoverScreen = p;
     if (e.pointerType === 'touch' && this.touches.has(e.pointerId)) {
@@ -379,8 +433,9 @@ export class BattleSession {
     if (!d) return;
     if (Math.hypot(p.x - d.sx, p.y - d.sy) > 6) d.moved = true;
     if (!d.moved) return;
-    const pan = d.button === 1 || (e.pointerType === 'touch' && !d.onOwn && !(this.phase === 'deploy'));
-    if (pan || (d.button === 0 && e.pointerType === 'touch' && !d.onOwn)) {
+    // A finger on the ground pans, unless Select mode turns it into a selection box.
+    const pan = d.button === 1 || (e.pointerType === 'touch' && d.button === 0 && !d.onOwn && !d.touchSelect);
+    if (pan) {
       cam.x -= e.movementX / cam.zoom || 0;
       cam.y -= e.movementY / cam.zoom || 0;
       if (e.pointerType === 'touch') {
@@ -409,6 +464,7 @@ export class BattleSession {
   };
 
   private onUp = (e: PointerEvent): void => {
+    this.lastInput = performance.now();
     const p = this.local(e);
     if (e.pointerType === 'touch') {
       this.touches.delete(e.pointerId);
@@ -438,7 +494,7 @@ export class BattleSession {
           const s = cam.toScreen(c.x, c.y);
           if (s.x >= x0 && s.x <= x1 && s.y >= y0 && s.y <= y1) ids.push(u.id);
         }
-        this.select(ids, e.shiftKey);
+        this.select(ids, e.shiftKey || !!d.touchSelect);
         return;
       }
       if (d.moved) return;
@@ -448,8 +504,9 @@ export class BattleSession {
       }
       const u = this.renderer.pick(p.x, p.y);
       if (e.pointerType === 'touch') {
-        // Touch: tap own unit to select; tap ground or enemy to order the selection.
-        if (u && u.side === this.side) this.clickSelect(u, e.shiftKey);
+        // Touch: tap own unit to select (Select mode adds or removes it);
+        // tap ground or enemy to order the selection.
+        if (u && u.side === this.side) this.clickSelect(u, e.shiftKey || !!d.touchSelect);
         else if (this.overlay.selected.size) this.orderAt(w.x, w.y, u);
         else this.select([]);
         return;
@@ -457,6 +514,11 @@ export class BattleSession {
       if (u && u.side === this.side) this.clickSelect(u, e.shiftKey);
       else if (!e.shiftKey) this.select([]);
     } else if (d.button === 2) {
+      // Line mode on touch: a tap still aims an ability that is waiting for a target.
+      if (this.targeting && e.pointerType === 'touch' && !d.moved) {
+        this.castTargeting(w.x, w.y, p);
+        return;
+      }
       if (this.targeting) {
         this.targeting = null;
         this.overlay.abilityPreview = null;
@@ -596,6 +658,7 @@ export class BattleSession {
   }
 
   private onKey = (e: KeyboardEvent): void => {
+    this.lastInput = performance.now();
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
     this.keys.add(e.code);
     const units = this.selectedUnits();
@@ -663,6 +726,7 @@ export class BattleSession {
   };
 
   private onKeyUp = (e: KeyboardEvent): void => {
+    this.lastInput = performance.now();
     this.keys.delete(e.code);
   };
 }
