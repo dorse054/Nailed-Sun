@@ -458,10 +458,21 @@ button {
 .center-banner {
   position: absolute;
   left: 50%;
-  top: 22%;
+  top: calc(66px + env(safe-area-inset-top, 0px));
   transform: translateX(-50%);
   text-align: center;
   pointer-events: none;
+  padding: 4px 14px;
+  border-radius: var(--radius);
+  background: rgba(12, 10, 20, 0.55);
+}
+/* Keep the pause notice small and out of the fighting. */
+.center-banner h2 {
+  font-size: 22px !important;
+  margin: 0;
+}
+.center-banner .muted {
+  font-size: 12px;
 }
 
 .modal-veil {

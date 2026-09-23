@@ -905,7 +905,8 @@ export class BattleRenderer {
       const h = 16;
       ctx.fillStyle = sel ? '#ffe6a0' : team;
       ctx.fillRect(x - w / 2 - 1, y - h / 2 - 1, w + 2, h + 2);
-      ctx.fillStyle = ms === 'broken' ? (Math.floor(this.time * 4) % 2 ? '#7a1a14' : '#2a0a08') : '#171322';
+      // Banner cloth in the side's color, so friend and foe read at a glance.
+      ctx.fillStyle = ms === 'broken' ? (Math.floor(this.time * 4) % 2 ? '#7a1a14' : '#2a0a08') : u.side === 0 ? '#1b3a68' : '#6a1f1a';
       ctx.fillRect(x - w / 2, y - h / 2, w, h);
       drawRoleIcon(ctx, u.def, x, y, 13, sel ? '#ffe6a0' : '#f0e8d8');
       // Strength and morale bars.

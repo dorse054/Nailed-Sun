@@ -245,6 +245,13 @@ class AudioEngine {
     else this.glass([587, 880, 1175, 1318], 0.15, 1.8);
   }
 
+  /** The end of a campaign Toll: one deep bell over the world. */
+  toll(): void {
+    if (!this.ctx) return;
+    this.bell(73.4, 0.32, 6);
+    this.bell(110, 0.14, 4, 0.04);
+  }
+
   battleEnd(won: boolean): void {
     if (!this.ctx) return;
     if (won) {

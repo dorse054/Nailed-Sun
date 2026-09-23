@@ -46,6 +46,8 @@ export function CampaignScreen({ session }: { session: CampaignSession }) {
       map.clamp();
     });
     ro.observe(c);
+    // The faction's ambience plays under the campaign map.
+    audio.ambient(session.player, 1);
 
     const view = (): MapView => {
       const vis = session.visibility();
@@ -199,6 +201,7 @@ export function CampaignScreen({ session }: { session: CampaignSession }) {
     window.addEventListener('keydown', key);
     return () => {
       cancelAnimationFrame(raf);
+      audio.ambient(null, 0);
       ro.disconnect();
       c.removeEventListener('pointerdown', down);
       window.removeEventListener('pointermove', move);

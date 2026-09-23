@@ -19,6 +19,7 @@ import { regionDef } from '../../campaign/regions';
 import { simulate } from '../../sim/pool';
 import { go, loadRaw, remove, save, settings } from '../store';
 import { factionDef } from '../../data/index';
+import { audio } from '../../audio/audio';
 
 const SAVE_KEY = 'nailedsun.campaign.v1';
 
@@ -167,7 +168,12 @@ export class CampaignSession {
   private afterBattles(reports: BattleReport[]): void {
     this.bump();
     const mine = reports.filter((r) => r.attacker === this.player || r.defender === this.player);
-    if (mine.length) this.prompt.value = { kind: 'reports', reports: mine };
+    if (mine.length) {
+      this.prompt.value = { kind: 'reports', reports: mine };
+      // Fought battles already sounded their ending on the field.
+      const last = mine[mine.length - 1]!;
+      if (!last.fought) audio.battleEnd(last.winner === this.player);
+    }
     else if (this.prompt.value?.kind === 'battle') this.prompt.value = null;
   }
 
@@ -214,6 +220,7 @@ export class CampaignSession {
     this.selArmy.value = null;
     this.path = null;
     this.busy.value = 'The world turns…';
+    audio.toll();
     try {
       await endTurn(this.s, this.hooks(false), scriptedAI);
     } finally {
