@@ -61,7 +61,14 @@ function DilemmaPrompt({ session, focus }: { session: CampaignSession; focus: (r
             </button>
           )}
         </div>
-        <h2 id="dilemma-title">{d.title}</h2>
+        <h2 id="dilemma-title">
+          {d.title}
+          {d.written && (
+            <span class="jev-mark" title="Written by Claude for this moment of your campaign; the game sets what each choice gives and costs">
+              ✦ Claude
+            </span>
+          )}
+        </h2>
         <p class="dilemma-text">{d.text}</p>
         <div class="dilemma-choices">
           {d.choices.map((c, i) => (

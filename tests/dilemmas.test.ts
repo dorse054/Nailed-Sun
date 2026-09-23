@@ -59,3 +59,27 @@ describe('dilemmas', () => {
     expect(s.regions.vesper!.order).toBe(20);
   });
 });
+
+describe('written dilemmas', () => {
+  it('price each choice from the menu, and refuse unfair or unknown pairs', async () => {
+    const { newCampaign } = await import('../src/campaign/setup');
+    const { writtenEffect, pendingDilemma, resolveDilemma } = await import('../src/campaign/dilemmas');
+    const s = newCampaign({ faction: 'vesperate', difficulty: 'normal', seed: 5 });
+    expect(writtenEffect(s, 'coin', 'order')).toEqual({ coin: 120, order: -3 });
+    expect(writtenEffect(s, 'friendship', 'food', 'drift')).toEqual({ opinion: { of: 'drift', by: 10 }, food: -20 });
+    expect(writtenEffect(s, 'sunward', 'enmity', undefined, 'choir')).toEqual({ tilt: 5, opinion: { of: 'choir', by: -10 } });
+    // Same kind both ways, the player's own faction, a made-up boon: no.
+    expect(writtenEffect(s, 'coin', 'coin')).toBeNull();
+    expect(writtenEffect(s, 'friendship', 'enmity', 'drift', 'choir')).toBeNull();
+    expect(writtenEffect(s, 'friendship', 'coin', 'vesperate')).toBeNull();
+    expect(writtenEffect(s, 'gold', 'coin')).toBeNull();
+    // A written dilemma is what the player sees and chooses from.
+    const region = Object.keys(s.regions).find((r) => s.regions[r]!.owner === 'vesperate')!;
+    const coin = s.factions.vesperate.coin;
+    s.dilemma = { id: 'pilgrims', region, turn: s.turn, written: { title: 'A Test', text: 'Something happens here.', choices: [{ label: 'Take it', effect: { coin: 120, order: -3 } }, { label: 'Leave it', effect: { food: 30, coin: -100 } }] } };
+    expect(pendingDilemma(s)).toMatchObject({ title: 'A Test', written: true });
+    expect(resolveDilemma(s, 0)).toBe(true);
+    expect(s.factions.vesperate.coin).toBe(coin + 120);
+    expect(s.dilemmasSeen ?? []).not.toContain('pilgrims');
+  });
+});

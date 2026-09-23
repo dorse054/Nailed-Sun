@@ -22,7 +22,7 @@ import { armyVisible, visibleRegions } from '../../campaign/vision';
 import { regionDef } from '../../campaign/regions';
 import { jevProvider } from '../../campaign/jev';
 import { claudeStatus } from '../claude';
-import { councilAdvice, envoyDecision, envoyWords, writeSaga } from './claudeJev';
+import { councilAdvice, envoyDecision, envoyWords, writeDilemma, writeSaga } from './claudeJev';
 import { guideBaseline } from './Guide';
 import { maybeDilemma } from '../../campaign/dilemmas';
 import { detachHero, heroById, heroReach, heroes, heroesNewToll, heroVision, moveHero } from '../../campaign/heroes';
@@ -460,7 +460,7 @@ export class CampaignSession {
     try {
       await endTurn(this.s, this.hooks(false), scriptedAI);
       heroesNewToll(this.s);
-      maybeDilemma(this.s);
+      if (maybeDilemma(this.s)) await this.writeDilemma();
     } finally {
       this.busy.value = null;
     }
@@ -473,7 +473,26 @@ export class CampaignSession {
   save(): boolean {
     return save(SAVE_KEY, this.s);
   }
+
+  /**
+   * With Claude's counsel on, now and then the Toll's dilemma is written for
+   * this moment instead: its words from Claude, its prices from the game.
+   * The handwritten one stands whenever Claude can't give a fair one.
+   */
+  private async writeDilemma(): Promise<void> {
+    const d = this.s.dilemma;
+    if (!d?.region || !this.counsel() || Math.random() >= WRITTEN_SHARE) return;
+    this.busy.value = 'A messenger arrives…';
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 15000);
+    const w = await writeDilemma(this.s, d.region, ctrl.signal);
+    clearTimeout(timer);
+    if (w && this.s.dilemma === d) d.written = w as NonNullable<typeof d.written>;
+  }
 }
+
+/** The share of dilemmas written on the spot when Claude's counsel is on. */
+const WRITTEN_SHARE = 0.4;
 
 export let active: CampaignSession | null = null;
 

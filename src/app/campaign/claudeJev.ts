@@ -5,13 +5,16 @@
  * character. Any failure, doubt or delay leaves the scripted AI in charge.
  */
 import { effect } from '@preact/signals';
-import type { FactionId } from '../../data/schema';
+import { FACTION_IDS, type FactionId } from '../../data/schema';
 import { setJevProvider, situationFor, type JevChoice, type JevProvider } from '../../campaign/jev';
 import { regionDef } from '../../campaign/regions';
 import { neighbors } from '../../campaign/geometry';
 import type { CampaignState } from '../../campaign/types';
 import type { Deal, DealKind, DealValue } from '../../campaign/diplomacy';
-import { relation } from '../../campaign/state';
+import { atWar, relation } from '../../campaign/state';
+import { regionBand } from '../../campaign/rules';
+import { BANDS } from '../../data/rules';
+import { writtenEffect, type DilemmaChoice } from '../../campaign/dilemmas';
 import { factionDef } from '../../data/index';
 import { askClaudeJson, claudeStatus, findClaude } from '../claude';
 import { settings } from '../store';
@@ -130,6 +133,52 @@ export async function envoyDecision(s: CampaignState, deal: Deal, value: DealVal
     return null;
   } finally {
     clearTimeout(timer);
+  }
+}
+
+/**
+ * A dilemma written for this moment of the campaign: something that happens
+ * at the chosen place, with two choices. Claude writes the words and picks
+ * each choice's boon and cost from the game's menu; the game sets how much.
+ * Null when Claude is off, slow or its answer doesn't make a fair choice.
+ */
+export async function writeDilemma(s: CampaignState, region: string, signal?: AbortSignal): Promise<{ title: string; text: string; choices: [DilemmaChoice, DilemmaChoice] } | null> {
+  if (!settings.value.claudeAI || claudeStatus.value !== 'ready') return null;
+  const me = s.player;
+  const fd = factionDef(me);
+  const r = regionDef(region);
+  const place = r.settlement || r.name;
+  const others = FACTION_IDS.filter((f) => f !== me && s.factions[f].alive);
+  const stance = (f: FactionId) => (atWar(s, me, f) ? 'at war with you' : relation(s, me, f).opinion > 20 ? 'friendly' : relation(s, me, f).opinion < -20 ? 'hostile' : 'wary');
+  const recent = s.events.filter((e) => (!e.faction || e.faction === me) && e.turn >= s.turn - 4 && e.kind !== 'info').slice(-8);
+  const prompt = [
+    `You write events for Nailed Sun, a strategy game. The world is tidally locked: one half burns in endless noon, the other freezes in endless night, and the sun had not moved in a thousand years until it shuddered. The Tilt measures how far it has leaned.`,
+    `The player leads ${PERSONA[me]} It is Toll ${s.turn}; the Tilt stands at ${s.tilt} (negative is nightward).`,
+    `The place: ${place}, in ${BANDS[regionBand(s, region)].name.replace(/^The /, 'the ')}, held by the player. ${r.desc}`,
+    `The others: ${others.map((f) => `${factionDef(f).name} (${f}), ${stance(f)}`).join('; ')}.`,
+    recent.length ? `Lately: ${recent.map((e) => e.text).join(' ')}` : 'Nothing much has happened lately.',
+    '',
+    `Write a dilemma for the player: something that happens at ${place} and asks a choice, fitting the place, their people and what has happened lately. Two choices, each with one boon and one cost of a different kind.`,
+    `Boons: coin, food, resource (${fd.resource.name}), order (here), orderEverywhere, friendship (with another faction, by id), sunward (pull the Tilt toward the sun), nightward.`,
+    'Costs: coin, food, resource, order, orderEverywhere, enmity (with another faction, by id).',
+    'Reply with only JSON: {"title": "<2 to 5 words>", "text": "<two or three sentences to the player, second person, present tense, no numbers>", "choices": [{"label": "<what the player does, at most 8 words>", "boon": "<boon>", "boonFaction": "<faction id, for friendship>", "cost": "<cost>", "costFaction": "<faction id, for enmity>"}, {"label": "...", "boon": "...", "cost": "..."}]}',
+  ].join('\n');
+  try {
+    const j = await askClaudeJson<{ title?: unknown; text?: unknown; choices?: unknown } | null>(prompt, { modelTier: 'quick', signal, cache: false });
+    const clean = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().replace(/\s+/g, ' ').replace(/^"|"$/g, '').slice(0, max) : '');
+    const title = clean(j?.title, 60);
+    const text = clean(j?.text, 500);
+    const cs = Array.isArray(j?.choices) ? (j!.choices as Record<string, unknown>[]).slice(0, 2) : [];
+    if (!title || text.length < 30 || cs.length !== 2) return null;
+    const choices = cs.map((c) => {
+      const effect = writtenEffect(s, c?.boon, c?.cost, c?.boonFaction, c?.costFaction);
+      const label = clean(c?.label, 70);
+      return effect && label ? { label, effect } : null;
+    });
+    if (!choices[0] || !choices[1]) return null;
+    return { title, text, choices: [choices[0], choices[1]] };
+  } catch {
+    return null;
   }
 }
 

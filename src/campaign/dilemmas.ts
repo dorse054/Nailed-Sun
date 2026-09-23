@@ -251,8 +251,12 @@ export function dilemmaDef(id: string): DilemmaDef | undefined {
 }
 
 /** The pending dilemma, with its words and choices, for the UI. */
-export function pendingDilemma(s: CampaignState): { title: string; text: string; region?: string; choices: [DilemmaChoice, DilemmaChoice] } | null {
+export function pendingDilemma(s: CampaignState): { title: string; text: string; region?: string; choices: [DilemmaChoice, DilemmaChoice]; written?: boolean } | null {
   const p = s.dilemma;
+  if (p?.written) {
+    const w = p.written;
+    return { title: w.title, text: w.text, region: p.region, choices: w.choices as [DilemmaChoice, DilemmaChoice], written: true };
+  }
   const d = p && dilemmaDef(p.id);
   if (!p || !d) return null;
   const f = s.player;
@@ -311,9 +315,60 @@ export function resolveDilemma(s: CampaignState, choice: 0 | 1): boolean {
   if (e.tilt) s.tiltProgress += e.tilt;
   if (e.garrisonLoss && pend.region) s.regions[pend.region]!.garrisonLoss = Math.max(s.regions[pend.region]!.garrisonLoss ?? 0, e.garrisonLoss);
   log(s, 'info', `${p.title}: ${c.label.charAt(0).toLowerCase()}${c.label.slice(1)}.`, f, pend.region);
-  s.dilemmasSeen = [...(s.dilemmasSeen ?? []), pend.id];
+  // A written dilemma stood in for the handwritten one, which the player never saw.
+  if (!pend.written) s.dilemmasSeen = [...(s.dilemmasSeen ?? []), pend.id];
   s.dilemma = undefined;
   return true;
+}
+
+// -------------------------------------------------------- written dilemmas
+
+/**
+ * A dilemma written on the spot (by Claude) picks each choice's boon and
+ * cost from these, and the game sets how much: as much as a handwritten
+ * dilemma gives or takes, so a written one is never worth more.
+ */
+const BOON_EFFECT: Record<string, DilemmaEffect> = {
+  coin: { coin: 120 },
+  food: { food: 30 },
+  resource: { res: 20 },
+  order: { order: 4 },
+  orderEverywhere: { orderAll: 1 },
+  sunward: { tilt: 5 },
+  nightward: { tilt: -5 },
+};
+const COST_EFFECT: Record<string, DilemmaEffect> = {
+  coin: { coin: -100 },
+  food: { food: -20 },
+  resource: { res: -15 },
+  order: { order: -3 },
+  orderEverywhere: { orderAll: -1 },
+};
+export const WRITTEN_BOONS = [...Object.keys(BOON_EFFECT), 'friendship'];
+export const WRITTEN_COSTS = [...Object.keys(COST_EFFECT), 'enmity'];
+
+/**
+ * A written choice's effect: one boon and one cost of different kinds, a
+ * friendship or enmity naming another living faction. Null when the pair
+ * doesn't make a fair choice.
+ */
+export function writtenEffect(s: CampaignState, boon: unknown, cost: unknown, boonOf?: unknown, costOf?: unknown): DilemmaEffect | null {
+  const other = (x: unknown): FactionId | null => (FACTION_IDS.includes(x as FactionId) && x !== s.player && s.factions[x as FactionId].alive ? (x as FactionId) : null);
+  const kindOf = (k: string) => (k === 'friendship' || k === 'enmity' ? 'opinion' : k === 'sunward' || k === 'nightward' ? 'tilt' : k);
+  if (typeof boon !== 'string' || typeof cost !== 'string' || !WRITTEN_BOONS.includes(boon) || !WRITTEN_COSTS.includes(cost)) return null;
+  if (kindOf(boon) === kindOf(cost)) return null;
+  const e: DilemmaEffect = {};
+  if (boon === 'friendship') {
+    const f = other(boonOf);
+    if (!f) return null;
+    e.opinion = { of: f, by: 10 };
+  } else Object.assign(e, BOON_EFFECT[boon]);
+  if (cost === 'enmity') {
+    const f = other(costOf);
+    if (!f) return null;
+    e.opinion = { of: f, by: -10 };
+  } else Object.assign(e, COST_EFFECT[cost]);
+  return e;
 }
 
 /** An effect in a few words, for the choice buttons. */
