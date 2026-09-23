@@ -7,7 +7,7 @@ import { CANDLES, REGIONS, regionDef } from '../../campaign/regions';
 import { factionArmies, fmtNum, ownedRegions, relation } from '../../campaign/state';
 import { armyPower, currentObservance } from '../../campaign/rules';
 import { victoryStatus } from '../../campaign/victory';
-import { factionLedger } from '../../campaign/turn';
+import { factionLedger, MIGRATION_RENOWN } from '../../campaign/turn';
 import { JevMark } from './Prompts';
 import {
   HYMNS,
@@ -279,7 +279,7 @@ function Drift({ session }: { session: CampaignSession }) {
           {a.name}: bands visited this migration {(a.bandsVisited ?? []).length} / 5
         </p>
       ))}
-      <p class="small muted">A sail that passes through all five bands completes a migration: +100 Renown. Every 2 points of Tilt in either direction raise the wind everywhere.</p>
+      <p class="small muted">A sail that passes through all five bands completes a migration: +{MIGRATION_RENOWN} Renown. Every 2 points of Tilt in either direction raise the wind everywhere.</p>
     </div>
   );
 }
