@@ -39,6 +39,9 @@ const resume = (data: unknown) => {
 if (hot?.ready) hot.ready(resume);
 else if (hot?.data) resume(hot.data);
 
+// For browser tests in development: start any screen or battle directly.
+if (import.meta.env.DEV) (globalThis as unknown as { __go?: typeof go }).__go = go;
+
 // Shortcuts: #demo, #demo:a=choir,b=hush,band=gloaming,seed=3 and #quick start straight into a battle.
 const hash = location.hash.slice(1);
 if (hash.startsWith('demo')) {
