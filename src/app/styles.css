@@ -198,6 +198,12 @@ button {
   inset: 0;
   overflow: hidden;
 }
+/* Screens of content (setup, results, tutorials) scroll when they don't fit. */
+.screen.scroll {
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
 .backdrop {
   position: absolute;
   inset: 0;
@@ -212,9 +218,13 @@ button {
   height: 100%;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+  /* Centered when it fits; scrolls from the top when it doesn't. */
   align-content: center;
+  align-content: safe center;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding-inline: max(16px, 6vw);
-  padding-block: 24px;
+  padding-block: calc(24px + env(safe-area-inset-top, 0px)) calc(18px + env(safe-area-inset-bottom, 0px));
 }
 .menu-title {
   font-size: clamp(54px, 10vw, 120px);
@@ -260,10 +270,12 @@ button {
   font-size: 22px;
   font-weight: 600;
   color: var(--text);
+  white-space: nowrap;
 }
 .menu-item span {
   color: var(--muted);
   font-size: 13px;
+  text-align: right;
 }
 /* New players: the tutorials are the way in. */
 .menu-item.fresh {
@@ -273,12 +285,50 @@ button {
   color: var(--gold);
 }
 .menu-foot {
-  position: absolute;
-  left: max(16px, 6vw);
-  right: 16px;
-  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  margin-top: 22px;
+  max-width: 70ch;
   color: var(--faint);
   font-size: 12px;
+}
+/* Phones: tighter items. */
+@media (max-width: 480px) {
+  .menu-items {
+    margin-top: 24px;
+    gap: 8px;
+  }
+  .menu-item {
+    padding: 10px 14px;
+  }
+  .menu-item b {
+    font-size: 20px;
+  }
+  .menu-item span {
+    font-size: 12px;
+  }
+}
+/* Short screens (phones held sideways): a smaller title and two columns of items. */
+@media (max-height: 560px) {
+  .menu-title {
+    font-size: 46px;
+  }
+  .menu-tag {
+    font-size: 16px;
+    margin-top: 4px;
+  }
+  .menu-items {
+    margin-top: 14px;
+  }
+}
+@media (max-height: 560px) and (min-width: 640px) {
+  .menu-items {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: min(760px, 100%);
+    gap: 8px;
+  }
+  .menu-item {
+    padding: 9px 14px;
+  }
 }
 
 /* Battle HUD */
