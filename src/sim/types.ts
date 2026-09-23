@@ -295,7 +295,9 @@ export type Command =
   | { type: 'hour'; side: Side; hour: HourId }
   | { type: 'embark'; unit: number; target: number }
   | { type: 'disembark'; unit: number }
-  | { type: 'withdraw'; unit: number };
+  | { type: 'withdraw'; unit: number }
+  /** The side's general changes plan in the middle of the battle (see ArmyPlan), with a word to the army. */
+  | { type: 'plan'; stance: 'attack' | 'defend'; patience?: number; speech?: string };
 
 export interface TimedCommand {
   tick: number;
@@ -319,7 +321,8 @@ export type SimEvent =
   | { t: 'general'; side: Side }
   | { t: 'shockwave'; x: number; y: number; r: number; kind: 'bell' | 'knell' | 'flash' | 'dust' | 'eyes' | 'ram' }
   | { t: 'text'; x: number; y: number; text: string; side: Side }
-  | { t: 'fire'; x: number; y: number };
+  | { t: 'fire'; x: number; y: number }
+  | { t: 'plan'; side: Side; stance: 'attack' | 'defend'; speech?: string };
 
 export interface UnitSpec {
   def: string;

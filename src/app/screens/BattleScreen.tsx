@@ -64,11 +64,10 @@ function Hud({ s }: { s: BattleSession }) {
           <UnitCards s={s} />
         </div>
       </div>
-      {s.message.value && (
-        <div class="panel hud-flash" style={{ position: 'absolute', left: '50%', top: '96px', transform: 'translateX(-50%)', padding: '6px 12px', fontSize: '13px' }}>
-          {s.message.value}
-        </div>
-      )}
+      <div class="hud-notes">
+        {s.message.value && <div class="panel hud-flash">{s.message.value}</div>}
+        <Herald s={s} />
+      </div>
       {s.paused && s.phase === 'battle' && !menu && (
         <div class="center-banner">
           <h2 style={{ fontSize: '34px', color: 'var(--gold)', textShadow: '0 2px 12px #000' }}>Paused</h2>
@@ -78,6 +77,19 @@ function Hud({ s }: { s: BattleSession }) {
       {menu && <PauseMenu s={s} onClose={() => setMenu(false)} />}
       {s.phase === 'over' && !s.req.tutorial && <EndOverlay s={s} />}
     </>
+  );
+}
+
+/** A general's order to the army, heard across the field. */
+function Herald({ s }: { s: BattleSession }) {
+  const h = s.herald.value;
+  if (!h) return null;
+  const mine = h.side === s.side;
+  return (
+    <div class={`panel herald ${mine ? 'own' : 'foe'} ${h.stance}`} role="status">
+      <span class="who">{h.who}</span>
+      <span class="words">“{h.text}”</span>
+    </div>
   );
 }
 

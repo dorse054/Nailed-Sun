@@ -82,6 +82,8 @@ export class BattleAI implements Controller {
   private lastKnown = new Map<number, { x: number; y: number; t: number }>();
   private stance: 'attack' | 'defend' = 'attack';
   private decided = false;
+  /** When the general's latest change of plan came (Battle's 'plan' order), once we follow it. */
+  private planAt = -1;
   /** When our main line first fought, and when it last did. */
   private contact = -1;
   private lastLineFight = 0;
@@ -96,6 +98,11 @@ export class BattleAI implements Controller {
     this.opts = opts;
   }
 
+  /** Whether the army is going in or holding its ground, as things stand. */
+  get currentStance(): 'attack' | 'defend' {
+    return this.stance;
+  }
+
   update(b: Battle, side: Side): void {
     const mine = b.units.filter((u) => u.side === side && (u.state === 'ready' || u.state === 'embarked') && u.alive > 0);
     if (!mine.length) return;
@@ -108,10 +115,20 @@ export class BattleAI implements Controller {
       this.lastLineFight = b.time;
       if (this.contact < 0) this.contact = b.time;
     }
-    // Nobody wants to start it: after a quiet spell the defender advances anyway.
-    const patience = this.opts.patience ?? 75;
-    if (this.stance === 'defend' && b.time - this.lastLineFight > patience && !b.terrain.fort) this.stance = 'attack';
-    if (this.stance === 'defend' && this.contact >= 0 && b.time - this.contact > 60 && b.remainingValue(side) > b.remainingValue((1 - side) as Side) + 0.1) {
+    // The general changed plan mid-battle: follow it. The walls set the stance of a siege.
+    const plan = b.sides[side].plan;
+    if (plan && plan.at !== this.planAt && !b.terrain.fort) {
+      this.planAt = plan.at;
+      this.stance = plan.stance;
+    }
+    const planned = plan && plan.at === this.planAt ? plan : null;
+    // Nobody wants to start it: after a quiet spell the defender advances anyway. A fresh
+    // order to hold gets its full patience, and a minute before stronger numbers overrule it.
+    const patience = planned?.patience ?? this.opts.patience ?? 75;
+    const quiet = Math.max(this.lastLineFight, planned?.at ?? -1);
+    if (this.stance === 'defend' && b.time - quiet > patience && !b.terrain.fort) this.stance = 'attack';
+    const fought = Math.max(this.contact, planned?.at ?? -1);
+    if (this.stance === 'defend' && this.contact >= 0 && b.time - fought > 60 && b.remainingValue(side) > b.remainingValue((1 - side) as Side) + 0.1) {
       this.stance = 'attack';
     }
     const ctx = this.context(b, side, mine, foes);

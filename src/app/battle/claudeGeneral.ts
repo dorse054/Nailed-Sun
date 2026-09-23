@@ -5,6 +5,11 @@
  * the army. The plan goes into the battle's setup before it starts, so the
  * battle and its replay follow it exactly; an answer that comes too late is
  * dropped and the scripted general decides alone, as it always can.
+ *
+ * During the battle the general thinks again at the moments that matter (the
+ * lines meet, the battle turns, a colossus falls, nobody will attack) and may
+ * switch between pressing and holding. That change goes in as a recorded
+ * order, so the replay follows it too.
  */
 import type { FactionId } from '../../data/schema';
 import { LIGHT_NAMES, WIND_NAMES } from '../../data/schema';
@@ -95,6 +100,109 @@ export function fieldReport(b: Battle, side: Side): string {
   if (mid > 0.06) lines.push('Woods break up the middle of the field.');
   if (t.fort) lines.push(t.fort.defender === side ? 'You hold a walled town: the attacker must take its square.' : 'You must storm a walled town and hold its square.');
   return lines.join('\n');
+}
+
+/** Our army's strength against theirs as things stand: 1 is even, 2 twice theirs. */
+export function strengthRatio(b: Battle, side: Side): number {
+  const foe = (1 - side) as Side;
+  const mine = b.remainingValue(side) * value(b.units.filter((u) => u.side === side));
+  const theirs = b.remainingValue(foe) * value(b.units.filter((u) => u.side === foe));
+  return mine / Math.max(1, theirs);
+}
+
+/** A share of an army, in words. */
+const share = (x: number) => band(x, [0.12, 0.3, 0.45, 0.6, 0.8, 0.95], ['almost none', 'about a quarter', 'about a third', 'about half', 'about two-thirds', 'most', 'all']);
+
+/** Missile units whose shot is nearly spent. */
+function spent(list: Unit[]): Unit[] {
+  return list.filter((u) => {
+    const w = u.def.missile;
+    if (!w || !(w.ammo > 0) || !Number.isFinite(w.ammo) || u.state !== 'ready' || u.alive <= 0) return false;
+    let left = 0;
+    for (const s of u.soldiers) if (s.alive) left += s.ammo;
+    return left < u.alive * w.ammo * 0.25;
+  });
+}
+
+/** Where each unit of an army stands: fighting, waiting, broken or destroyed. */
+function standing(label: string, list: Unit[]): string[] {
+  const fighting = list.filter((u) => u.state === 'ready' && u.engaged > 0);
+  const waiting = list.filter((u) => (u.state === 'ready' && u.engaged === 0) || u.state === 'embarked');
+  const broken = list.filter((u) => u.state === 'routing' || u.state === 'shattered' || u.state === 'fled');
+  const lost = list.filter((u) => u.state === 'dead');
+  const out: string[] = [];
+  if (fighting.length) out.push(`${label} fighting now: ${roster(fighting)}.`);
+  if (waiting.length) out.push(`${label} not yet fighting: ${roster(waiting)}.`);
+  if (broken.length) out.push(`${label} broken or fled: ${roster(broken)}.`);
+  if (lost.length) out.push(`${label} destroyed: ${roster(lost)}.`);
+  const dry = spent(list);
+  if (dry.length) out.push(`${label} nearly out of shot: ${roster(dry)}.`);
+  return out;
+}
+
+/** The battle as it stands, for a general asked to think again. */
+export function battleReport(b: Battle, side: Side): string {
+  const foe = (1 - side) as Side;
+  const mine = b.units.filter((u) => u.side === side);
+  // The general knows only what its army can see of the enemy, and the enemy dead.
+  const known = (u: Unit) => u.state === 'dead' || u.visible[side] || (u.lastSeen[side] > 0 && b.time - u.lastSeen[side] < 10);
+  const theirs = b.units.filter((u) => u.side === foe);
+  const seen = theirs.filter(known);
+  const lines: string[] = [];
+  const f = b.time / b.timeLimit;
+  lines.push(f < 0.25 ? 'The battle is young.' : f < 0.6 ? 'The battle is well under way.' : f < 0.85 ? 'The battle is getting long.' : 'Time is nearly out.');
+  if (!b.terrain.fort) lines.push('If time runs out, whichever army has kept more of itself wins.');
+  lines.push(`You have kept ${share(b.remainingValue(side))} of your army; they have kept ${share(b.remainingValue(foe))} of theirs.`);
+  const r = strengthRatio(b, side);
+  lines.push(`You are now ${band(r, [0.7, 0.9, 1.12, 1.4], ['far weaker than', 'weaker than', 'about even with', 'stronger than', 'far stronger than'])} them.`);
+  lines.push(...standing('Yours', mine));
+  lines.push(...standing('Theirs', seen));
+  if (seen.length < theirs.length) lines.push('Some of their army is out of your sight.');
+  if (b.sides[foe].generalDead) lines.push('Their general has fallen.');
+  return lines.join('\n');
+}
+
+/** A plan changed in the middle of a battle, as the order that carries it. */
+export interface MidPlan {
+  stance: 'attack' | 'defend';
+  patience?: number;
+  speech?: string;
+}
+
+/** How long a mid-battle order to hold stands before the army goes in anyway. */
+const HOLD_AGAIN = 90;
+
+/**
+ * Ask the AI general to think again in the middle of the battle, told why
+ * (the lines have met, the battle is turning). Null when Claude is off,
+ * slow or unclear: the army carries on as it was.
+ */
+export async function askGeneralMid(b: Battle, side: Side, why: string, stance: 'attack' | 'defend', signal?: AbortSignal): Promise<MidPlan | null> {
+  if (!settings.value.claudeAI || claudeStatus.value !== 'ready') return null;
+  const me: FactionId = b.sides[side].faction;
+  const prompt = [
+    `You are the general of ${PERSONA[me]}`,
+    `You are in the middle of a battle in Nailed Sun, a strategy game, against ${factionDef(b.sides[(1 - side) as Side].faction).name}. ${why}`,
+    '',
+    battleReport(b, side),
+    '',
+    `Right now your army is ${stance === 'attack' ? 'pressing the attack' : 'holding its ground'}.`,
+    'Choose: "press" (go forward and attack everywhere) or "hold" (keep your ground and let them come; your army still fights whatever reaches it, and goes forward if they will not come).',
+    'Then give your army one short order, as you would shout it across the field: one sentence, in character, no numbers or game terms.',
+    'Reply with only JSON: {"plan": "press" | "hold", "speech": "<the order>"}',
+  ].join('\n');
+  try {
+    const j = await askClaudeJson<{ plan?: unknown; speech?: unknown } | null>(prompt, { modelTier: 'quick', signal });
+    const choice = j?.plan === 'press' ? 'attack' : j?.plan === 'hold' ? 'defend' : null;
+    if (!choice) return null;
+    const speech = typeof j?.speech === 'string' ? j.speech.trim().replace(/\s+/g, ' ').replace(/^"|"$/g, '').slice(0, 160) : '';
+    const plan: MidPlan = { stance: choice };
+    if (choice === 'defend') plan.patience = HOLD_AGAIN;
+    if (speech) plan.speech = speech;
+    return plan;
+  } catch {
+    return null;
+  }
 }
 
 /**

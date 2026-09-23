@@ -9,7 +9,7 @@ import { DT } from '../../sim/constants';
 import type { BattleSetup, Command, Side, Unit, UnitSpec } from '../../sim/types';
 import { BattleAI } from '../../ai/battleAI';
 import { aiOptions } from '../../ai/plan';
-import { askGeneral } from './claudeGeneral';
+import { askGeneral, askGeneralMid, strengthRatio } from './claudeGeneral';
 import { claudeStatus } from '../claude';
 import { layoutSlots, placeInFormation } from '../../sim/army';
 import { castBlocker, casterPos, findAbility } from '../../sim/abilities';
@@ -18,9 +18,14 @@ import { groupMove, lineFormation, type Placement } from './orders';
 import type { BattleRequest } from '../store';
 import { settings } from '../store';
 import type { FactionId } from '../../data/schema';
+import { factionDef } from '../../data/index';
 import { audio } from '../../audio/audio';
 
 export type Phase = 'deploy' | 'battle' | 'over';
+
+/** The enemy general thinks again at most every this many battle seconds, and this many times a battle. */
+const MID_GAP = 30;
+const MID_ASKS = 4;
 
 interface Targeting {
   unit: number;
@@ -93,6 +98,7 @@ export class BattleSession {
 
   private attachControllers(): void {
     const b = this.battle;
+    this.ais = [null, null];
     for (const s of [0, 1] as Side[]) {
       const custom = this.req.controller?.(s);
       if (custom !== undefined) {
@@ -102,7 +108,7 @@ export class BattleSession {
       const ctrl = b.setup.armies[s].controller;
       // Replays re-run the AI wherever it played, including both sides of a watched battle.
       const auto = this.req.mode === 'demo' || (ctrl === 'ai' && s !== this.side) || (this.req.mode === 'replay' && (s !== this.side || ctrl === 'ai'));
-      if (auto) b.setController(s, new BattleAI(aiOptions(b.setup.armies[s])));
+      if (auto) b.setController(s, (this.ais[s] = new BattleAI(aiOptions(b.setup.armies[s]))));
     }
   }
 
@@ -135,6 +141,8 @@ export class BattleSession {
   dispose(): void {
     this.disposed = true;
     this.general.abort?.abort();
+    this.mid.abort?.abort();
+    clearTimeout(this.heraldTimer);
     cancelAnimationFrame(this.raf);
     this.unbind();
   }
@@ -164,6 +172,89 @@ export class BattleSession {
     });
   }
 
+  /** The scripted general playing each side, where one does. */
+  private ais: [BattleAI | null, BattleAI | null] = [null, null];
+  /**
+   * The enemy general during the battle, when Claude plays it: how often it
+   * has thought again, the strength and the fallen it last saw, and the
+   * question in flight.
+   */
+  private mid = { asks: 0, lastAt: 0, busy: false, contact: false, ratio: 0, fallen: new Set<number>(), abort: null as AbortController | null, tick: 0 };
+  /** A general's latest words to its army, shown over the field for a few seconds. */
+  readonly herald = signal<{ side: Side; who: string; text: string; stance: 'attack' | 'defend' } | null>(null);
+  private heraldTimer = 0;
+
+  /** The side the enemy general plays, when Claude may think for it during this battle. */
+  private midSide(): Side | null {
+    const r = this.req;
+    if (r.tutorial || r.mode === 'replay' || r.mode === 'demo' || this.battle.terrain.fort) return null;
+    const s = (1 - this.side) as Side;
+    return r.setup.armies[s].controller === 'ai' && this.ais[s] ? s : null;
+  }
+
+  /**
+   * Once a second of battle: has something happened that a general would
+   * stop and think about? Most telling first: a colossus or a general falls,
+   * the battle turns, the lines meet, or nobody will attack.
+   */
+  private watchGeneral(): void {
+    const b = this.battle;
+    const m = this.mid;
+    if (b.tick - m.tick < 20) return;
+    m.tick = b.tick;
+    const s = this.midSide();
+    if (s === null || b.over || m.busy || m.asks >= MID_ASKS) return;
+    if (!settings.value.claudeAI || claudeStatus.value !== 'ready') return;
+    // A fallen general gives no new orders: the army fights on as it was.
+    if (b.sides[s].generalDead) return;
+    if (!m.ratio) m.ratio = strengthRatio(b, s);
+    const fell = b.units.filter((u) => (u.def.category === 'colossus' || u.isGeneral) && u.state !== 'ready' && u.state !== 'embarked' && u.state !== 'routing' && !m.fallen.has(u.id));
+    if (b.time - m.lastAt < MID_GAP) return;
+    // Has the army come to blows yet (now, or since the general last thought)?
+    const contact = b.units.some((u) => u.side === s && (u.engaged > 0 || u.lastMeleeTime > m.lastAt));
+    const ratio = strengthRatio(b, s);
+    let why: string | null = null;
+    const ours = fell.find((u) => u.side === s);
+    const theirs = fell.find((u) => u.side !== s);
+    if (ours) why = `You have just lost ${ours.def.name}.`;
+    else if (theirs) why = `Your army has just brought down their ${theirs.def.name}.`;
+    else if (ratio < m.ratio * 0.72) why = 'The battle is turning against you.';
+    else if (ratio > m.ratio * 1.38) why = 'The battle is turning your way.';
+    else if (contact && !m.contact) why = 'The lines have met.';
+    else if (!contact && !m.contact && b.time >= 90 && b.time - m.lastAt >= 75) why = 'The main lines have stood apart for a long while and neither has closed.';
+    if (contact) m.contact = true;
+    if (!why) return;
+    for (const u of fell) m.fallen.add(u.id);
+    m.ratio = ratio;
+    m.lastAt = b.time;
+    m.asks++;
+    m.busy = true;
+    const stance = this.ais[s]!.currentStance;
+    const abort = new AbortController();
+    m.abort = abort;
+    // A general who takes too long has missed the moment.
+    const timer = setTimeout(() => abort.abort(), 12000);
+    void askGeneralMid(b, s, why, stance, abort.signal).then((plan) => {
+      clearTimeout(timer);
+      m.busy = false;
+      if (!plan || this.disposed || b !== this.battle || b.over || this.phase !== 'battle') return;
+      // Pressing on as before needs no order; a new order to hold starts its patience afresh.
+      if (plan.stance === stance && stance === 'attack' && !plan.speech) return;
+      this.battle.issue(s, { type: 'plan', ...plan });
+    });
+  }
+
+  /** A general spoke (live, or from a replay's log): show it over the field. */
+  private heard(side: Side, stance: 'attack' | 'defend', text: string): void {
+    const st = this.battle.sides[side];
+    const who = st.general?.def.name ?? `${factionDef(st.faction).short} general`;
+    this.herald.value = { side, who, text, stance };
+    clearTimeout(this.heraldTimer);
+    this.heraldTimer = window.setTimeout(() => {
+      this.herald.value = null;
+    }, 7000);
+  }
+
   // ------------------------------------------------------------------ loop
 
   private loop = (now: number): void => {
@@ -180,12 +271,14 @@ export class BattleSession {
         if (ev.length) {
           this.renderer.effects.consume(ev, (id) => b.units[id]?.def.name ?? '', this.side);
           audio.events(ev, this.renderer.camera, this.side, (id) => b.units[id]);
+          for (const e of ev) if (e.t === 'plan' && e.speech) this.heard(e.side, e.stance, e.speech);
         }
         this.acc -= DT;
         n++;
         if (b.over) break;
       }
       if (n >= 16) this.acc = 0;
+      this.watchGeneral();
       if (b.over) {
         this.phase = 'over';
         audio.battleEnd(b.result!.winner === this.side);

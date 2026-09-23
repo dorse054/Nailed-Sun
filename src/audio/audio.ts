@@ -507,6 +507,14 @@ class AudioEngine {
           if (e.side !== viewer && windup >= 1) this.warn(0.07, windup);
           break;
         }
+        case 'plan':
+          // A general's new order carries across the field: the war cry to go in, drums to hold.
+          if (this.ok('plan', 3)) {
+            const f = this.factions?.[e.side];
+            if (e.stance === 'attack' && f) this.chargeCry(f, 0.5);
+            else [0, 0.5].forEach((w) => setTimeout(() => this.thud(0.18), w * 1000));
+          }
+          break;
         case 'rout':
           if (e.side === viewer && this.ok('rout', 1)) this.burst(400, 3, 0.08, 0.8, 200);
           break;

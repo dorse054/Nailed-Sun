@@ -58,6 +58,8 @@ export interface SideState {
   generalDead: boolean;
   /** Seconds the attacker has held the capture point uncontested. */
   capture: number;
+  /** The general's latest change of plan during the battle, and when it came. */
+  plan: { stance: 'attack' | 'defend'; patience?: number; at: number } | null;
 }
 
 /** Anything that plays a side: the scripted AI, a tutorial script, a replay. */
@@ -128,6 +130,7 @@ export class Battle {
         general: null,
         generalDead: false,
         capture: 0,
+        plan: null,
       } satisfies SideState;
     }) as [SideState, SideState];
     const scale = setup.unitScale ?? 1;
@@ -291,6 +294,13 @@ export class Battle {
   private applyCommand(side: Side, cmd: Command): void {
     if (cmd.type === 'hour') {
       if (this.sides[side].faction === 'vesperate') this.sides[side].hour = cmd.hour;
+      return;
+    }
+    if (cmd.type === 'plan') {
+      const plan: SideState['plan'] = { stance: cmd.stance, at: this.time };
+      if (cmd.patience !== undefined) plan.patience = cmd.patience;
+      this.sides[side].plan = plan;
+      this.events.push({ t: 'plan', side, stance: cmd.stance, ...(cmd.speech ? { speech: cmd.speech } : {}) });
       return;
     }
     const u = this.units[cmd.unit];
