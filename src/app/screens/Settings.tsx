@@ -1,9 +1,10 @@
-import { useState } from 'preact/hooks';
+import { useRef, useState } from 'preact/hooks';
 import { saveSettings, settings } from '../store';
 import { audio } from '../../audio/audio';
-import { abandonCampaign, savedCampaign } from '../campaign/session';
+import { abandonCampaign, campaignFile, importCampaign, readCampaignFile, savedCampaign } from '../campaign/session';
+import type { CampaignState } from '../../campaign/types';
 import { factionDef } from '../../data/index';
-import { claudeStatus, findClaude } from '../claude';
+import { claudeStatus, findClaude, saveFile } from '../claude';
 
 const SIZES: { value: number; label: string; note: string }[] = [
   { value: 0.5, label: 'Small', note: 'About half-size regiments. Fastest; the default on phones.' },
@@ -11,10 +12,13 @@ const SIZES: { value: number; label: string; note: string }[] = [
   { value: 1, label: 'Large', note: 'Full regiments: 1,000–2,500 soldiers a battle.' },
 ];
 
-/** Sound, unit size and the saved campaign. */
+/** Sound, unit size, the AI and the saved campaign. */
 export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const s = settings.value;
   const [confirm, setConfirm] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const [pending, setPending] = useState<CampaignState | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const saved = savedCampaign();
   const set = (patch: Partial<typeof s>) => saveSettings({ ...s, ...patch });
   void findClaude();
@@ -87,12 +91,77 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                 : 'In a campaign, each AI faction asks Claude once per Toll to choose its wars, treaties and plans, in character. It uses your Claude usage, and the scripted AI takes over whenever Claude is slow or unavailable.'}
           </p>
         </section>
-        {saved && (
-          <section>
-            <span class="label">Saved campaign</span>
+        <section>
+          <span class="label">Saved campaign</span>
+          {saved ? (
             <p class="small">
               {factionDef(saved.player).name}, Toll {saved.turn}.
             </p>
+          ) : (
+            <p class="small muted">No campaign in progress.</p>
+          )}
+          <div class="row">
+            {saved && (
+              <button
+                class="btn small"
+                onClick={async () => {
+                  const f = campaignFile();
+                  if (!f) return;
+                  const r = await saveFile(f.name, f.json);
+                  setNote(r === 'saved' ? 'Save file written.' : r === 'declined' ? null : 'The save file could not be written here.');
+                }}
+                title="Keep a copy, or carry the campaign to another device"
+              >
+                Download save
+              </button>
+            )}
+            <button class="btn small" onClick={() => fileRef.current?.click()} title="Continue a campaign from a save file">
+              Load a save file
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".json,application/json"
+              hidden
+              onChange={async (e) => {
+                const input = e.target as HTMLInputElement;
+                const file = input.files?.[0];
+                input.value = '';
+                if (!file) return;
+                const r = readCampaignFile(await file.text());
+                if ('error' in r) setNote(r.error);
+                else if (saved) setPending(r.state);
+                else setNote(importCampaign(r.state) ? `Loaded: ${factionDef(r.state.player).name}, Toll ${r.state.turn}. Continue it from Campaign.` : 'This browser would not store the save.');
+              }}
+            />
+          </div>
+          {pending && (
+            <div class="row">
+              <span class="warn small">
+                Replace your {factionDef(saved!.player).short} campaign with {factionDef(pending.player).name}, Toll {pending.turn}?
+              </span>
+              <button
+                class="btn small danger"
+                onClick={() => {
+                  setNote(importCampaign(pending) ? `Loaded: ${factionDef(pending.player).name}, Toll ${pending.turn}. Continue it from Campaign.` : 'This browser would not store the save.');
+                  setPending(null);
+                }}
+              >
+                Replace
+              </button>
+              <button class="btn small ghost" onClick={() => setPending(null)}>
+                Keep mine
+              </button>
+            </div>
+          )}
+          {note && (
+            <p class="small muted" role="status">
+              {note}
+            </p>
+          )}
+        </section>
+        {saved && (
+          <section>
             {confirm ? (
               <div class="row">
                 <span class="bad small">Delete it for good?</span>

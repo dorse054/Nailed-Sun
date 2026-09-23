@@ -273,6 +273,33 @@ export function resumeCampaign(s: CampaignState): CampaignSession {
   return active;
 }
 
+/** The saved campaign as a file, to keep or to carry to another device. */
+export function campaignFile(): { name: string; json: string } | null {
+  const s = active?.s ?? savedCampaign();
+  if (!s) return null;
+  return { name: `nailed-sun-${s.player}-toll-${s.turn}.json`, json: JSON.stringify({ kind: 'nailed-sun-campaign', version: 1, state: s }) };
+}
+
+/** Read a campaign file: the state if it is one, or what is wrong with it. */
+export function readCampaignFile(text: string): { state: CampaignState } | { error: string } {
+  let j: { kind?: string; state?: CampaignState };
+  try {
+    j = JSON.parse(text) as typeof j;
+  } catch {
+    return { error: 'That file is not a campaign save.' };
+  }
+  const s = j?.kind === 'nailed-sun-campaign' ? j.state : undefined;
+  if (!s || s.version !== 1 || !s.factions || !s.regions || !s.player) return { error: 'That file is not a Nailed Sun campaign save.' };
+  return { state: s };
+}
+
+/** Make a campaign from a file the saved campaign. False if this browser would not store it. */
+export function importCampaign(s: CampaignState): boolean {
+  if (!save(SAVE_KEY, s)) return false;
+  active = null;
+  return true;
+}
+
 export function abandonCampaign(): void {
   active = null;
   remove(SAVE_KEY);
