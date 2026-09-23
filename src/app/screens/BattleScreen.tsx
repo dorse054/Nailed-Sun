@@ -743,7 +743,47 @@ function PauseMenu({ s, onClose }: { s: BattleSession; onClose: () => void }) {
             Quit to menu
           </button>
         </div>
+        <Adviser s={s} />
       </div>
+    </div>
+  );
+}
+
+/** The adviser in the pause menu: two or three orders for the battle as it stands. */
+function Adviser({ s }: { s: BattleSession }) {
+  void s.hud.value;
+  const a = s.advice;
+  const can = s.phase === 'battle' && !s.req.tutorial && s.req.mode !== 'replay' && s.req.mode !== 'demo';
+  if (!can || (claudeStatus.value !== 'ready' && !a.tips && !a.failed)) return null;
+  // Advice goes stale as the battle moves on.
+  const fresh = a.tips && s.battle.time - a.at < 20;
+  return (
+    <div class="counsel adviser">
+      {a.tips && (
+        <>
+          <div class="counsel-head">
+            Your adviser{fresh ? '' : `, at ${fmtTime(a.at)}`}
+            <span class="jev-mark" title="Counsel from Claude, from where every unit stands">
+              ✦ Claude
+            </span>
+          </div>
+          <ul>
+            {a.tips.map((x) => (
+              <li key={x}>{x}</li>
+            ))}
+          </ul>
+        </>
+      )}
+      {a.busy ? (
+        <p class="general-says waiting">Your adviser studies the field…</p>
+      ) : (
+        <div class="row">
+          <button class="btn small" disabled={claudeStatus.value !== 'ready'} onClick={() => s.askAdvice()} title="Ask Claude what to do now, from where every unit stands">
+            {a.tips ? '✦ Ask again' : '✦ Ask your adviser'}
+          </button>
+          {a.failed && <span class="muted">{claudeStatus.value === 'refused' ? 'Claude isn’t allowed on this page right now.' : 'Your adviser has nothing to say. Try again.'}</span>}
+        </div>
+      )}
     </div>
   );
 }

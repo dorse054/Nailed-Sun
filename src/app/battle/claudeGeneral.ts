@@ -155,6 +155,77 @@ export async function askCounsel(b: Battle, side: Side, signal?: AbortSignal): P
   }
 }
 
+/** Where a unit stands as the player sees the field: left, centre or right, and how far toward the enemy. */
+function where(b: Battle, side: Side, u: Unit): string {
+  const t = b.terrain;
+  const x = u.x / t.width;
+  const h = x < 0.36 ? 'left' : x < 0.64 ? 'centre' : 'right';
+  const zo = t.deployZone(side);
+  const ze = t.deployZone((1 - side) as Side);
+  const oy = zo.y + zo.h / 2;
+  const ey = ze.y + ze.h / 2;
+  const d = Math.max(0, Math.min(1, (u.y - oy) / (ey - oy || 1)));
+  return `${h}, ${d < 0.3 ? 'near your lines' : d < 0.7 ? 'midfield' : 'near their lines'}`;
+}
+
+/** What a unit is doing and how it is holding up, in words. */
+function doing(u: Unit): string {
+  if (u.state === 'routing') return 'routing';
+  if (u.state === 'embarked') return 'aboard';
+  const parts: string[] = [];
+  if (u.engaged > 0) parts.push(u.meleeTarget ? `fighting ${u.meleeTarget.def.name}` : 'fighting');
+  else if (u.missileTarget && u.missileTarget.alive > 0) parts.push(`shooting at ${u.missileTarget.def.name}`);
+  else parts.push(u.moving ? 'moving' : 'standing');
+  const hp = u.hpStart > 0 ? u.soldiers.reduce((a, s) => a + (s.alive ? Math.max(0, s.hp) : 0), 0) / u.hpStart : u.alive / Math.max(1, u.initial);
+  parts.push(hp > 0.8 ? 'fresh' : hp > 0.5 ? 'worn' : hp > 0.25 ? 'badly hurt' : 'nearly spent');
+  if (u.morale < u.maxMorale * 0.5) parts.push('wavering');
+  if (spent([u]).length) parts.push('nearly out of shot');
+  if (u.fatigue > 0.6) parts.push('tired');
+  return parts.join(', ');
+}
+
+/**
+ * Counsel for the player in the middle of a battle, with the game paused:
+ * two or three orders to give now, from where every unit stands. Null when
+ * Claude is unavailable, slow or unclear.
+ */
+export async function askAdvice(b: Battle, side: Side, signal?: AbortSignal): Promise<string[] | null> {
+  if (claudeStatus.value !== 'ready') return null;
+  const me = factionDef(b.sides[side].faction);
+  const foe = factionDef(b.sides[(1 - side) as Side].faction);
+  const known = (u: Unit) => u.visible[side] || (u.lastSeen[side] > 0 && b.time - u.lastSeen[side] < 10);
+  const active = (u: Unit) => u.state === 'ready' || u.state === 'routing' || u.state === 'embarked';
+  const mine = b.units.filter((u) => u.side === side && active(u));
+  const theirs = b.units.filter((u) => u.side !== side && active(u) && known(u));
+  const field = fieldReport(b, side)
+    .split('\n')
+    .filter((l) => /^(The light|Breeze|Gale|No wind|There are woods|Woods)/.test(l));
+  const prompt = [
+    `You are the adviser of the player, who commands ${me.name} against ${foe.name} in Nailed Sun, a strategy game of real-time battles. The battle is paused so the player can give orders.`,
+    '',
+    battleReport(b, side),
+    ...field,
+    '',
+    'Where everyone stands, as the player sees the field (left, centre or right; near the player\'s lines, midfield or near the enemy\'s):',
+    'Yours:',
+    ...mine.map((u) => `- ${u.def.name} (${u.def.roleLabel.toLowerCase()}): ${where(b, side, u)}; ${doing(u)}.`),
+    'Theirs, as far as you can see:',
+    ...(theirs.length ? theirs.map((u) => `- ${u.def.name} (${u.def.roleLabel.toLowerCase()}): ${where(b, side, u)}; ${doing(u)}.`) : ['- none in sight']),
+    '',
+    `${me.name} are strong at: ${me.strengths} ${foe.name} are weak at: ${foe.weaknesses}`,
+    '',
+    'Give the two or three orders that matter most right now, the most urgent first: each one sentence that names the player\'s own units and says where to send them or whom to attack, using left, centre and right as above. No numbers.',
+    'Reply with only JSON: {"tips": ["<order>", "<order>"]}',
+  ].join('\n');
+  try {
+    const j = await askClaudeJson<{ tips?: unknown } | null>(prompt, { modelTier: 'default', signal });
+    const tips = Array.isArray(j?.tips) ? j!.tips.filter((t): t is string => typeof t === 'string' && t.trim().length > 8).map((t) => t.trim().slice(0, 260)) : [];
+    return tips.length ? tips.slice(0, 3) : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Our army's strength against theirs as things stand: 1 is even, 2 twice theirs. */
 export function strengthRatio(b: Battle, side: Side): number {
   const foe = (1 - side) as Side;

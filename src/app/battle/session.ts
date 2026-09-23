@@ -9,7 +9,7 @@ import { DT } from '../../sim/constants';
 import type { BattleSetup, Command, Side, Unit, UnitSpec } from '../../sim/types';
 import { BattleAI } from '../../ai/battleAI';
 import { aiOptions } from '../../ai/plan';
-import { askCounsel, askGeneral, askGeneralMid, strengthRatio } from './claudeGeneral';
+import { askAdvice, askCounsel, askGeneral, askGeneralMid, strengthRatio } from './claudeGeneral';
 import { MomentLog, type Moment } from './moments';
 import { claudeStatus } from '../claude';
 import { layoutSlots, placeInFormation } from '../../sim/army';
@@ -157,6 +157,7 @@ export class BattleSession {
     this.disposed = true;
     this.general.abort?.abort();
     this.counsel.abort?.abort();
+    this.advice.abort?.abort();
     for (const m of this.mids) m.abort?.abort();
     clearTimeout(this.heraldTimer);
     cancelAnimationFrame(this.raf);
@@ -185,6 +186,26 @@ export class BattleSession {
       if (this.disposed) return;
       if (tips) this.counsel.tips = tips;
       else this.counsel.failed = !abort.signal.aborted || this.phase === 'deploy';
+      this.hud.value++;
+    });
+  }
+
+  /** The adviser in the middle of the battle, asked from the pause menu: its orders, and when it gave them. */
+  readonly advice: { busy: boolean; tips: string[] | null; failed: boolean; at: number; abort?: AbortController } = { busy: false, tips: null, failed: false, at: -1 };
+
+  askAdvice(): void {
+    if (this.phase !== 'battle' || this.advice.busy || claudeStatus.value !== 'ready') return;
+    const abort = new AbortController();
+    const timer = setTimeout(() => abort.abort(), 30000);
+    const at = this.battle.time;
+    Object.assign(this.advice, { busy: true, failed: false, abort });
+    this.hud.value++;
+    void askAdvice(this.battle, this.side, abort.signal).then((tips) => {
+      clearTimeout(timer);
+      this.advice.busy = false;
+      if (this.disposed) return;
+      if (tips) Object.assign(this.advice, { tips, at });
+      else this.advice.failed = true;
       this.hud.value++;
     });
   }
