@@ -95,7 +95,7 @@ export const CHAINS: ChainDef[] = [
   chain('choir', 'range', 'range', ['Shard Range', 'Lens Gallery', 'Heliograph Academy'], [{}, {}, {}], RECRUIT('missile infantry')),
   chain('choir', 'stables', 'stables', ['Kilnback Stalls', "Riders' Court", 'Lancer Kilns'], [{}, {}, {}], RECRUIT('cavalry')),
   chain('choir', 'foundry', 'foundry', ['Mirror Foundry', 'Heliostat Works', "Saints' Forge"], [{}, {}, {}], RECRUIT('engines, and at a level-4 city the Molten Saints')),
-  chain('choir', 'farm', 'farm', ['Salt Gardens', 'Irrigated Terraces', 'Sun Orchards'], [{ food: 3, growth: 1 }, { food: 5, growth: 1 }, { food: 8, growth: 2 }], 'Food, scaled by the light: best in bright land.'),
+  chain('choir', 'farm', 'farm', ['Salt Gardens', 'Irrigated Terraces', 'Sun Orchards'], [{ food: 2, growth: 1 }, { food: 4, growth: 1 }, { food: 6, growth: 2 }], 'Food, scaled by the light: best in bright land.'),
   chain('choir', 'market', 'market', ['Glass Market', 'Mirror Exchange', 'Treasury of Light'], [{ coin: 50 }, { coin: 100 }, { coin: 170 }], 'Coin every Toll.'),
   chain('choir', 'shrine', 'shrine', ['Chapel of the Nail', 'Cathedral of Noon', 'Choir Basilica'], [{ order: 2, res: 1 }, { order: 4, res: 2 }, { order: 6, res: 3 }], 'Public order and Radiance. Level 2 trains heroes.'),
   chain('choir', 'walls', 'walls', ['Sunstone Walls', 'Mirror Walls', 'Lens Bastions'], [{ walls: 1, garrison: 1, order: 1 }, { walls: 2, garrison: 2, order: 1 }, { walls: 3, garrison: 3, order: 2 }], 'Walls, gates and towers: attacks here are fortified battles.'),

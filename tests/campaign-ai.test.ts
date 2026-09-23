@@ -6,7 +6,7 @@ import { offerToPlayer, refreshBattle, type AiContext, type TurnHooks } from '..
 import { applyBattle, attackerPower, defenderPower, prepareBattle } from '../src/campaign/battles';
 import { relation } from '../src/campaign/state';
 import { endRound } from '../src/campaign/turn';
-import type { Deal } from '../src/campaign/diplomacy';
+import { factionStrength, type Deal } from '../src/campaign/diplomacy';
 import type { CampaignState } from '../src/campaign/types';
 import type { BattleResult, SideSummary } from '../src/sim/types';
 import { FACTION_IDS } from '../src/data/schema';
@@ -162,6 +162,57 @@ describe('AI offers to the player', () => {
     expect(await offerToPlayer(s, deal, yes)).toBe(true);
     expect(seen).toBe(1);
     expect(relation(s, 'choir', 'hush').stance).toBe('peace');
+  });
+
+  it('sends the player one envoy a Toll at most, and a refused kind of deal waits ten Tolls', async () => {
+    const s = newCampaign({ faction: 'vesperate', seed: 4 });
+    // Every AI faction at peace with the player, warm, and no trade yet: each would like to open trade.
+    for (const f of FACTION_IDS) {
+      if (f === s.player) continue;
+      const r = relation(s, f, s.player);
+      r.stance = 'peace';
+      r.trade = false;
+      r.opinion = 20;
+    }
+    const asked: { turn: number; from: string; kind: string }[] = [];
+    const hooks: TurnHooks = {
+      playerBattle: async () => Promise.reject(new Error('no battles')),
+      offer: async (st, d) => (asked.push({ turn: st.turn, from: d.from, kind: d.kind }), false),
+    };
+    for (let i = 0; i < 16; i++) {
+      for (const f of FACTION_IDS) if (f !== s.player) await scriptedAI(s, f, { ...noBattles, offer: (d) => offerToPlayer(s, d, hooks) });
+      endRound(s);
+    }
+    expect(asked.length).toBeGreaterThanOrEqual(3);
+    const perToll = new Map<number, number>();
+    for (const a of asked) perToll.set(a.turn, (perToll.get(a.turn) ?? 0) + 1);
+    expect(Math.max(...perToll.values())).toBe(1);
+    for (const a of asked) {
+      for (const b of asked) if (b.turn > a.turn && b.from === a.from && b.kind === a.kind) expect(b.turn - a.turn).toBeGreaterThanOrEqual(10);
+    }
+  });
+
+  it('sues for peace again inside ten Tolls only while losing badly', async () => {
+    const s = losingHush();
+    s.factions.hush.coin = 0;
+    const asked: number[] = [];
+    const hooks: TurnHooks = { playerBattle: async () => Promise.reject(new Error('no battles')), offer: async (st) => (asked.push(st.turn), false) };
+    const ctx: AiContext = { ...noBattles, offer: (d) => offerToPlayer(s, d, hooks) };
+    await scriptedAI(s, 'hush', ctx);
+    s.turn += 4;
+    await scriptedAI(s, 'hush', ctx);
+    // Losing badly: a refused peace comes back as soon as envoys may go.
+    expect(asked).toEqual([12, 16]);
+    // Merely losing (about two to one): a refused peace waits its ten Tolls.
+    const base = factionStrength(s, 'choir') - s.factions.choir.coin * 0.5;
+    s.factions.choir.coin = Math.max(0, (factionStrength(s, 'hush') * 2.1 - base) * 2);
+    expect(factionStrength(s, 'choir')).toBeLessThan(factionStrength(s, 'hush') * 2.5);
+    s.turn += 4;
+    await scriptedAI(s, 'hush', ctx);
+    expect(asked).toEqual([12, 16]);
+    s.turn += 6;
+    await scriptedAI(s, 'hush', ctx);
+    expect(asked).toEqual([12, 16, 26]);
   });
 });
 

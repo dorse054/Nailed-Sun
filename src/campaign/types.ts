@@ -166,6 +166,8 @@ export interface AiMemory {
   holdWar?: { target: FactionId; until: number };
   /** Last Toll this faction put a deal to the player. */
   lastOffer?: number;
+  /** Last Toll the player refused each kind of deal from this faction ('demand' for a tribute demand). */
+  refused?: Partial<Record<string, number>>;
   /** Wars joined only to stop a rival's victory, by the Toll they were declared. */
   coalition?: Partial<Record<FactionId, number>>;
 }
