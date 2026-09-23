@@ -61,7 +61,7 @@ export function HowToPage({ nav }: { nav: Nav }) {
             { name: 'Deploy', desc: 'Drag your units inside the blue zone. Put the sun at your back if you can, and your archers upwind. Shadows never move: units standing in them stay hidden until an enemy comes close.' },
             { name: 'Fight', desc: 'Every soldier is simulated. Charges hit hardest into flanks and rears, spears brace against horses, and fatigue wears units down. Big abilities show a marker on the ground before they land.' },
             { name: 'Morale', desc: 'Units waver, rout and can rally. Most units run before they die, so a lost fight rarely means a lost army. Losing your general shakes everyone.' },
-            { name: 'Win', desc: 'Rout the enemy army. In a fortified battle, the attacker wins by holding the town square for a minute; the defender by holding out until time runs out.' },
+            { name: 'Win', desc: 'Rout the enemy army. In a fortified battle, the attacker wins by holding the town square for a minute; the defender by holding out until time runs out. When what is left of the enemy can no longer win, the Menu lets you claim the field rather than chase it down.' },
           ]}
         />
       </Section>

@@ -644,6 +644,9 @@ function PauseMenu({ s, onClose }: { s: BattleSession; onClose: () => void }) {
       s.paused = wasPaused.current;
     };
   }, [s]);
+  // A remnant that can't win (fled, routed or kited to pieces) needn't be chased to the timer.
+  const theirs = s.battle.remainingValue((1 - s.side) as 0 | 1);
+  const claimable = s.phase === 'battle' && !s.req.tutorial && s.req.mode !== 'replay' && s.req.mode !== 'demo' && theirs < 0.35 && s.battle.remainingValue(s.side) >= theirs * 2 + 0.1;
   return (
     <div class="modal-veil" onClick={onClose}>
       <div class="panel modal" onClick={(e) => e.stopPropagation()}>
@@ -657,6 +660,18 @@ function PauseMenu({ s, onClose }: { s: BattleSession; onClose: () => void }) {
           <button class="btn primary" onClick={onClose}>
             Resume
           </button>
+          {claimable && (
+            <button
+              class="btn"
+              title="What is left of the enemy can no longer win: end the battle as a victory"
+              onClick={() => {
+                s.battle.finish(s.side, 'rout');
+                onClose();
+              }}
+            >
+              Claim the field
+            </button>
+          )}
           {s.phase === 'battle' && s.req.mode !== 'replay' && s.req.mode !== 'demo' && (
             <button
               class="btn danger"
