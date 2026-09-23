@@ -491,7 +491,7 @@ function FortSection({ nav }: { nav: Nav }) {
           },
           {
             name: 'Towers',
-            desc: `Each tower shoots ${TOWER_SHOTS} crossbow bolts a second at the nearest attacker within ${meters(bolt.range)}: ${num(bolt.damage)} damage, ${num(bolt.ap)} armour-piercing, leading moving targets. Towers see over the walls, but not into shadow or stealth. They can't be destroyed; they fall silent once no defender is left to man them.`,
+            desc: `Each tower shoots ${TOWER_SHOTS === 1 ? 'a crossbow bolt' : `${TOWER_SHOTS} crossbow bolts`} a second at the nearest attacker within ${meters(bolt.range)}: ${num(bolt.damage)} damage, ${num(bolt.ap)} armour-piercing, leading moving targets. Towers see over the walls, but not into shadow or stealth. They can't be destroyed; they fall silent once no defender is left to man them.`,
           },
         ]}
       />

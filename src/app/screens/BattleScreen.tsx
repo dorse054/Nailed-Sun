@@ -246,7 +246,7 @@ function DeployPanel({ s }: { s: BattleSession }) {
       tips.push(me === 'choir' ? 'Your line faces the sun. The Choir never suffer glare, but with the sun at their backs the enemy is not blinded either.' : `Your line faces the sun: units facing it suffer glare (${L.glareAccuracyPct}% accuracy${L.glareMa ? `, ${L.glareMa} melee attack` : ''}).`);
     else if (rel > (Math.PI * 3) / 4) tips.push(`The sun is at your back: the enemy fights into the glare.`);
     else tips.push(me === 'choir' ? 'The sun is on your flank: turn to put it at your back and the enemy fights into the glare.' : 'The sun is on your flank: turn to attack from the side and neither line is blinded.');
-  } else if (t.light === 4) tips.push('The sun stands overhead: no glare, but non-Choir units tire 50% faster.');
+  } else if (t.light === 4) tips.push(`The sun stands overhead: no glare, but non-Choir units tire ${Math.round((L.fatigueMult - 1) * 100)}% faster.`);
   else tips.push(`${LIGHT_NAMES[t.light]}: spotting ${Math.round((L.spotMult - 1) * 100)}%, beams at ${Math.round(L.beamMult * 100)}%.`);
   if (t.wind > 0) {
     const down = Math.cos(t.sunBearing - facing);
