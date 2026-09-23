@@ -544,6 +544,16 @@ function End({ session }: { session: CampaignSession }) {
             Look at the world
           </button>
           <button
+            class="btn"
+            title="Your record, and every tale and saga told"
+            onClick={() => {
+              leaveCampaign();
+              go({ name: 'chronicles' });
+            }}
+          >
+            Chronicles
+          </button>
+          <button
             class="btn primary"
             onClick={() => {
               abandonCampaign();
