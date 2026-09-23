@@ -178,6 +178,7 @@ export function updateAnchors(b: Battle): void {
       continue;
     }
     if (u.state === 'embarked') continue;
+    if (u.order.kind !== 'hold' && (b.tick + u.id) % 10 === 0) regroup(b, u);
     const o = u.order;
     const speed = unitSpeed(b, u);
     const turn = turnRate(u) * DT;
@@ -321,7 +322,8 @@ export function updateAnchors(b: Battle): void {
   }
 }
 
-function cohesion(u: Unit): number {
+/** Mean distance of (a sample of) the living soldiers from their formation slots, in meters. */
+export function formationError(u: Unit): number {
   let err = 0;
   let n = 0;
   const step = Math.max(1, Math.floor(u.soldiers.length / 8));
@@ -332,9 +334,39 @@ function cohesion(u: Unit): number {
     err += Math.sqrt((s.x - tmp.x) * (s.x - tmp.x) + (s.y - tmp.y) * (s.y - tmp.y));
     n++;
   }
-  if (!n) return 1;
-  err /= n;
-  return err > 30 ? 0 : err > 12 ? 0.35 : err > 6 ? 0.7 : 1;
+  return n ? err / n : 0;
+}
+
+/**
+ * How fast the anchor may advance while the soldiers catch up with their slots. A formation
+ * that has come apart never freezes its anchor outright (regroup() re-forms it where its
+ * soldiers are), so a unit can always move again.
+ */
+function cohesion(u: Unit): number {
+  const err = formationError(u);
+  return err > 30 ? 0.2 : err > 12 ? 0.35 : err > 6 ? 0.7 : 1;
+}
+
+/** Formation error beyond which a unit re-forms around its soldiers. */
+const REGROUP_ERROR = 30;
+
+/**
+ * A formation whose soldiers have drifted far from their slots (a pursuit, a melee that
+ * swirled, soldiers held up behind an obstacle) re-forms where the soldiers are: the anchor
+ * moves to their centroid and a marching unit plans its route again from there.
+ */
+function regroup(b: Battle, u: Unit): void {
+  if (u.soldiers.length <= 1 || (u.special.regroupAt ?? -99) > b.time) return;
+  if (formationError(u) <= REGROUP_ERROR) return;
+  u.special.regroupAt = b.time + 4;
+  centroid(u);
+  const o = u.order;
+  if (o.kind === 'move' && u.path.length) {
+    const flying = isFlyer(u.def) && u.grounded <= 0;
+    u.path = flying ? [{ x: o.x, y: o.y }] : (b.nav.find(u.x, u.y, o.x, o.y, u.def.category) ?? siegeDetour(b, u, o.x, o.y));
+  } else if (o.kind === 'attack') {
+    u.special.pathAt = 0;
+  }
 }
 
 export function centroid(u: Unit): void {
@@ -387,6 +419,9 @@ export function moveSoldiers(b: Battle): void {
     const immobile = isImmobile(u);
     // Gust Leap: the Gale Dancers glide over the front rank.
     const leaping = (u.special.leapUntil ?? 0) > b.time;
+    // Routing defenders slip out through their own gates.
+    const postern = routing && b.terrain.fort !== null && b.terrain.fort.defender === u.side;
+    const pass = (x: number, y: number) => b.terrain.passable(x, y, cat) || (postern && b.terrain.isGate(x, y));
     for (const s of u.soldiers) {
       if (!s.alive) continue;
       s.px = s.x;
@@ -454,8 +489,39 @@ export function moveSoldiers(b: Battle): void {
           arrive = false;
         }
       }
+      // Out of the fire: a soldier not locked in a fight hurries out of burning ground that caught
+      // it, and waits at its edge rather than walking back in while it burns.
+      if (!routing && !s.target && s.hotUntil > b.time && cat !== 'colossus') {
+        const edge = s.hotR + s.radius + 1;
+        let fx = s.x - s.hotX;
+        let fy = s.y - s.hotY;
+        let fd = Math.sqrt(fx * fx + fy * fy);
+        if (fd < 0.01) {
+          fx = dcos(s.id * 2.399);
+          fy = dsin(s.id * 2.399);
+          fd = 1;
+        }
+        if (fd < edge) {
+          gx = s.hotX + (fx / fd) * (edge + 1);
+          gy = s.hotY + (fy / fd) * (edge + 1);
+          maxV = Math.max(maxV, baseSpeed * 0.8);
+          arrive = false;
+        } else {
+          const gdx = gx - s.hotX;
+          const gdy = gy - s.hotY;
+          const gd = Math.sqrt(gdx * gdx + gdy * gdy);
+          if (gd < edge) {
+            // The goal is in the fire: hold at the edge, on the goal's side.
+            const k = gd > 0.01 ? (edge + 0.5) / gd : 0;
+            gx = gd > 0.01 ? s.hotX + gdx * k : s.x;
+            gy = gd > 0.01 ? s.hotY + gdy * k : s.y;
+          }
+        }
+      }
       if (s.staggerTimer > 0) maxV *= 0.2;
-      maxV *= b.terrain.speedMult(s.x, s.y, cat, s.airborne);
+      const tm = b.terrain.speedMult(s.x, s.y, cat, s.airborne);
+      // Routers scramble down a wall faster than an ordered climb up it.
+      maxV *= routing && tm < 0.35 ? 0.35 : tm;
       const dx = gx - s.x;
       const dy = gy - s.y;
       const d = Math.sqrt(dx * dx + dy * dy);
@@ -477,13 +543,15 @@ export function moveSoldiers(b: Battle): void {
       s.vy += ay;
       const nx = s.x + s.vx * DT;
       const ny = s.y + s.vy * DT;
-      if (s.airborne || b.terrain.passable(nx, ny, cat) || (routing && !b.terrain.inBounds(nx, ny))) {
+      // A soldier already standing on impassable ground (deep water, a building, a re-stamped
+      // wall) may always move, so it can walk out instead of being trapped for good.
+      if (s.airborne || pass(nx, ny) || (routing && !b.terrain.inBounds(nx, ny)) || !pass(s.x, s.y)) {
         s.x = nx;
         s.y = ny;
-      } else if (b.terrain.passable(nx, s.y, cat)) {
+      } else if (pass(nx, s.y)) {
         s.x = nx;
         s.vy *= 0.3;
-      } else if (b.terrain.passable(s.x, ny, cat)) {
+      } else if (pass(s.x, ny)) {
         s.y = ny;
         s.vx *= 0.3;
       } else {
@@ -496,7 +564,7 @@ export function moveSoldiers(b: Battle): void {
           const a = base + off * sign;
           const tx2 = s.x + dcos(a) * sp * DT;
           const ty2 = s.y + dsin(a) * sp * DT;
-          if (b.terrain.passable(tx2, ty2, cat)) {
+          if (pass(tx2, ty2)) {
             s.x = tx2;
             s.y = ty2;
             s.vx = dcos(a) * sp * 0.7;
@@ -518,6 +586,37 @@ export function moveSoldiers(b: Battle): void {
       keepInside(b, s, W, H, routing);
     }
     if (flyer) updateFlyerAltitude(b, u);
+  }
+}
+
+/**
+ * Nearest point to (x, y) where a body of this category can stand, searched on rings
+ * 2 m apart out to `maxR` meters; the point itself when it is already passable, or when
+ * nothing passable is found.
+ */
+export function nearestPassable(b: Battle, x: number, y: number, cat: Category, maxR = 80): { x: number; y: number } {
+  const t = b.terrain;
+  if (t.passable(x, y, cat)) return { x, y };
+  for (let r = 2; r <= maxR; r += 2) {
+    const steps = Math.max(8, Math.ceil((2 * Math.PI * r) / 2));
+    for (let k = 0; k < steps; k++) {
+      const a = (k / steps) * 2 * Math.PI;
+      const px = x + dcos(a) * r;
+      const py = y + dsin(a) * r;
+      if (t.passable(px, py, cat)) return { x: px, y: py };
+    }
+  }
+  return { x, y };
+}
+
+/** Move a unit's grounded soldiers off impassable ground (placed in a building, deep water or a wall). */
+export function settleSoldiers(b: Battle, u: Unit): void {
+  const cat = u.def.category;
+  for (const s of u.soldiers) {
+    if (!s.alive || s.airborne || b.terrain.passable(s.x, s.y, cat)) continue;
+    const p = nearestPassable(b, s.x, s.y, cat);
+    s.x = s.px = p.x;
+    s.y = s.py = p.y;
   }
 }
 
@@ -675,7 +774,9 @@ export function resolveCollisions(b: Battle): void {
   for (const s of soldiers) {
     if (!s.alive || s.airborne || s.unit.state === 'embarked') continue;
     if (!b.terrain.inBounds(s.x, s.y)) continue;
-    if (!b.terrain.passable(s.x, s.y, s.unit.def.category)) {
+    const u = s.unit;
+    const postern = b.terrain.fort !== null && b.terrain.fort.defender === u.side && (u.state === 'routing' || u.state === 'shattered');
+    if (!b.terrain.passable(s.x, s.y, u.def.category) && !(postern && b.terrain.isGate(s.x, s.y))) {
       if (b.terrain.passable(s.px, s.py, s.unit.def.category)) {
         s.x = s.px;
         s.y = s.py;

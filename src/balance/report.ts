@@ -801,7 +801,7 @@ function colossusMarkdown(c: ColossusSection, L: string[]): void {
     const byL = r.byLight.map((x) => (x.n ? pct(x.rate) : '—'));
     L.push(`| ${r.name} | ${rateCell(r.vsArms)} | ${byF.join(' | ')} | ${byL.join(' | ')} | ${Math.round(r.meanArmsCost)} | ${r.meanTime.toFixed(0)} s | ${r.timeouts} | ${pct(r.meanLost)} | ${pct(r.meanArmsLost)} |`);
   }
-  L.push('', 'Battles on the timer are scored by the simulation’s remaining-value rule, which counts a colossus at full value until it falls.', '');
+  L.push('', 'Battles on the timer are scored by the simulation’s remaining-value rule: every unit still fighting counts its cost times the share of its hit points left, so a badly hurt colossus counts for what is left of it.', '');
 }
 
 function duelMarkdown(d: DuelSection, L: string[]): void {
@@ -894,7 +894,7 @@ function methodMarkdown(L: string[]): void {
   L.push(
     '- Both sides are played by the same scripted battle AI (`src/ai/battleAI.ts`). Every fixture is fought twice with the sides swapped, and the sun is rotated north, east, south and west across fixtures, so deployment edge and glare cancel out.',
     '- Conditions: 5 light levels (Dark to Blaze) × 3 winds (Calm, Breeze, Gale), each fought on the terrain of the band that has that light naturally (Evernight, Dimmark, Gloaming, Long Afternoon, Glare).',
-    '- Faction battles: two armies of the same budget from the army generator (`generateArmy`, colossus “maybe”), one random draw per fixture, auto-deployed; decided by rout, or on remaining value at the time limit.',
+    '- Faction battles: two armies of the same budget from the army generator (`generateArmy`, colossus “maybe”), one random draw per fixture, auto-deployed; decided by rout (every unit routed, or an army broken: under 25% of its value still fighting while the enemy has at least twice as much plus 10 percentage points), or on remaining value (cost times hit points left, for units still fighting) at the time limit.',
     '- Unit duels: cost-matched copies placed 300 m apart on open, flat ground checked free of water, woods and rocks. A lone unit gives the battle AI no battle line, so the duel harness (`src/balance/duelAI.ts`) sends idle units at the nearest enemy after 20 s without damage or closing in; both sides use it. Duels leave out army context: no general, no Toll, no auras from other units.',
     '- Unit size: with `unitScale` below 1 only infantry, cavalry, beasts and flyers shrink; monsters, artillery, heroes and colossi keep full strength, so reduced-scale runs favour armies that field more of them.',
     '- Win rates count a draw as half a win. Intervals are 95% Wilson intervals for win rates and bootstrap intervals for efficiency.',

@@ -16,6 +16,7 @@ import { formationSize } from '../sim/army';
 import { hasMechanic, isFlyer } from '../sim/mechanics';
 import { moraleState } from '../sim/morale';
 import { tollActive } from '../sim/stats';
+import { ZONES } from '../data/zones';
 
 type Group = 'line' | 'missile' | 'cavalry' | 'skirmisher' | 'monster' | 'artillery' | 'flyer' | 'colossus' | 'lord' | 'hero' | 'support';
 
@@ -76,6 +77,11 @@ export class BattleAI implements Controller {
   private contact = -1;
   private lastLineFight = 0;
   private readonly opts: AIOptions;
+  /**
+   * Fortified battles, attacking: the gate the assault goes in by (x, y), its outward
+   * normal (nx, ny), and whether the line is still gathering outside it.
+   */
+  private siege: { wall: number; x: number; y: number; nx: number; ny: number; phase: 'gather' | 'assault'; since: number } | null = null;
 
   constructor(opts: AIOptions = {}) {
     this.opts = opts;
@@ -101,12 +107,35 @@ export class BattleAI implements Controller {
     }
     const ctx = this.context(b, side, mine, foes);
     this.chooseHour(b, side, mine, foes);
+    const fort = b.terrain.fort;
+    if (fort && fort.defender !== side) this.planSiege(b, mine);
+    const gateGuard = fort && fort.defender === side ? this.threatenedGate(b, side, mine) : null;
+    const cp = b.terrain.capturePoint;
+    const intruders = fort && fort.defender === side && cp ? foes.filter((e) => this.dist(e, cp) < cp.r + 90 && b.terrain.insideFort(e.x, e.y)) : [];
     for (const u of mine) {
       const m = this.memory(u);
       if (u.state === 'embarked') continue;
       if (u.engaged > 0) {
         if (m.engagedSince < 0) m.engagedSince = b.time;
       } else m.engagedSince = -1;
+      if (this.siege && u.engaged === 0 && this.siegeOrder(b, side, u, m, foes)) {
+        if ((this.opts.abilityUse ?? 1) > 0) this.abilities(b, side, u, foes);
+        continue;
+      }
+      if (fort && fort.defender === side && cp && u.engaged === 0 && this.guardPoint(b, side, u, m, intruders, cp)) {
+        if ((this.opts.abilityUse ?? 1) > 0) this.abilities(b, side, u, foes);
+        continue;
+      }
+      if (gateGuard && m.group === 'line' && u.engaged === 0 && gateGuard.guards.includes(u)) {
+        const i = gateGuard.guards.indexOf(u);
+        const lat = (i - (gateGuard.guards.length - 1) / 2) * 30;
+        const x = gateGuard.x - gateGuard.nx * 22 - gateGuard.ny * lat;
+        const y = gateGuard.y - gateGuard.ny * 22 + gateGuard.nx * lat;
+        const near = this.bestMeleeTarget(b, u, foes, 30);
+        if (near) this.order(b, side, u, { type: 'attack', unit: u.id, target: near.id, run: true });
+        else if (this.dist(u, { x, y }) > 8) this.moveTo(b, side, u, x, y, datan2(gateGuard.ny, gateGuard.nx), true);
+        continue;
+      }
       switch (m.group) {
         case 'line':
           this.line(b, side, u, m, ctx, foes);
@@ -209,7 +238,9 @@ export class BattleAI implements Controller {
     const fronts = lineUnits.map(fwd).sort((a, z) => a - z);
     const median = fronts.length ? fronts[Math.floor(fronts.length / 2)]! : 0;
     const gap = Math.sqrt((them.x - me.x) * (them.x - me.x) + (them.y - me.y) * (them.y - me.y));
-    return { me, them, dir, fwd, median, gap };
+    // The line is taking losses from missiles or artillery while not yet in melee.
+    const lineUnderFire = lineUnits.some((u) => u.engaged === 0 && b.time - u.lastLossTime < 4);
+    return { me, them, dir, fwd, median, gap, lineUnits: lineUnits.length, lineUnderFire };
   }
 
   // ------------------------------------------------------------- utilities
@@ -297,6 +328,204 @@ export class BattleAI implements Controller {
     return best;
   }
 
+  // ---------------------------------------------------------------- sieges
+
+  /**
+   * Attacking a fort: pick the gate nearest our army, gather the line outside it,
+   * then go in together once most of it has arrived (or after a while).
+   */
+  private planSiege(b: Battle, mine: Unit[]): void {
+    const walls = b.terrain.walls;
+    const cx = b.terrain.width / 2;
+    const cy = b.terrain.height / 2;
+    if (!this.siege) {
+      let x = 0;
+      let y = 0;
+      let n = 0;
+      for (const u of mine) {
+        x += u.x * u.alive;
+        y += u.y * u.alive;
+        n += u.alive;
+      }
+      const me = n ? { x: x / n, y: y / n } : { x: cx, y: cy };
+      let best = -1;
+      let bd = Infinity;
+      walls.forEach((w, i) => {
+        if (!w.gate) return;
+        const d = this.dist(me, { x: (w.x1 + w.x2) / 2, y: (w.y1 + w.y2) / 2 });
+        if (d < bd) {
+          bd = d;
+          best = i;
+        }
+      });
+      if (best < 0) return;
+      const w = walls[best]!;
+      const mx = (w.x1 + w.x2) / 2;
+      const my = (w.y1 + w.y2) / 2;
+      const len = Math.sqrt((mx - cx) * (mx - cx) + (my - cy) * (my - cy)) || 1;
+      this.siege = { wall: best, x: mx, y: my, nx: (mx - cx) / len, ny: (my - cy) / len, phase: 'gather', since: b.time };
+    }
+    const s = this.siege;
+    if (s.phase === 'gather') {
+      const line = mine.filter((u) => this.memory(u).group === 'line');
+      const stage = { x: s.x + s.nx * 70, y: s.y + s.ny * 70 };
+      const there = line.filter((u) => this.dist(u, stage) < 70).length;
+      if (walls[s.wall]!.broken || !line.length || there >= line.length * 0.7 || b.time - s.since > 100) s.phase = 'assault';
+    }
+  }
+
+  /** Siege orders for one unit of the attacking army; false when it should fight as usual. */
+  private siegeOrder(b: Battle, side: Side, u: Unit, m: Memory, foes: Unit[]): boolean {
+    const s = this.siege!;
+    const gate = b.terrain.walls[s.wall]!;
+    const face = datan2(-s.ny, -s.nx);
+    const lateral = (list: Unit[], spacing: number): number => {
+      const i = list.indexOf(u);
+      return (i - (list.length - 1) / 2) * spacing;
+    };
+    const at = (out: number, lat: number) => ({ x: s.x + s.nx * out - s.ny * lat, y: s.y + s.ny * out + s.nx * lat });
+    const line = b.units.filter((o) => o.side === side && o.state === 'ready' && o.alive > 0 && this.memory(o).group === 'line');
+    const cp = b.terrain.capturePoint;
+    if (gate.broken && cp) {
+      // Through the breach and on to the capture point, fighting whatever stands in the way.
+      // Once the line is spent, everything that can still fight hand to hand goes in too.
+      const armed = m.group === 'missile' && u.soldiers.some((q) => q.alive && q.ammo > 0);
+      const pushes = m.group === 'line' || (!line.length && m.group !== 'artillery' && m.group !== 'support' && m.group !== 'flyer' && !armed);
+      if (!pushes) return false;
+      const near = this.bestMeleeTarget(b, u, foes, 45);
+      if (near) {
+        this.order(b, side, u, { type: 'attack', unit: u.id, target: near.id, run: true });
+        return true;
+      }
+      const list = line.length ? line : b.units.filter((o) => o.side === side && o.state === 'ready' && o.alive > 0);
+      const lat = Math.max(-24, Math.min(24, lateral(list, 14)));
+      const p = { x: cp.x + s.nx * 8 - s.ny * lat, y: cp.y + s.ny * 8 + s.nx * lat };
+      if (this.dist(u, p) > 8) this.moveTo(b, side, u, p.x, p.y, face, true);
+      else if (u.order.kind !== 'hold') this.order(b, side, u, { type: 'halt', unit: u.id });
+      return true;
+    }
+    // With no foot left to do it, riders, beasts and characters batter the gate themselves.
+    const batters = m.group === 'line' || (!line.length && s.phase === 'assault' && (m.group === 'cavalry' || m.group === 'monster' || m.group === 'lord' || m.group === 'hero'));
+    if (batters) {
+      if (s.phase === 'gather') {
+        // Form up outside the gate; meet anything that sallies out.
+        const fort = b.terrain.fort!;
+        const cx = b.terrain.width / 2;
+        const cy = b.terrain.height / 2;
+        const sally = this.bestMeleeTarget(b, u, foes.filter((e) => this.dist(e, { x: cx, y: cy }) > fort.radius + 5), 30);
+        if (sally) {
+          this.order(b, side, u, { type: 'attack', unit: u.id, target: sally.id, run: true });
+          return true;
+        }
+        const p = at(70, lateral(line, 34));
+        if (this.dist(u, p) > 10) this.moveTo(b, side, u, p.x, p.y, face, false);
+        else if (u.order.kind !== 'hold') this.order(b, side, u, { type: 'halt', unit: u.id });
+        return true;
+      }
+      if (gate.broken) return false;
+      // Batter the gate down together; fight whoever stands in the way.
+      const near = this.bestMeleeTarget(b, u, foes, 12);
+      if (near) {
+        this.order(b, side, u, { type: 'attack', unit: u.id, target: near.id, run: true });
+        return true;
+      }
+      const crew = line.length ? line : b.units.filter((o) => o.side === side && o.state === 'ready' && o.alive > 0 && ['cavalry', 'monster', 'lord', 'hero'].includes(this.memory(o).group));
+      const p = at(9, lateral(crew, 12));
+      if (this.dist(u, p) > 5) this.moveTo(b, side, u, p.x, p.y, face, true);
+      return true;
+    }
+    if (gate.broken) return false;
+    if (m.group === 'artillery') {
+      // Bring the engines within range of the gate: they batter it on their own.
+      const w = weaponOf(u);
+      if (!w) return false;
+      const d = this.dist(u, s);
+      const range = effectiveRange(b, u, w, datan2(s.y - u.y, s.x - u.x));
+      if (d > range * 0.92) {
+        const k = (d - range * 0.85) / d;
+        this.moveTo(b, side, u, u.x + (s.x - u.x) * k, u.y + (s.y - u.y) * k, datan2(s.y - u.y, s.x - u.x), false);
+      } else if (u.order.kind === 'move' && !w.whileMoving) this.order(b, side, u, { type: 'halt', unit: u.id });
+      return true;
+    }
+    if (m.group === 'cavalry' || m.group === 'monster') {
+      // Nothing to charge over a wall: wait behind the assault until the gate falls.
+      const list = b.units.filter((o) => o.side === side && o.state === 'ready' && (this.memory(o).group === 'cavalry' || this.memory(o).group === 'monster'));
+      const p = at(130, lateral(list, 40));
+      if (this.dist(u, p) > 15) this.moveTo(b, side, u, p.x, p.y, face, false);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Defending a fort: once the enemy is inside the walls, everything that can fight hand to
+   * hand falls back onto the capture point and fights whoever comes close to it, instead of
+   * chasing raiders around the town; archers out of arrows stand on it too.
+   */
+  private guardPoint(b: Battle, side: Side, u: Unit, m: Memory, intruders: Unit[], cp: { x: number; y: number; r: number }): boolean {
+    const g = m.group;
+    if (g === 'artillery' || g === 'support' || g === 'flyer' || g === 'colossus') return false;
+    const armed = (g === 'missile' || g === 'skirmisher') && u.soldiers.some((q) => q.alive && q.ammo > 0);
+    if (armed) return false;
+    const threatened = intruders.length > 0 || b.sides[(1 - side) as Side].capture > 0;
+    if (!threatened && g !== 'missile' && g !== 'skirmisher') return false;
+    const close = intruders.filter((e) => this.dist(e, cp) < cp.r + 45);
+    const t = close.length ? this.bestMeleeTarget(b, u, close) : this.bestMeleeTarget(b, u, intruders, 15);
+    if (t) {
+      this.order(b, side, u, { type: 'attack', unit: u.id, target: t.id, run: true });
+      return true;
+    }
+    if (this.dist(u, cp) > cp.r * 0.7) {
+      const a = (u.id * 2.399) % (2 * Math.PI);
+      this.moveTo(b, side, u, cp.x + dcos(a) * cp.r * 0.4, cp.y + dsin(a) * cp.r * 0.4, u.facing, threatened);
+    } else if (u.order.kind !== 'hold') this.order(b, side, u, { type: 'halt', unit: u.id });
+    return true;
+  }
+
+  /**
+   * Defending a fort: the gate the most enemy soldiers are closing on, and the half of
+   * our line (nearest to it) that should stand behind it. Null while no gate is threatened.
+   */
+  private threatenedGate(b: Battle, side: Side, mine: Unit[]): { x: number; y: number; nx: number; ny: number; guards: Unit[] } | null {
+    const cx = b.terrain.width / 2;
+    const cy = b.terrain.height / 2;
+    let best: { x: number; y: number } | null = null;
+    let most = 0;
+    for (const w of b.terrain.walls) {
+      if (!w.gate) continue;
+      const g = { x: (w.x1 + w.x2) / 2, y: (w.y1 + w.y2) / 2 };
+      let n = 0;
+      for (const e of b.units) {
+        if (e.side === side || e.state !== 'ready' || e.alive <= 0 || !e.visible[side]) continue;
+        if (e.def.role === 'artillery' || isFlyer(e.def) || e.def.missile) continue;
+        if (this.dist(e, g) < 170) n += e.alive;
+      }
+      if (n > most) {
+        most = n;
+        best = g;
+      }
+    }
+    if (!best || most < 40) return null;
+    const len = Math.sqrt((best.x - cx) * (best.x - cx) + (best.y - cy) * (best.y - cy)) || 1;
+    const line = mine.filter((u) => this.memory(u).group === 'line' && u.state === 'ready');
+    const g = best;
+    const guards = [...line].sort((p, q) => this.dist(p, g) - this.dist(q, g) || p.id - q.id).slice(0, Math.max(2, Math.ceil(line.length / 2)));
+    return { x: g.x, y: g.y, nx: (g.x - cx) / len, ny: (g.y - cy) / len, guards };
+  }
+
+  /**
+   * Nothing to shoot or fight in sight and no battle line to keep with: go where the
+   * enemy was last seen (hidden units are found once we come close), instead of idling
+   * until the time limit.
+   */
+  private hunt(b: Battle, side: Side, u: Unit, ctx: Ctx, run: boolean): void {
+    const d = this.dist(u, ctx.them);
+    if (d < 20) return;
+    const dir = datan2(ctx.them.y - u.y, ctx.them.x - u.x);
+    const step = Math.min(d, 60);
+    this.moveTo(b, side, u, u.x + dcos(dir) * step, u.y + dsin(dir) * step, dir, run);
+  }
+
   private moveTo(b: Battle, side: Side, u: Unit, x: number, y: number, facing: number, run: boolean): void {
     x = Math.max(10, Math.min(b.terrain.width - 10, x));
     y = Math.max(10, Math.min(b.terrain.height - 10, y));
@@ -329,10 +558,10 @@ export class BattleAI implements Controller {
       if (u.order.kind === 'attack') this.order(b, side, u, { type: 'halt', unit: u.id });
       return;
     }
-    // Advance in step with the line.
+    // Advance in step with the line; under missile or artillery fire, close the distance at a run.
     const f = ctx.fwd(u);
     const ahead = f - ctx.median;
-    if (ahead > 14) {
+    if (ahead > (ctx.lineUnderFire ? 30 : 14)) {
       if (u.order.kind !== 'hold') this.order(b, side, u, { type: 'halt', unit: u.id });
       return;
     }
@@ -340,7 +569,7 @@ export class BattleAI implements Controller {
     const x = u.x + dcos(ctx.dir) * step;
     const y = u.y + dsin(ctx.dir) * step;
     void m;
-    this.moveTo(b, side, u, x, y, ctx.dir, false);
+    this.moveTo(b, side, u, x, y, ctx.dir, ctx.lineUnderFire);
   }
 
   private missile(b: Battle, side: Side, u: Unit, m: Memory, ctx: Ctx, foes: Unit[]): void {
@@ -350,6 +579,8 @@ export class BattleAI implements Controller {
       // Out of ammunition: join the melee where it helps.
       const t = this.bestMeleeTarget(b, u, foes.filter((e) => e.engaged > 0), 120);
       if (t) this.order(b, side, u, { type: 'attack', unit: u.id, target: t.id, run: true });
+      // No battle line left to join: fight as one.
+      else if (!ctx.lineUnits) this.line(b, side, u, m, ctx, foes);
       return;
     }
     if (u.engaged > 0) {
@@ -388,6 +619,11 @@ export class BattleAI implements Controller {
     }
     if (best && bs > 0) {
       if (u.missileTarget !== best) this.order(b, side, u, { type: 'attack', unit: u.id, target: best.id, run: false });
+      return;
+    }
+    // Nothing in range and no line to keep behind: go and find the enemy.
+    if (!ctx.lineUnits) {
+      this.hunt(b, side, u, ctx, false);
       return;
     }
     // Nothing in range: keep position behind our line.
@@ -436,7 +672,10 @@ export class BattleAI implements Controller {
         break;
       }
     }
-    if (!inRange && foes.length) {
+    if (!inRange && !ctx.lineUnits) {
+      // No line left to stand behind: close in on where the enemy was last seen.
+      this.hunt(b, side, u, ctx, false);
+    } else if (!inRange && foes.length) {
       const x = u.x + dcos(ctx.dir) * 40;
       const y = u.y + dsin(ctx.dir) * 40;
       if (ctx.fwd(u) < ctx.median - 50) this.moveTo(b, side, u, x, y, ctx.dir, false);
@@ -473,8 +712,11 @@ export class BattleAI implements Controller {
       }
     }
     const engagedFoes = foes.filter((e) => e.engaged > 0);
-    // Before the lines meet, guard a wing.
-    if (this.contact < 0 || !engagedFoes.length) {
+    // Before the lines meet, guard a wing. But don't wait for a battle line that isn't there
+    // or never closes (a lone colossus, a skirmish), and don't idle on the wing long after it.
+    const lineWaiting = this.contact < 0 && ctx.lineUnits > 0 && b.time < 150;
+    const lull = this.contact >= 0 && !engagedFoes.length && b.time - this.lastLineFight < 30;
+    if (lineWaiting || lull) {
       // Hunt exposed missiles and artillery that are close.
       const prey = this.threatNear(u, foes, 180, (e) => (e.def.role === 'missile' || e.def.role === 'artillery') && e.engaged === 0 && !this.guarded(e, foes));
       if (prey && this.stance === 'attack') {
@@ -563,8 +805,9 @@ export class BattleAI implements Controller {
       this.moveTo(b, side, u, u.x + dcos(away) * 80, u.y + dsin(away) * 80, away, true);
       return;
     }
-    // Run from melee threats.
-    const danger = this.threatNear(u, foes, 55, (e) => (e.def.category === 'cavalry' || e.def.category === 'beast' || e.def.category === 'flyer') && !e.def.missile);
+    // Run from melee threats: anything without missiles that could close in (cavalry, beasts, flyers,
+    // monsters, colossi and infantry alike); skirmishers never stand and trade blows.
+    const danger = this.threatNear(u, foes, 55, (e) => !e.def.missile && e.def.role !== 'artillery');
     if (danger) {
       const away = datan2(u.y - danger.y, u.x - danger.x);
       this.moveTo(b, side, u, u.x + dcos(away) * 90, u.y + dsin(away) * 90, away, true);
@@ -584,7 +827,10 @@ export class BattleAI implements Controller {
         best = e;
       }
     }
-    if (!best) return;
+    if (!best) {
+      if (!ctx.lineUnits) this.hunt(b, side, u, ctx, true);
+      return;
+    }
     const dirTo = datan2(best.y - u.y, best.x - u.x);
     const range = effectiveRange(b, u, w, dirTo);
     const d = this.dist(u, best);
@@ -652,7 +898,10 @@ export class BattleAI implements Controller {
         best = e;
       }
     }
-    if (!best) return;
+    if (!best) {
+      if (!ctx.lineUnits) this.hunt(b, side, u, ctx, true);
+      return;
+    }
     if (hasAmmo) {
       // Bombing runs: fly over the target and out the other side.
       const d = this.dist(u, best);
@@ -676,6 +925,8 @@ export class BattleAI implements Controller {
     }
     if (u.engaged > 0 && u.meleeTarget && u.meleeTarget.state === 'ready') return;
     const flying = isFlyer(u.def);
+    // A colossus without a battle line to keep pace with fights on its own.
+    const alone = ctx.lineUnits === 0;
     let best: Unit | null = null;
     let bs = -Infinity;
     for (const e of foes) {
@@ -686,17 +937,23 @@ export class BattleAI implements Controller {
       }
       if (e.def.role === 'antiLarge') s -= 15;
       if (e.def.category === 'colossus') s += 5;
+      // Don't chase what it can't catch: fast units that are free to run.
+      if (e.engaged === 0 && e.def.speed > u.def.speed * 1.3 && this.dist(u, e) > 60) s -= 30;
       if (s > bs) {
         bs = s;
         best = e;
       }
     }
-    if (!best) return;
-    const wait = this.stance === 'defend' && this.contact < 0 && this.edgeGap(u, best) > 50;
+    if (!best) {
+      // Nothing in sight: march on where the enemy was last seen.
+      if (alone || this.stance === 'attack') this.moveTo(b, side, u, ctx.them.x, ctx.them.y, ctx.dir, true);
+      return;
+    }
+    const wait = !alone && this.stance === 'defend' && this.contact < 0 && this.edgeGap(u, best) > 50;
     if (wait) return;
     // Walk with the line; don't run ahead alone.
     const f = ctx.fwd(u);
-    if (!flying && this.contact < 0 && f - ctx.median > 25 && this.edgeGap(u, best) > 60) {
+    if (!flying && !alone && this.contact < 0 && f - ctx.median > 25 && this.edgeGap(u, best) > 60) {
       if (u.order.kind !== 'hold') this.order(b, side, u, { type: 'halt', unit: u.id });
       return;
     }
@@ -705,7 +962,6 @@ export class BattleAI implements Controller {
 
   /** Sail across the enemy line with the wind, ram what's ahead, broadside the rest. */
   private dreadsail(b: Battle, side: Side, u: Unit, ctx: Ctx, foes: Unit[]): void {
-    if (!foes.length) return;
     const down = b.terrain.sunBearing;
     const hull = casterPos(u);
     // Anything in front and downwind to ram?
@@ -851,9 +1107,9 @@ export class BattleAI implements Controller {
         }
         const hurt = b.units.find((f) => f.side === side && f.state === 'ready' && f.engaged > 0 && foes.every((e) => this.dist(e, f) > 40) && this.dist(o, f) < range);
         if (hurt) return { x: hurt.x, y: hurt.y };
-        // Otherwise use it to brighten the target of our beams.
-        const beams = b.units.find((f) => f.side === side && f.state === 'ready' && f.def.missile?.lightScaled && f.missileTarget && this.dist(o, f.missileTarget) < range);
-        if (beams && beams.missileTarget && beams.light < 3) return { x: (beams.x + beams.missileTarget.x) / 2, y: (beams.y + beams.missileTarget.y) / 2 };
+        // Otherwise light up our own beam units: a beam draws its power from the light where it is fired.
+        const beams = b.units.find((f) => f.side === side && f.state === 'ready' && f.def.missile?.lightScaled && f.missileTarget && f.light < 3 && this.dist(o, f) < range);
+        if (beams && def.effects.some((e) => e.kind === 'zone' && e.at === 'target' && (ZONES[e.zone]?.light?.level ?? 0) >= 3)) return { x: beams.x, y: beams.y };
         return null;
       }
       case 'onEnemyCharacter': {
@@ -983,7 +1239,7 @@ export class BattleAI implements Controller {
       const friendlyFire = def.effects.some((e) => (e.kind === 'damage' || e.kind === 'knockback') && e.who === 'all') || name === 'hourThatNeverComes';
       return enemies - (friendlyFire ? friends * 1.5 : friends * 0.1);
     };
-    const needed = name === 'unveil' ? 120 : name === 'hourThatNeverComes' ? 160 : name === 'thousandEyes' ? 110 : name === 'noonLance' ? 70 : front ? 14 : 40;
+    const needed = name === 'unveil' ? 120 : name === 'hourThatNeverComes' ? 100 : name === 'thousandEyes' ? 110 : name === 'noonLance' ? 70 : front ? 14 : 40;
     let best: { x: number; y: number; s: number } | null = null;
     for (const e of foes) {
       const d = this.dist(o, e);
@@ -1023,6 +1279,10 @@ type Ctx = {
   fwd: (u: Unit) => number;
   median: number;
   gap: number;
+  /** Units of the battle line (infantry and bait) this side still has. */
+  lineUnits: number;
+  /** Some line unit out of melee has lost soldiers in the last 4 s: missiles or artillery are on it. */
+  lineUnderFire: boolean;
 };
 
 /** Main battle-line units whose fighting counts as the armies meeting. */

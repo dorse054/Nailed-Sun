@@ -68,6 +68,13 @@ export interface Soldier {
   flankKind: number;
   /** Ambush strike available (stealth units). */
   ambush: boolean;
+  /** Big bodies: how many enemy soldiers are fighting this one in melee (recounted every tick). */
+  attackers: number;
+  /** The last burning ground that caught this soldier: when it burns out, its center and radius. */
+  hotUntil: number;
+  hotX: number;
+  hotY: number;
+  hotR: number;
 }
 
 export type UnitState = 'ready' | 'routing' | 'shattered' | 'dead' | 'fled' | 'embarked';
@@ -197,6 +204,8 @@ export interface Unit {
   special: Record<string, number>;
   kills: number;
   damageDealt: number;
+  /** Points of enemy value destroyed: hit points taken off enemies, priced at their unit's cost. */
+  valueDealt: number;
   damageTaken: number;
   isGeneral: boolean;
   embarkedOn: Unit | null;
@@ -237,6 +246,8 @@ export interface Zone {
   spreadAt: number;
   generation: number;
   born: number;
+  /** Burning ground set by a weapon: its fire damage per second (else the zone definition's). */
+  dps?: number;
 }
 
 export interface Projectile {
@@ -357,6 +368,8 @@ export interface UnitSummary {
   alive: number;
   kills: number;
   damageDealt: number;
+  /** Points of enemy value destroyed (hit points priced at the victim's cost). */
+  valueDealt?: number;
   state: UnitState;
   cost: number;
   /** Share of the unit's starting hit points still standing, 0..1. */

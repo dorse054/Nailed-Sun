@@ -159,6 +159,21 @@ export const COMBAT = {
   colossusStunLockout: 20,
 };
 
+/**
+ * Damage numbers of the colossi's scripted signature moves. Their shapes and
+ * timings are in the ability data; these are the hits.
+ */
+export const SIGNATURE = {
+  /** The Nailbearer's sweeping beam: burns the first `pierce` bodies in its path (each once per cast), scaled by light. */
+  noonLance: { damage: 22, ap: 28, halfWidth: 2.5, range: 300, pierce: 6 },
+  /** Old Midnight's ring: Brittle units take this resonance hit as it passes. */
+  hourThatNeverComes: { damage: 30, ap: 30 },
+  /** The Umbral Mother's swoop: each soldier under it is struck once. */
+  dive: { damage: 30, ap: 12 },
+  /** The Dreadsail's ram: damage at 8 m/s (it scales with speed), and how far ahead of the bow it reaches. */
+  rammingRun: { damage: 45, ap: 30, reach: 14 },
+};
+
 /** Morale constants. States: Steady, Wavering below 50%, Broken at 0. */
 export const MORALE = {
   waveringAt: 0.5,
@@ -180,8 +195,8 @@ export const MORALE = {
   rallyMorale: 0.4,
   /** A unit that routs this many times is Shattered and leaves the field. */
   shatterRouts: 3,
-  /** A unit below this share of its soldiers shatters when it routs. */
-  shatterStrength: 0.12,
+  /** A unit with less than this share of its hit points left (wounds count) shatters when it routs. */
+  shatterStrength: 0.25,
   fearDrain: 2,
   losingMeleeDrain: 2.2,
   winningMeleeRegen: 0.6,

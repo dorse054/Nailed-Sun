@@ -25,6 +25,33 @@ import {
 import { hasMechanic, mechanic } from './mechanics';
 import { nearestSoldier, reachOf } from './movement';
 
+/**
+ * How many soldiers can fight one big body (monster, colossus, engine, flyer) at
+ * once: one ring of attackers around it, a formation's spacing apart. The rest
+ * of a crowd waits its turn behind them.
+ */
+export function meleeSlots(o: Soldier): number {
+  return Math.max(4, Math.round((2 * Math.PI * (o.radius + 0.45)) / MELEE_SLOT_SPACING));
+}
+const MELEE_SLOT_SPACING = 1.25;
+
+/** Count each big body's melee attackers; soldiers beyond its slots let go of it. */
+function countAttackers(b: Battle): void {
+  const bigs = b.bigSoldiers;
+  for (let i = 0; i < bigs.length; i++) bigs[i]!.attackers = 0;
+  const soldiers = b.soldiers;
+  for (let i = 0; i < soldiers.length; i++) {
+    const s = soldiers[i]!;
+    const t = s.target;
+    if (!t || !s.alive || t.radius <= 1.3) continue;
+    if (t.attackers >= meleeSlots(t)) {
+      s.target = null;
+      continue;
+    }
+    t.attackers++;
+  }
+}
+
 export function updateMelee(b: Battle): void {
   const soldiers = b.soldiers;
   for (const u of b.units) {
@@ -34,6 +61,7 @@ export function updateMelee(b: Battle): void {
     const rp = u.special.rearP;
     if (rp) u.special.rearP = rp * 0.96;
   }
+  countAttackers(b);
   // Soldiers only look for opponents when some enemy unit is close.
   if (b.tick % 4 === 0) markNearEnemies(b);
   for (let i = 0; i < soldiers.length; i++) {
@@ -74,6 +102,9 @@ export function updateMelee(b: Battle): void {
         search(b, s, reach);
         t = s.target;
       }
+    } else if (!t && s.approach) {
+      // No enemy near the unit any more: stop chasing and fall back into formation.
+      s.approach = null;
     }
     if (!t) continue;
     u.engaged++;
@@ -155,6 +186,8 @@ function search(b: Battle, s: Soldier, reach: number): void {
   for (const o of b.bigSoldiers) {
     if (!o.alive || o.unit.side === u.side || o.unit.state === 'embarked') continue;
     if (o.airborne && !s.airborne) continue;
+    // Every place around it is taken.
+    if (o.attackers >= meleeSlots(o)) continue;
     const dx = o.x - s.x;
     const dy = o.y - s.y;
     const d = Math.sqrt(dx * dx + dy * dy) - o.radius - s.radius;
@@ -166,8 +199,10 @@ function search(b: Battle, s: Soldier, reach: number): void {
     }
   }
   if (best) {
-    s.target = best;
+    const chosen = best as Soldier;
+    s.target = chosen;
     s.approach = null;
+    if (chosen.radius > 1.3) chosen.attackers++;
     return;
   }
   // Close with the enemy: charging soldiers run at the target unit, others join the fight nearby.
@@ -176,7 +211,17 @@ function search(b: Battle, s: Soldier, reach: number): void {
     s.approach = null;
     return;
   }
-  if (s.approach && s.approach.alive && s.approach.unit.state !== 'fled') {
+  // Frontage: only the front ranks of a block step out to find an opponent. The ranks behind
+  // keep formation, fight whoever comes within reach (a flank or rear attack) and step up as
+  // the front rank falls, so a wider line or a flank attack brings more soldiers to bear.
+  if (u.formation === 'block' && frontRank(u, s) >= FRONT_RANKS) {
+    s.approach = null;
+    return;
+  }
+  // Soldiers only run after routers when their unit was sent after that unit: otherwise a
+  // formation dissolves into a stream of pursuers and its anchor can no longer move.
+  const chases = (o: Soldier): boolean => (o.unit.state !== 'routing' && o.unit.state !== 'shattered') || o.unit === pref;
+  if (s.approach && s.approach.alive && s.approach.unit.state !== 'fled' && chases(s.approach)) {
     const dx = s.approach.x - s.x;
     const dy = s.approach.y - s.y;
     if (dx * dx + dy * dy < 30 * 30) return;
@@ -188,6 +233,7 @@ function search(b: Battle, s: Soldier, reach: number): void {
     const o = b.soldiers[j]!;
     if (!o.alive || o.unit.side === u.side || o.unit.state === 'embarked') return;
     if (o.airborne && !s.airborne) return;
+    if (!chases(o)) return;
     const dx = o.x - s.x;
     const dy = o.y - s.y;
     const d = dx * dx + dy * dy + (pref && o.unit !== pref ? 64 : 0);
@@ -205,6 +251,15 @@ function search(b: Battle, s: Soldier, reach: number): void {
   const n = near as Soldier | null;
   if (n && !s.airborne && !straightClear(b, s, n)) near = null;
   s.approach = near;
+}
+
+/** Ranks of a block that press forward into melee. */
+export const FRONT_RANKS = 2;
+
+/** Which rank of its block a soldier stands in (0 = front), from its formation slot. */
+export function frontRank(u: Unit, s: Soldier): number {
+  const files = Math.max(1, Math.min(u.files, u.alive));
+  return Math.floor(s.slot / files);
 }
 
 function straightClear(b: Battle, s: Soldier, t: Soldier): boolean {

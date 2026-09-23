@@ -66,9 +66,13 @@ export function applyDamage(
   if (tu.special.elkHp !== undefined && tu.special.elkHp > 0 && from) {
     const dir = datan2(from.y - t.y, from.x - t.x);
     if (Math.abs(angleDiff(tu.facing, dir)) < 1.1) {
+      const elkLost = Math.min(dmg, tu.special.elkHp);
       tu.special.elkHp -= dmg;
       tu.damageTaken += dmg;
-      if (fromUnit) fromUnit.damageDealt += dmg;
+      if (fromUnit) {
+        fromUnit.damageDealt += dmg;
+        if (fromUnit.side !== tu.side) fromUnit.valueDealt += elkLost * valuePerHp(tu);
+      }
       if (tu.special.elkHp <= 0) {
         tu.special.elkHp = 0;
         b.events.push({ t: 'text', x: t.x, y: t.y, text: 'Elk team down', side: tu.side });
@@ -87,9 +91,14 @@ export function applyDamage(
     tu.special.sailsUntil = b.time + 20;
     b.events.push({ t: 'text', x: t.x, y: t.y, text: 'Sails alight!', side: tu.side });
   }
+  const lost = Math.min(dmg, Math.max(0, t.hp));
   t.hp -= dmg;
   tu.damageTaken += dmg;
-  if (fromUnit) fromUnit.damageDealt += dmg;
+  if (fromUnit) {
+    fromUnit.damageDealt += dmg;
+    if (fromUnit.side !== tu.side) fromUnit.valueDealt += lost * valuePerHp(tu);
+  }
+  casualty(b, t, lost / t.maxHp);
   if (t.hp <= 0) {
     killSoldier(b, t, from, fromUnit);
     return true;
@@ -97,9 +106,40 @@ export function applyDamage(
   return false;
 }
 
+const VALUE_PER_HP = new WeakMap<Unit, number>();
+
+/** A unit's cost per starting hit point (an elk team included), for the value-dealt tally. */
+function valuePerHp(u: Unit): number {
+  let v = VALUE_PER_HP.get(u);
+  if (v === undefined) {
+    let max = u.special.elkMax ?? 0;
+    for (const s of u.soldiers) max += s.maxHp;
+    v = max > 0 ? u.cost / max : 0;
+    VALUE_PER_HP.set(u, v);
+  }
+  return v;
+}
+
+/**
+ * Casualties count by the hit points a unit loses, a wound as a fraction of a
+ * soldier: losing the whole unit costs MORALE.casualtyShock % of max morale
+ * whether it bled or died outright, and heavy recent losses drain it further.
+ * Soldiers here take several hits to fall, so counting deaths alone would let
+ * a badly wounded unit stand at full morale until one sweep killed it outright.
+ */
+function casualty(b: Battle, t: Soldier, share: number): void {
+  if (share <= 0) return;
+  const tu = t.unit;
+  tu.lastLossTime = b.time;
+  tu.losses[Math.floor(b.time) % tu.losses.length]! += share;
+  tu.morale -= ((MORALE.casualtyShock / 100) * tu.maxMorale * share) / Math.max(1, tu.initial);
+}
+
 export function killSoldier(b: Battle, t: Soldier, from: Soldier | null, fromUnit: Unit | null): void {
   if (!t.alive) return;
   const tu = t.unit;
+  // Whatever health it still had counts as lost (a soldier swallowed whole, or felled outright).
+  casualty(b, t, Math.max(0, t.hp) / t.maxHp);
   t.alive = false;
   t.hp = 0;
   t.target = null;
@@ -107,9 +147,6 @@ export function killSoldier(b: Battle, t: Soldier, from: Soldier | null, fromUni
   tu.alive--;
   tu.slotsDirty = true;
   tu.lastLossTime = b.time;
-  tu.losses[Math.floor(b.time) % tu.losses.length]! += 1;
-  // Casualty shock: losing the whole unit would cost MORALE.casualtyShock % of max morale.
-  tu.morale -= ((MORALE.casualtyShock / 100) * tu.maxMorale) / Math.max(1, tu.initial);
   if (from) from.kills++;
   if (fromUnit) fromUnit.kills++;
   const big = isBig(t);

@@ -12,6 +12,7 @@ import { DT } from './constants';
 import type { Unit } from './types';
 import { hasMechanic, mechanic } from './mechanics';
 import { angleDiff, datan2 } from '../core/dmath';
+import { unitHpShare } from './army';
 
 export function moraleState(u: Unit): 'steady' | 'wavering' | 'broken' {
   if (u.state === 'routing' || u.state === 'shattered') return 'broken';
@@ -117,7 +118,8 @@ export function rout(b: Battle, u: Unit): void {
   }
   u.formation = 'block';
   u.slotsDirty = true;
-  const shatter = u.routs >= MORALE.shatterRouts || u.alive / Math.max(1, u.initial) < MORALE.shatterStrength;
+  // A unit that has lost most of its strength (wounds included) breaks for good.
+  const shatter = u.routs >= MORALE.shatterRouts || unitHpShare(u) < MORALE.shatterStrength;
   u.state = shatter ? 'shattered' : 'routing';
   for (const s of u.soldiers) {
     s.target = null;
@@ -133,6 +135,16 @@ function fleeVector(b: Battle, u: Unit): void {
   let fx = 0;
   let fy = u.side === 0 ? 1 : -1;
   if (b.terrain.fort && b.terrain.fort.defender === u.side) fy = 0;
+  // A unit routing inside the walls runs for a way out first.
+  const exit = b.terrain.fort && b.terrain.insideFort(u.x, u.y) ? fortExit(b, u) : null;
+  if (exit) {
+    const dx = exit.x - u.x;
+    const dy = exit.y - u.y;
+    const d = Math.sqrt(dx * dx + dy * dy) || 1;
+    u.special.fleeX = dx / d;
+    u.special.fleeY = dy / d;
+    return;
+  }
   let ex = 0;
   let ey = 0;
   let n = 0;
@@ -152,9 +164,64 @@ function fleeVector(b: Battle, u: Unit): void {
     fy += (ey / n) * 0.8;
   }
   if (fx === 0 && fy === 0) fy = u.side === 0 ? 1 : -1;
+  // Outside a fort, run around its walls rather than into them.
+  const fort = b.terrain.fort;
+  if (fort) {
+    const cx = b.terrain.width / 2;
+    const cy = b.terrain.height / 2;
+    const dx = cx - u.x;
+    const dy = cy - u.y;
+    const r = Math.sqrt(dx * dx + dy * dy) || 1;
+    const inward = (fx * dx + fy * dy) / r;
+    if (r < fort.radius + 60 && inward > 0 && !b.terrain.insideFort(u.x, u.y)) {
+      fx -= (inward + 0.25) * (dx / r);
+      fy -= (inward + 0.25) * (dy / r);
+      if (Math.abs(fx) + Math.abs(fy) < 1e-6) {
+        fx = -dy / r;
+        fy = dx / r;
+      }
+    }
+  }
   const l = Math.sqrt(fx * fx + fy * fy);
   u.special.fleeX = fx / l;
   u.special.fleeY = fy / l;
+}
+
+/**
+ * For a unit inside a fort's walls: a point just outside the way out it should take.
+ * Anyone can run through a breach or a broken gate, the defenders also through their
+ * own gates (they open a postern), and foot soldiers can climb a stretch of wall.
+ * Openings count as nearer than a climb; defenders avoid ways out near the enemy.
+ */
+function fortExit(b: Battle, u: Unit): { x: number; y: number } | null {
+  const fort = b.terrain.fort!;
+  const cx = b.terrain.width / 2;
+  const cy = b.terrain.height / 2;
+  const own = fort.defender === u.side;
+  const climbs = u.def.category === 'infantry' || u.def.category === 'character';
+  let best: { x: number; y: number } | null = null;
+  let bd = Infinity;
+  for (const w of b.terrain.walls) {
+    if (w.tower) continue;
+    const open = w.broken || (own && w.gate);
+    if (!open && (w.gate || !climbs)) continue;
+    const mx = (w.x1 + w.x2) / 2;
+    const my = (w.y1 + w.y2) / 2;
+    let d = Math.sqrt((mx - u.x) * (mx - u.x) + (my - u.y) * (my - u.y)) * (open ? 0.5 : 1);
+    if (own) {
+      let near = Infinity;
+      for (const e of b.units) {
+        if (e.side === u.side || e.state !== 'ready' || e.alive <= 0) continue;
+        near = Math.min(near, Math.sqrt((e.x - mx) * (e.x - mx) + (e.y - my) * (e.y - my)));
+      }
+      if (near < 150) d += (150 - near) * 2;
+    }
+    if (d >= bd) continue;
+    bd = d;
+    const out = Math.sqrt((mx - cx) * (mx - cx) + (my - cy) * (my - cy)) || 1;
+    best = { x: mx + ((mx - cx) / out) * 25, y: my + ((my - cy) / out) * 25 };
+  }
+  return best;
 }
 
 function updateRouting(b: Battle, u: Unit): void {

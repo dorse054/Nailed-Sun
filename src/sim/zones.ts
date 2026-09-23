@@ -10,7 +10,7 @@ import { WIND_RULES } from '../data/rules';
 import { dcos, dsin } from '../core/dmath';
 import type { Battle } from './battle';
 import type { Side, Unit, Zone } from './types';
-import { applyDamage } from './combat';
+import { applyDamage, typeMult } from './combat';
 
 export function addZone(
   b: Battle,
@@ -181,7 +181,8 @@ export function updateZones(b: Battle): void {
     }
     if (z.def.dps) fires++;
   }
-  // Burning ground ticks twice a second.
+  // Burning ground ticks twice a second. Armor turns part of the heat (as for any hit with
+  // half its damage armor-piercing, at the mean armor roll), and fire vulnerability applies.
   if (b.tick % 10 === 0) {
     for (const z of zones) {
       if (!z.def.dps || !z.enabled) continue;
@@ -191,7 +192,14 @@ export function updateZones(b: Battle): void {
         if (!s.alive || s.airborne) return;
         if (!dps.friendly && s.unit.side === z.side) return;
         if (s.unit.def.mechanics?.some((m) => m.kind === 'heatImmune')) return;
-        applyDamage(b, s, dps.damage * 0.5, null, dps.type, z.source);
+        const armor = Math.max(0, Math.min(100, s.armor + s.unit.stats.armorAdd));
+        const dmg = (z.dps ?? dps.damage) * 0.5 * (1 - (0.5 * 0.75 * armor) / 100) * typeMult(dps.type, s.unit);
+        // Anyone not locked in a fight steps out of the flames (see moveSoldiers).
+        s.hotUntil = z.until;
+        s.hotX = z.x;
+        s.hotY = z.y;
+        s.hotR = z.radius;
+        applyDamage(b, s, dmg, null, dps.type, z.source);
       });
     }
   }
@@ -221,6 +229,7 @@ export function updateZones(b: Battle): void {
       const remaining = Math.max(6, (z.until - b.time) * 0.8);
       const child = addZone(b, z.def, z.side, nx, ny, remaining, z.source, false);
       child.generation = z.generation + 1;
+      child.dps = z.dps;
       b.events.push({ t: 'fire', x: nx, y: ny });
     }
   }
