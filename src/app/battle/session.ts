@@ -28,6 +28,20 @@ export type Phase = 'deploy' | 'battle' | 'over';
 const MID_GAP = 30;
 const MID_ASKS = 4;
 
+/** What one AI general has seen and said during the battle, when Claude plays it. */
+interface MidState {
+  asks: number;
+  lastAt: number;
+  busy: boolean;
+  contact: boolean;
+  /** A watched battle's opening plan has been asked for. */
+  opened: boolean;
+  ratio: number;
+  fallen: Set<number>;
+  abort: AbortController | null;
+}
+const newMid = (): MidState => ({ asks: 0, lastAt: 0, busy: false, contact: false, opened: false, ratio: 0, fallen: new Set(), abort: null });
+
 interface Targeting {
   unit: number;
   ability: AbilityDef;
@@ -143,7 +157,7 @@ export class BattleSession {
     this.disposed = true;
     this.general.abort?.abort();
     this.counsel.abort?.abort();
-    this.mid.abort?.abort();
+    for (const m of this.mids) m.abort?.abort();
     clearTimeout(this.heraldTimer);
     cancelAnimationFrame(this.raf);
     this.unbind();
@@ -202,48 +216,60 @@ export class BattleSession {
   /** The scripted general playing each side, where one does. */
   private ais: [BattleAI | null, BattleAI | null] = [null, null];
   /**
-   * The enemy general during the battle, when Claude plays it: how often it
+   * The AI generals during the battle, when Claude plays them: how often each
    * has thought again, the strength and the fallen it last saw, and the
    * question in flight.
    */
-  private mid = { asks: 0, lastAt: 0, busy: false, contact: false, ratio: 0, fallen: new Set<number>(), abort: null as AbortController | null, tick: 0 };
+  private mids: [MidState, MidState] = [newMid(), newMid()];
+  private midTick = 0;
   /** A general's latest words to its army, shown over the field for a few seconds. */
   readonly herald = signal<{ side: Side; who: string; text: string; stance: 'attack' | 'defend' } | null>(null);
   private heraldTimer = 0;
 
-  /** The side the enemy general plays, when Claude may think for it during this battle. */
-  private midSide(): Side | null {
+  /**
+   * The sides whose general Claude may play during this battle: the enemy's
+   * in a battle the player fights, both in a battle the player watches.
+   */
+  private midSides(): Side[] {
     const r = this.req;
-    if (r.tutorial || r.mode === 'replay' || r.mode === 'demo' || this.battle.terrain.fort) return null;
+    if (r.tutorial || r.mode === 'replay' || this.battle.terrain.fort) return [];
+    if (r.mode === 'demo') return ([0, 1] as Side[]).filter((s) => this.ais[s]);
     const s = (1 - this.side) as Side;
-    return r.setup.armies[s].controller === 'ai' && this.ais[s] ? s : null;
+    return r.setup.armies[s].controller === 'ai' && this.ais[s] ? [s] : [];
   }
 
   /**
    * Once a second of battle: has something happened that a general would
    * stop and think about? Most telling first: a colossus or a general falls,
-   * the battle turns, the lines meet, or nobody will attack.
+   * the battle turns, the lines meet, or nobody will attack. A watched
+   * battle also opens with both generals choosing a plan.
    */
   private watchGeneral(): void {
     const b = this.battle;
-    const m = this.mid;
-    if (b.tick - m.tick < 20) return;
-    m.tick = b.tick;
-    const s = this.midSide();
-    if (s === null || b.over || m.busy || m.asks >= MID_ASKS) return;
-    if (!settings.value.claudeAI || claudeStatus.value !== 'ready') return;
+    if (b.tick - this.midTick < 20) return;
+    this.midTick = b.tick;
+    if (b.over || !settings.value.claudeAI || claudeStatus.value !== 'ready') return;
+    for (const s of this.midSides()) this.watchSide(s);
+  }
+
+  private watchSide(s: Side): void {
+    const b = this.battle;
+    const m = this.mids[s];
+    if (m.busy || m.asks >= MID_ASKS) return;
     // A fallen general gives no new orders: the army fights on as it was.
     if (b.sides[s].generalDead) return;
     if (!m.ratio) m.ratio = strengthRatio(b, s);
     const fell = b.units.filter((u) => (u.def.category === 'colossus' || u.isGeneral) && u.state !== 'ready' && u.state !== 'embarked' && u.state !== 'routing' && !m.fallen.has(u.id));
-    if (b.time - m.lastAt < MID_GAP) return;
+    const opening = this.req.mode === 'demo' && !m.opened;
+    if (!opening && b.time - m.lastAt < MID_GAP) return;
     // Has the army come to blows yet (now, or since the general last thought)?
     const contact = b.units.some((u) => u.side === s && (u.engaged > 0 || u.lastMeleeTime > m.lastAt));
     const ratio = strengthRatio(b, s);
     let why: string | null = null;
     const ours = fell.find((u) => u.side === s);
     const theirs = fell.find((u) => u.side !== s);
-    if (ours) why = `You have just lost ${ours.def.name}.`;
+    if (opening) why = 'The armies have just taken the field and face each other: choose how to open the battle.';
+    else if (ours) why = `You have just lost ${ours.def.name}.`;
     else if (theirs) why = `Your army has just brought down their ${theirs.def.name}.`;
     else if (ratio < m.ratio * 0.72) why = 'The battle is turning against you.';
     else if (ratio > m.ratio * 1.38) why = 'The battle is turning your way.';
@@ -251,6 +277,7 @@ export class BattleSession {
     else if (!contact && !m.contact && b.time >= 90 && b.time - m.lastAt >= 75) why = 'The main lines have stood apart for a long while and neither has closed.';
     if (contact) m.contact = true;
     if (!why) return;
+    m.opened = true;
     for (const u of fell) m.fallen.add(u.id);
     m.ratio = ratio;
     m.lastAt = b.time;
@@ -261,7 +288,7 @@ export class BattleSession {
     m.abort = abort;
     // A general who takes too long has missed the moment.
     const timer = setTimeout(() => abort.abort(), 12000);
-    void askGeneralMid(b, s, why, stance, abort.signal).then((plan) => {
+    void askGeneralMid(b, s, why, stance, abort.signal, opening).then((plan) => {
       clearTimeout(timer);
       m.busy = false;
       if (!plan || this.disposed || b !== this.battle || b.over || this.phase !== 'battle') return;
@@ -271,16 +298,28 @@ export class BattleSession {
     });
   }
 
-  /** A general spoke (live, or from a replay's log): show it over the field. */
+  /** Words waiting their turn over the field, and when the current ones went up. */
+  private heraldQueue: { side: Side; who: string; text: string; stance: 'attack' | 'defend' }[] = [];
+  private heraldAt = 0;
+
+  /** A general spoke (live, or from a replay's log): show it over the field, one general at a time. */
   private heard(side: Side, stance: 'attack' | 'defend', text: string): void {
     const st = this.battle.sides[side];
     const who = st.general?.def.name ?? `${factionDef(st.faction).short} general`;
-    this.herald.value = { side, who, text, stance };
+    this.heraldQueue.push({ side, who, text, stance });
+    if (!this.herald.value) return this.nextHerald();
+    // Someone else is waiting: the words on screen make way a little sooner.
     clearTimeout(this.heraldTimer);
-    this.heraldTimer = window.setTimeout(() => {
-      this.herald.value = null;
-    }, 7000);
+    this.heraldTimer = window.setTimeout(this.nextHerald, Math.max(1500, this.heraldAt + 4500 - performance.now()));
   }
+
+  private nextHerald = (): void => {
+    const next = this.heraldQueue.shift() ?? null;
+    this.herald.value = next;
+    this.heraldAt = performance.now();
+    clearTimeout(this.heraldTimer);
+    if (next) this.heraldTimer = window.setTimeout(this.nextHerald, this.heraldQueue.length ? 4500 : 7000);
+  };
 
   // ------------------------------------------------------------------ loop
 

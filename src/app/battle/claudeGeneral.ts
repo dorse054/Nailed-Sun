@@ -230,14 +230,14 @@ const HOLD_AGAIN = 90;
  * (the lines have met, the battle is turning). Null when Claude is off,
  * slow or unclear: the army carries on as it was.
  */
-export async function askGeneralMid(b: Battle, side: Side, why: string, stance: 'attack' | 'defend', signal?: AbortSignal): Promise<MidPlan | null> {
+export async function askGeneralMid(b: Battle, side: Side, why: string, stance: 'attack' | 'defend', signal?: AbortSignal, opening = false): Promise<MidPlan | null> {
   if (!settings.value.claudeAI || claudeStatus.value !== 'ready') return null;
   const me: FactionId = b.sides[side].faction;
   const prompt = [
     `You are the general of ${PERSONA[me]}`,
-    `You are in the middle of a battle in Nailed Sun, a strategy game, against ${factionDef(b.sides[(1 - side) as Side].faction).name}. ${why}`,
+    `You are ${opening ? 'opening' : 'in the middle of'} a battle in Nailed Sun, a strategy game, against ${factionDef(b.sides[(1 - side) as Side].faction).name}. ${why}`,
     '',
-    battleReport(b, side),
+    opening ? fieldReport(b, side) : battleReport(b, side),
     '',
     `Right now your army is ${stance === 'attack' ? 'pressing the attack' : 'holding its ground'}.`,
     'Choose: "press" (go forward and attack everywhere) or "hold" (keep your ground and let them come; your army still fights whatever reaches it, and goes forward if they will not come).',
