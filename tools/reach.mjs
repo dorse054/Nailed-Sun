@@ -82,6 +82,7 @@ for (const [w, h] of SIZES) {
   await fromMenu('tutorials', async () => page.click('text=Tutorials'));
   await fromMenu('codex', async () => page.click('text=Codex'));
   await fromMenu('new campaign', async () => page.click('text=Campaign'));
+  await fromMenu('chronicles', async () => page.click('text=Chronicles'));
   await open('#quick', 1500);
   await report('deployment');
   // A battle under way, with a unit selected so its panel and abilities show.
@@ -95,6 +96,16 @@ for (const [w, h] of SIZES) {
   });
   await page.waitForTimeout(500);
   await report('battle');
+  await page.click('text=Menu');
+  await page.waitForTimeout(400);
+  await report('battle menu');
+  await page.click('text=Resume');
+  // The battle report, after a battle ends.
+  await page.evaluate(() => { const s = globalThis.__ns; s.battle.finish(s.side, 'rout'); });
+  await page.waitForTimeout(700);
+  await page.click('text=Battle report');
+  await page.waitForTimeout(700);
+  await report('results');
   for (const panel of ['faction', 'diplomacy', 'log', 'help', 'army', 'region']) {
     await open('#camp:hush', 2200);
     await page.click('.modal .btn.primary');
