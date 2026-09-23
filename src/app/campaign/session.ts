@@ -14,9 +14,12 @@ import { scriptedAI } from '../../campaign/ai';
 import { AUTO_SCALE, prepareBattle } from '../../campaign/battles';
 import { assault, makeBattle, moveArmy } from '../../campaign/actions';
 import { findPath, reachable } from '../../campaign/rules';
-import { armyById, playerEvents } from '../../campaign/state';
+import { armyById, log, playerEvents } from '../../campaign/state';
 import { armyVisible, visibleRegions } from '../../campaign/vision';
 import { regionDef } from '../../campaign/regions';
+import { jevProvider } from '../../campaign/jev';
+import { claudeStatus } from '../claude';
+import { envoyWords } from './claudeJev';
 import { detachHero, heroById, heroReach, heroes, heroesNewToll, heroVision, moveHero } from '../../campaign/heroes';
 import { simulate } from '../../sim/pool';
 import { go, loadRaw, remove, save, settings } from '../store';
@@ -47,6 +50,9 @@ export class CampaignSession {
   prompt = signal<Prompt | null>(null);
   busy = signal<string | null>(null);
   toast = signal<{ text: string; id: number } | null>(null);
+  /** The last words of each faction's envoy to the player (Claude's voice); empty text while they come. */
+  envoys = signal<Partial<Record<FactionId, { text: string; turn: number; seq: number }>>>({});
+  private envoySeq = 0;
   panel = signal<Panel>('none');
   hover: string | null = null;
   hoverArmy: string | null = null;
@@ -80,6 +86,25 @@ export class CampaignSession {
     setTimeout(() => {
       if (this.toast.value?.id === id) this.toast.value = null;
     }, 3200);
+  }
+
+  /** With Claude on, the other side's envoy answers the player's proposal in words. */
+  async envoy(deal: Deal, accepted: boolean, why: string[]): Promise<void> {
+    if (!settings.value.claudeAI || claudeStatus.value !== 'ready') return;
+    const to = deal.to;
+    const turn = this.s.turn;
+    const seq = ++this.envoySeq;
+    this.envoys.value = { ...this.envoys.value, [to]: { text: '', turn, seq } };
+    const text = await envoyWords(this.s, deal, accepted, why);
+    // A later proposal to the same faction answers instead.
+    if (this.envoys.value[to]?.seq !== seq) return;
+    const next = { ...this.envoys.value };
+    if (text) {
+      next[to] = { text, turn, seq };
+      log(this.s, 'diplomacy', `${factionDef(to).short} envoy: “${text}”`, this.player, undefined, 'jev');
+      this.bump();
+    } else delete next[to];
+    this.envoys.value = next;
   }
 
   // ------------------------------------------------------------ selection
@@ -221,8 +246,9 @@ export class CampaignSession {
           this.prompt.value = { kind: 'battle', pb, attacking: attacking && pb.attacker.faction === this.player, resolve };
         }),
       progress: (f) => {
-        this.busy.value = `${factionDef(f).name} are moving…`;
+        this.busy.value = settings.value.claudeAI && jevProvider() ? `${factionDef(f).name} take counsel…` : `${factionDef(f).name} are moving…`;
       },
+      offer: (_s, deal, value) => this.askOffer(deal, value),
     };
   }
 
@@ -288,6 +314,8 @@ export class CampaignSession {
     this.path = null;
     this.busy.value = 'The world turns…';
     audio.toll();
+    // The AI factions take Claude's counsel when the player has switched it on.
+    this.s.options.jev = settings.value.claudeAI;
     try {
       await endTurn(this.s, this.hooks(false), scriptedAI);
       heroesNewToll(this.s);

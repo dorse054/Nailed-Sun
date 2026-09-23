@@ -41,6 +41,8 @@ export interface JevChoice {
 export interface JevProvider {
   /** How long to wait for an answer, in ms (JEV_TIMEOUT_MS when unset). */
   timeoutMs?: number;
+  /** Consult each faction only every this many Tolls, staggered (every Toll when unset). */
+  every?: number;
   /**
    * Pick one of the options. `signal` aborts when the deadline passes (or
    * the advice is no longer wanted): stop work and reject.
@@ -125,8 +127,8 @@ function name(f: FactionId): string {
 export function situationFor(s: CampaignState, f: FactionId): string {
   const fs = s.factions[f];
   const lines: string[] = [];
-  const phase = s.turn < 26 ? 'early: expanding and meeting the neighbours' : s.turn < 61 ? 'middle: the wars over the Gloaming' : 'late: the race to victory';
-  lines.push(`Toll ${s.turn}, the ${phase}. The Tilt stands ${tiltWord(s.tilt)}${s.turn >= 70 ? ', and the Great Shudder shakes the world' : ''}.`);
+  const phase = s.turn < 26 ? 'early days: expanding and meeting the neighbours' : s.turn < 61 ? 'the middle years: the wars over the Gloaming' : 'the last years: the race to victory';
+  lines.push(`Toll ${s.turn}, ${phase}. The Tilt stands ${tiltWord(s.tilt)}${s.turn >= 70 ? ', and the Great Shudder shakes the world' : ''}.`);
   const me = factionStrength(s, f);
   const regions = ownedRegions(s, f).length;
   const net = ledgerNet(factionLedger(s, f));
@@ -178,14 +180,23 @@ function focusLabel(kind: AiFocusKind, target?: FactionId): string {
   }
 }
 
+/**
+ * Wars of choice keep the scripted AI's pacing: none in the first Tolls after
+ * the Shudder, none soon after a treaty, never a third front.
+ */
+export const JEV_WAR_FROM = 14;
+const JEV_WAR_SETTLE = 10;
+const JEV_MAX_WARS = 2;
+
 /** Every choice the faction could legally make this Toll. */
 export function optionsFor(s: CampaignState, f: FactionId): JevOption[] {
   const out: JevOption[] = [{ id: 'keep', label: 'Keep the current plan' }];
+  const wars = FACTION_IDS.filter((x) => x !== f && s.factions[x].alive && atWar(s, f, x)).length;
   for (const o of FACTION_IDS) {
     if (o === f || !s.factions[o].alive) continue;
     if (overlordOf(s, f) === o || overlordOf(s, o) === f) continue;
     const rel = relation(s, f, o);
-    if (rel.stance === 'peace') out.push({ id: `war:${o}`, label: `Declare war on ${name(o)}` });
+    if (rel.stance === 'peace' && s.turn >= JEV_WAR_FROM && s.turn - rel.since >= JEV_WAR_SETTLE && wars < JEV_MAX_WARS) out.push({ id: `war:${o}`, label: `Declare war on ${name(o)}` });
     if (rel.stance === 'war' && !s.factions[o].finalStage) out.push({ id: `peace:${o}`, label: `Offer peace to ${name(o)}` });
     const common = FACTION_IDS.some((x) => x !== f && x !== o && s.factions[x].alive && atWar(s, f, x) && atWar(s, o, x));
     if (rel.stance === 'peace' && common) out.push({ id: `alliance:${o}`, label: `Propose an alliance with ${name(o)}` });
@@ -219,6 +230,34 @@ async function ask(p: JevProvider, f: FactionId, situation: string, options: Jev
   }
 }
 
+/** Is this faction due to consult this Toll? */
+function due(s: CampaignState, f: FactionId, p: JevProvider): boolean {
+  const fs = s.factions[f];
+  if (!s.options.jev || fs.player || !fs.alive || fs.ai?.jevTurn === s.turn) return false;
+  const every = Math.max(1, Math.round(p.every ?? 1));
+  return (s.turn + FACTION_IDS.indexOf(f)) % every === 0;
+}
+
+/** Questions already on their way this Toll, by faction. */
+const early = new Map<string, { p: JevProvider; answer: Promise<JevChoice> }>();
+
+/**
+ * Ask for every AI faction due this Toll at once, before any of them moves,
+ * so the answers arrive together rather than one after another. Each
+ * faction still checks its answer against its options when its turn comes.
+ */
+export function prefetchJev(s: CampaignState): void {
+  early.clear();
+  const p = provider;
+  if (!p) return;
+  for (const f of FACTION_IDS) {
+    if (!due(s, f, p)) continue;
+    const answer = ask(p, f, situationFor(s, f), optionsFor(s, f));
+    answer.catch(() => undefined);
+    early.set(`${s.turn}:${f}`, { p, answer });
+  }
+}
+
 /**
  * Consult Jev once per faction per Toll, when it is on. Applies a confident
  * choice (a war, a treaty or an objective for the next Tolls) and returns
@@ -229,14 +268,16 @@ async function ask(p: JevProvider, f: FactionId, situation: string, options: Jev
 export async function consultJev(s: CampaignState, f: FactionId, offer?: (d: Deal) => Promise<boolean>): Promise<JevChoice | null> {
   const p = provider;
   const fs = s.factions[f];
-  if (!p || !s.options.jev || fs.player || !fs.alive) return null;
+  const key = `${s.turn}:${f}`;
+  const pre = early.get(key);
+  early.delete(key);
+  if (!p || !due(s, f, p)) return null;
   const mem = (fs.ai ??= {});
-  if (mem.jevTurn === s.turn) return null;
   mem.jevTurn = s.turn;
   const options = optionsFor(s, f);
   let pick: JevChoice;
   try {
-    pick = await ask(p, f, situationFor(s, f), options);
+    pick = await (pre && pre.p === p ? pre.answer : ask(p, f, situationFor(s, f), options));
     lastError = null;
   } catch (e) {
     lastError = e instanceof Error ? e.message : String(e);

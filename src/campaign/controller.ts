@@ -14,6 +14,7 @@ import { armyById, log, relation } from './state';
 import { regionDef } from './regions';
 import { endRound } from './turn';
 import { accept, valueDeal, type Deal, type DealValue } from './diplomacy';
+import { prefetchJev } from './jev';
 
 export interface PlayerBattleOutcome {
   prep: PreparedBattle;
@@ -149,6 +150,7 @@ export async function resolveBattles(s: CampaignState, pbs: PendingBattle[], hoo
 
 /** The player ends their Toll: every AI faction moves, then the world turns. */
 export async function endTurn(s: CampaignState, hooks: TurnHooks, ai: FactionAI): Promise<void> {
+  prefetchJev(s);
   for (const f of FACTION_IDS) {
     if (f === s.player || !s.factions[f].alive || s.winner) continue;
     hooks.progress?.(f);

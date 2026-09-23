@@ -7,6 +7,7 @@ import { Guard } from './app/Guard';
 import { go } from './app/store';
 import { demoBattle, quickBattle } from './app/quick';
 import { active, resumeCampaign, startCampaign } from './app/campaign/session';
+import { syncClaudeJev } from './app/campaign/claudeJev';
 import type { FactionId } from './data/schema';
 import type { CampaignState } from './campaign/types';
 
@@ -16,6 +17,9 @@ render(
   </Guard>,
   document.getElementById('app')!,
 );
+
+// The AI factions may take Claude's counsel, when the page can reach Claude and the player allows it.
+syncClaudeJev();
 
 // When the published page is updated, a running campaign carries over.
 interface Hot {

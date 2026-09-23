@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { newCampaign } from '../src/campaign/setup';
 import { aiExplain, scriptedAI } from '../src/campaign/ai';
-import { JEV_TIMEOUT_MS, consultJev, optionsFor, setJevProvider, situationFor, type JevProvider } from '../src/campaign/jev';
+import { JEV_TIMEOUT_MS, JEV_WAR_FROM, consultJev, optionsFor, prefetchJev, setJevProvider, situationFor, type JevProvider } from '../src/campaign/jev';
 import { offerToPlayer, refreshBattle, type AiContext, type TurnHooks } from '../src/campaign/controller';
 import { applyBattle, attackerPower, defenderPower, prepareBattle } from '../src/campaign/battles';
 import { relation } from '../src/campaign/state';
@@ -206,6 +206,19 @@ describe('Jev', () => {
     expect(ids).not.toContain('war:choir');
   });
 
+  it('offers no war of choice in the first Tolls, soon after a treaty, or on a third front', () => {
+    const s = jevOn();
+    s.turn = JEV_WAR_FROM - 1;
+    expect(optionsFor(s, 'hush').some((o) => o.id.startsWith('war:'))).toBe(false);
+    s.turn = 30;
+    relation(s, 'hush', 'drift').since = 25;
+    expect(optionsFor(s, 'hush').map((o) => o.id)).not.toContain('war:drift');
+    relation(s, 'hush', 'drift').since = 0;
+    expect(optionsFor(s, 'hush').map((o) => o.id)).toContain('war:drift');
+    relation(s, 'hush', 'vesperate').stance = 'war';
+    expect(optionsFor(s, 'hush').some((o) => o.id.startsWith('war:'))).toBe(false);
+  });
+
   it('applies a confident choice once per Toll, and the chronicle hears why', async () => {
     const s = jevOn();
     const p = provider(async () => ({ choice: 'war:drift', confidence: 0.9, reason: 'The wind-cities grow fat on our furs.' }));
@@ -273,5 +286,57 @@ describe('Jev', () => {
     const pending = consultJev(s, 'hush');
     await vi.advanceTimersByTimeAsync(6500);
     expect((await pending)?.choice).toBe('war:drift');
+  });
+
+  it('asks every faction at once before they move, and each uses its own answer', async () => {
+    vi.useFakeTimers();
+    const s = jevOn();
+    const asked: string[] = [];
+    setJevProvider({
+      timeoutMs: 8000,
+      choose: (f) => {
+        asked.push(f);
+        return new Promise((resolve) => setTimeout(() => resolve({ choice: f === 'hush' ? 'war:drift' : 'keep', confidence: 1 }), 2000));
+      },
+    });
+    prefetchJev(s);
+    // The three AI factions, not the player.
+    expect(asked.sort()).toEqual(['choir', 'drift', 'hush']);
+    const hush = consultJev(s, 'hush');
+    const choir = consultJev(s, 'choir');
+    await vi.advanceTimersByTimeAsync(2100);
+    expect((await hush)?.choice).toBe('war:drift');
+    expect(await choir).toBeNull();
+    expect(asked).toHaveLength(3);
+    vi.useRealTimers();
+  });
+
+  it('checks a prefetched answer against the options when the faction moves', async () => {
+    const s = jevOn();
+    setJevProvider({ choose: async () => ({ choice: 'war:drift', confidence: 1 }) });
+    prefetchJev(s);
+    // Another faction's move made the choice moot: they are at war already.
+    relation(s, 'hush', 'drift').stance = 'war';
+    expect(await consultJev(s, 'hush')).toBeNull();
+  });
+
+  it('consults each faction only every few Tolls when the provider asks for that', async () => {
+    const s = jevOn();
+    let calls = 0;
+    setJevProvider({ every: 2, choose: async () => (calls++, { choice: 'keep', confidence: 1 }) });
+    for (let t = 0; t < 4; t++) {
+      await consultJev(s, 'hush');
+      s.turn++;
+    }
+    expect(calls).toBe(2);
+    // Staggered: the factions do not all ask on the same Toll.
+    calls = 0;
+    prefetchJev(s);
+    const first = calls;
+    s.turn++;
+    prefetchJev(s);
+    expect(first).toBeGreaterThan(0);
+    expect(calls - first).toBeGreaterThan(0);
+    expect(calls).toBe(3);
   });
 });

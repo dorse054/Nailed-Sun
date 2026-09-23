@@ -8,6 +8,7 @@ import { factionArmies, fmtNum, ownedRegions, relation } from '../../campaign/st
 import { armyPower, currentObservance } from '../../campaign/rules';
 import { victoryStatus } from '../../campaign/victory';
 import { factionLedger } from '../../campaign/turn';
+import { JevMark } from './Prompts';
 import {
   HYMNS,
   OBSERVANCES,
@@ -291,12 +292,15 @@ function Diplomacy({ session }: { session: CampaignSession }) {
     if (d.kind === 'war') {
       const r = declareWar(s, me, d.to);
       if (!r.ok) session.say(r.reason);
+      else void session.envoy(d, true, []);
     } else {
       const r = propose(s, d);
       session.say(r.accepted ? `${factionDef(d.to).short} accept.` : `${factionDef(d.to).short} refuse: they find it ${r.value.label}.`);
+      void session.envoy(d, r.accepted, r.value.why);
     }
     session.bump();
   };
+  const words = session.envoys.value;
   return (
     <div class="fp-body">
       {FACTION_IDS.filter((f) => f !== me).map((o) => {
@@ -328,6 +332,11 @@ function Diplomacy({ session }: { session: CampaignSession }) {
               {rel.opinion}
               {s.factions[o].finalStage ? ' · in their final victory stage' : ''}
             </small>
+            {words[o] && (
+              <p class={`envoy ${words[o]!.text ? '' : 'waiting'}`}>
+                {words[o]!.text ? <>“{words[o]!.text}”</> : 'Their envoy considers…'}
+              </p>
+            )}
             {alive && (
               <div class="row">
                 {opts.map((x) => {
@@ -359,6 +368,7 @@ function Chronicle({ session, focus }: { session: CampaignSession; focus: (r: st
       {events.map((e, i) => (
         <li key={i} class={`ev ev-${e.kind}`}>
           <span class="muted num">T{e.turn}</span> {e.text}
+          {e.by === 'jev' && <JevMark />}
           {e.region && (
             <button
               class="btn ghost small"

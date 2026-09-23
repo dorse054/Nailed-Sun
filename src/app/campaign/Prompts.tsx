@@ -343,6 +343,7 @@ function Summary({ session }: { session: CampaignSession }) {
             {events.map((e, i) => (
               <li key={i} class={`ev ev-${e.kind}`}>
                 {e.text}
+                {e.by === 'jev' && <JevMark />}
               </li>
             ))}
           </ul>
@@ -429,5 +430,14 @@ function End({ session }: { session: CampaignSession }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/** Marks a choice the AI made on Claude's advice. */
+export function JevMark() {
+  return (
+    <span class="jev-mark" title="This faction's council took Claude's advice">
+      ✦ Claude
+    </span>
   );
 }
