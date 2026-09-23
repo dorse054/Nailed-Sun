@@ -32,6 +32,9 @@ export interface VictoryStatus {
 
 export const HOLD_NEEDED: Record<FactionId, number> = { choir: 0, hush: 5, vesperate: 10, drift: 5 };
 
+/** Final victory stages open in the late game, after the wars over the Gloaming. */
+export const VICTORY_OPENS = 50;
+
 export function gloamingSettlements(s: CampaignState): string[] {
   return REGIONS.filter((r) => r.settlement && regionBand(s, r.id) === 'gloaming').map((r) => r.id);
 }
@@ -72,6 +75,10 @@ export function victoryStatus(s: CampaignState, f: FactionId): VictoryStatus {
   }
   const need = HOLD_NEEDED[f];
   if (need) lines.push({ label: `Hold it for ${need} straight Tolls`, ok: fs.hold >= need, detail: `${fs.hold} / ${need}` });
+  if (s.turn < VICTORY_OPENS) {
+    lines.unshift({ label: `The world is not ready: final stages open on Toll ${VICTORY_OPENS}`, ok: false, detail: `Toll ${s.turn}` });
+    met = false;
+  }
   const okCount = lines.filter((l) => l.ok).length;
   return {
     name: factionDef(f).victory.name,
@@ -106,7 +113,7 @@ export function checkVictory(s: CampaignState): void {
     const st = victoryStatus(s, f);
     const need = HOLD_NEEDED[f];
     if (need) fs.hold = st.met ? fs.hold + 1 : 0;
-    const final = f === 'choir' ? fs.lens >= 1 || !!fs.lensBuilding : st.met;
+    const final = s.turn >= VICTORY_OPENS && (f === 'choir' ? fs.lens >= 1 || !!fs.lensBuilding : st.met);
     if (final && !fs.finalStage) {
       fs.finalStage = true;
       log(s, 'warning', `${factionDef(f).name} have begun their final victory stage: ${st.name}. Every rival gains +15% leadership against them.`);

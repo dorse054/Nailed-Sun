@@ -131,7 +131,7 @@ export function setMoveOrder(b: Battle, u: Unit, x: number, y: number, facing: n
     u.path = [{ x, y }];
     for (const s of u.soldiers) if (s.alive) s.airborne = true;
   } else {
-    u.path = b.nav.find(u.x, u.y, x, y, u.def.category === 'colossus' ? 'colossus' : 'infantry') ?? [{ x, y }];
+    u.path = b.nav.find(u.x, u.y, x, y, u.def.category) ?? siegeDetour(b, u, x, y);
   }
   if (files > 0 && files !== u.files) {
     u.files = files;
@@ -290,8 +290,8 @@ export function updateAnchors(b: Battle): void {
     const flying = isFlyer(u.def) && u.grounded <= 0;
     if (!flying && d > 12 && ((u.special.pathAt ?? 0) <= b.time || u.path.length === 0)) {
       u.special.pathAt = b.time + 2;
-      const cat = u.def.category === 'colossus' ? 'colossus' : 'infantry';
-      u.path = b.nav.clear(u.x, u.y, tx, ty, cat) ? [] : (b.nav.find(u.x, u.y, tx, ty, cat) ?? []);
+      const cat = u.def.category;
+      u.path = b.nav.clear(u.x, u.y, tx, ty, cat) ? [] : (b.nav.find(u.x, u.y, tx, ty, cat) ?? siegeDetour(b, u, tx, ty));
     }
     const wp = u.path.length > 1 ? u.path[0]! : null;
     if (wp) {
@@ -682,4 +682,34 @@ export function resolveCollisions(b: Battle): void {
       }
     }
   }
+}
+
+/**
+ * No way through the walls for horses and engines: go and stand at the
+ * nearest gate, where they batter it down.
+ */
+function siegeDetour(b: Battle, u: Unit, x: number, y: number): { x: number; y: number }[] {
+  if (!b.terrain.fort) return [{ x, y }];
+  const cx = b.terrain.width / 2;
+  const cy = b.terrain.height / 2;
+  let best: { x: number; y: number } | null = null;
+  let bd = Infinity;
+  for (const w of b.terrain.walls) {
+    if (!w.gate || w.broken) continue;
+    const mx = (w.x1 + w.x2) / 2;
+    const my = (w.y1 + w.y2) / 2;
+    const dx = mx - cx;
+    const dy = my - cy;
+    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+    // Just outside the gate.
+    const gx = mx + (dx / len) * 12;
+    const gy = my + (dy / len) * 12;
+    const d = (gx - u.x) * (gx - u.x) + (gy - u.y) * (gy - u.y);
+    if (d < bd) {
+      bd = d;
+      best = { x: gx, y: gy };
+    }
+  }
+  if (!best) return [{ x, y }];
+  return b.nav.find(u.x, u.y, best.x, best.y, u.def.category) ?? [best];
 }

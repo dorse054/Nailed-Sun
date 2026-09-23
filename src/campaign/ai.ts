@@ -68,7 +68,7 @@ const BUILD_PRIORITY: Record<FactionId, ChainKind[]> = {
   choir: ['market', 'farm', 'barracks', 'range', 'tower', 'special', 'shrine', 'walls', 'stables', 'foundry', 'wonder'],
   hush: ['farm', 'market', 'barracks', 'range', 'stables', 'special', 'shrine', 'tower', 'walls', 'foundry', 'wonder'],
   vesperate: ['farm', 'market', 'tower', 'barracks', 'range', 'walls', 'special', 'shrine', 'foundry', 'stables', 'wonder'],
-  drift: ['market', 'barracks', 'range', 'stables', 'kites', 'farm', 'shrine', 'sails', 'foundry', 'wonder'],
+  drift: ['market', 'farm', 'barracks', 'range', 'stables', 'kites', 'shrine', 'sails', 'foundry', 'wonder'],
 };
 
 export async function scriptedAI(s: CampaignState, f: FactionId, ctx: AiContext): Promise<void> {
@@ -171,7 +171,7 @@ function recruitAll(s: CampaignState, f: FactionId): void {
   }
   // Raise a new army when rich and allowed.
   const home = f === 'drift' ? KITE_FIELDS : ownedRegions(s, f).find((r) => regionDef(r).major) ?? ownedRegions(s, f)[0];
-  if (home && fs.coin > 3000 && canRaiseArmy(s, f, home).ok) {
+  if (home && fs.coin > 2000 && canRaiseArmy(s, f, home).ok) {
     const r = raiseArmy(s, f, home);
     if (r.ok) recruitAll(s, f);
   }
@@ -287,7 +287,8 @@ function military(s: CampaignState, f: FactionId): PendingBattle[] {
       const dist = steps[t.region] ?? 99;
       if (dist > 6) continue;
       const ratio = power / Math.max(1, t.need);
-      if (ratio < 1.25) continue;
+      const burned = s.reports.some((r) => r.turn >= s.turn - 3 && r.region === t.region && r.attacker === f && r.winner !== f);
+      if (ratio < (burned ? 2 : 1.25)) continue;
       const sun = sunForAttacker(a.region, t.region);
       const sunBonus = sun === 'back' ? 0.4 : sun === 'eyes' ? -0.3 : 0;
       const score = t.value * Math.min(2, ratio) - dist * 0.8 + sunBonus + (a.crusade?.target === t.region ? 5 : 0);

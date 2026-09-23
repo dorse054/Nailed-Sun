@@ -50,8 +50,10 @@ export function hostileArmiesIn(s: CampaignState, region: string, f: FactionId):
 
 export function hostileSettlement(s: CampaignState, region: string, f: FactionId): boolean {
   if (!regionDef(region).settlement) return false;
-  const o = s.regions[region]!.owner;
-  return o !== f && hostile(s, f, o);
+  const r = s.regions[region]!;
+  // A free city with a Drift mooring is a friendly port to the Drift.
+  if (f === 'drift' && r.owner === 'free' && r.mooring) return false;
+  return r.owner !== f && hostile(s, f, r.owner);
 }
 
 /**
@@ -177,8 +179,17 @@ export function recruitSite(s: CampaignState, a: ArmyState): { slots: (BuildingS
     return { slots: a.city.slots, level: a.city.level, region: null };
   }
   const r = s.regions[a.region]!;
-  if (r.owner !== a.faction || !regionDef(a.region).settlement) return null;
-  return { slots: r.slots, level: r.level, region: a.region };
+  if (r.owner === a.faction && regionDef(a.region).settlement) return { slots: r.slots, level: r.level, region: a.region };
+  // Troops march out from a neighboring settlement of our own.
+  let best: { slots: (BuildingSlot | null)[]; level: number; region: string } | null = null;
+  for (const n of neighbors(a.region)) {
+    const st = s.regions[n]!;
+    if (st.owner !== a.faction || !regionDef(n).settlement) continue;
+    if (!best || st.level > best.level || (st.level === best.level && st.slots.filter(Boolean).length > best.slots.filter(Boolean).length)) {
+      best = { slots: st.slots, level: st.level, region: n };
+    }
+  }
+  return best;
 }
 
 export function recruitOptions(s: CampaignState, armyId: string): RecruitOption[] {
@@ -270,7 +281,7 @@ export function transfer(s: CampaignState, fromId: string, index: number, toId: 
 
 export function armyCap(s: CampaignState, f: FactionId): number {
   if (f === 'drift') return Math.min(6, 2 + Math.floor(s.factions.drift.res / 250));
-  return Math.min(6, 1 + Math.floor(ownedRegions(s, f).length / 3));
+  return Math.min(8, 2 + Math.floor(ownedRegions(s, f).length / 3));
 }
 
 export const RAISE_COST = 700;
@@ -561,6 +572,7 @@ export const LENS_COST = { coin: 1500, res: 150 };
 export function lensReady(s: CampaignState): Result {
   const c = s.factions.choir;
   if (c.lens >= 5) return fail('The Last Lens is complete');
+  if (s.turn < 50) return fail('The world is not ready: the Last Lens can begin on Toll 50');
   if (c.lensBuilding) return fail('A stage is being built');
   if (s.regions[NAIL_SPIRE]!.owner !== 'choir') return fail('Hold the Nail Spire');
   if (!CANDLES.every((x) => s.regions[x]!.owner === 'choir' && s.regions[x]!.lit)) return fail('Hold all three Candles, lit');

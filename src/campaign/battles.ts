@@ -46,6 +46,8 @@ export function garrisonFor(s: CampaignState, region: string): string[] {
   const walls = wallLevel(s, region);
   let n = 1 + r.level + sumEffect(eff, 'garrison') + (def.major ? 1 : 0);
   if (r.owner === 'free' && walls > 0 && sumEffect(eff, 'garrison') === 0) n += 1;
+  if (r.owner === 'free' && (def.landmark === 'candle' || def.landmark === 'nailSpire')) n += 2;
+  if (r.owner === 'free' && def.major) n += 1;
   const tierCap = Math.max(1, Math.min(3, r.level));
   const roster = factionDef(culture).units.filter((u) => u.tier <= tierCap && u.category !== 'monster');
   const pattern = ['line', 'missile', 'antiLarge', 'missile', 'line', 'shock', 'missileCav', 'antiLarge'];

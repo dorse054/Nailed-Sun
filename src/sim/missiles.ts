@@ -291,7 +291,11 @@ function fireBeam(b: Battle, s: Soldier, v: Soldier, w: MissileWeapon): void {
   const ey = bt >= 0 ? s.y + (ay - s.y) * bt : ay;
   const power = w.lightScaled ? beamMult(u.light) : 1;
   if ((s.id & 3) === 0) b.events.push({ t: 'beam', kind: 'beam', x1: s.x, y1: s.y, x2: ex, y2: ey, power, blocked: bt >= 0, side: u.side });
-  if (bt >= 0) return;
+  if (bt >= 0) {
+    // Choir beams burn the gates that stop them.
+    if (b.terrain.fort) b.damageWalls(ex, ey, 4, w.damage * power * 2, u.side, true);
+    return;
+  }
   const hit = nearestAt(b, ax, ay, 0.6, u.side);
   if (!hit) return;
   missileHit(b, u, w, hit, s.x, s.y, u.stats.missileDmgMult * power);
@@ -315,6 +319,7 @@ function fireLineBeam(b: Battle, s: Soldier, v: Soldier, w: MissileWeapon): void
   }
   const power = w.lightScaled ? beamMult(u.light) : 1;
   b.events.push({ t: 'beam', kind: 'heliostat', x1: s.x, y1: s.y, x2: ex, y2: ey, power, blocked: bt >= 0, side: u.side });
+  if (bt >= 0 && b.terrain.fort) b.damageWalls(ex, ey, 5, w.damage * power * 3, u.side, true);
   const width = 1.8;
   forSoldiersNearSegment(b, s.x, s.y, ex, ey, width, (o) => {
     const d2 = (o.x - s.x) * (o.x - s.x) + (o.y - s.y) * (o.y - s.y);
@@ -386,6 +391,10 @@ function resolveImpact(b: Battle, p: Projectile): void {
   const w = p.weapon;
   const u = p.shooter;
   if (!b.terrain.inBounds(p.x1, p.y1)) return;
+  // Engines batter walls and gates where their shot lands.
+  if (b.terrain.fort && (u.def.category === 'artillery' || u.def.category === 'colossus')) {
+    b.damageWalls(p.x1, p.y1, Math.max(3, w.splash ?? 0), w.damage * 2 * p.dmgMult, u.side);
+  }
   if ((w.splash ?? 0) > 0) {
     b.events.push({ t: 'impact', x: p.x1, y: p.y1, kind: w.kind, splash: w.splash ?? 0 });
     const r = w.splash!;

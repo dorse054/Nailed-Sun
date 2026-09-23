@@ -173,10 +173,16 @@ export class Terrain {
     if (!this.inBounds(x, y)) return false;
     if (flying) return true;
     const c = this.cover[this.idx(x, y)]!;
-    if (c === COVER.Building || c === COVER.Deep || c === COVER.Cliff || c === COVER.Wall) return false;
-    if (c === COVER.Gate) return false;
+    if (c === COVER.Building || c === COVER.Deep || c === COVER.Cliff || c === COVER.Gate) return false;
+    // Any infantry can climb walls, slowly, with ladders.
+    if (c === COVER.Wall) return cat === 'infantry' || cat === 'character';
     if (cat === 'colossus' && c === COVER.Shallow) return true;
     return true;
+  }
+
+  isWall(x: number, y: number): boolean {
+    if (!this.inBounds(x, y)) return false;
+    return this.cover[this.idx(x, y)] === COVER.Wall;
   }
 
   /** Movement speed multiplier for a category at a point. */
@@ -190,6 +196,7 @@ export class Terrain {
       return 0.8;
     }
     if (c === COVER.Shallow) return cat === 'colossus' ? 0.85 : 0.55;
+    if (c === COVER.Wall) return 0.18;
     if (c === COVER.Field) return 0.95;
     return 1;
   }

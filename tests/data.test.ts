@@ -95,7 +95,8 @@ describe('unit ids', () => {
   it('are unique across all factions', () => {
     const ids = units.map((u) => u.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids).toHaveLength(4 * 15);
+    // 11 units, a colossus, a lord, 2 heroes and the generic campaign captain.
+    expect(ids).toHaveLength(4 * 16);
   });
 
   it('are prefixed by their faction, and each unit belongs to the faction that lists it', () => {

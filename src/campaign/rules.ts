@@ -101,8 +101,8 @@ export const LEVEL_COST = [0, 400, 900, 1800];
 
 // ---------------------------------------------------------------- economy
 
-const MAJOR_COIN = [0, 120, 170, 240, 320];
-const MINOR_COIN = [0, 60, 90, 130];
+const MAJOR_COIN = [0, 200, 280, 380, 500];
+const MINOR_COIN = [0, 110, 160, 220];
 const BAND_FOOD = [0, 1, 4, 2, 0];
 const FARM_MULT = [0.25, 0.6, 1.3, 1, 0.25];
 const DIFFICULTY_AI = { easy: 0.85, normal: 1, hard: 1.25 } as const;
@@ -176,7 +176,12 @@ export function armyFood(s: CampaignState, a: ArmyState): number {
   const n = a.units.length + 1;
   let eat = n * 0.5;
   if (a.faction === 'hush' && herdIn(s, a.region) > 0) eat = 0;
-  if (a.faction === 'drift' && a.city) eat -= sumEffect(cityEffects(a), 'food');
+  if (a.faction === 'drift') {
+    // The steppe and the moorings feed a wind-city; elsewhere it lives on stores.
+    if (regionDef(a.region).galeRoad || s.regions[a.region]!.mooring) eat = 0;
+    else if (s.regions[a.region]!.owner === 'free' && !regionDef(a.region).settlement) eat *= 0.5;
+    if (a.city) eat -= sumEffect(cityEffects(a), 'food');
+  }
   return eat;
 }
 
@@ -187,7 +192,7 @@ export function cityEffects(a: ArmyState): BuildingEffects[] {
 
 // ----------------------------------------------------------------- upkeep
 
-export const UPKEEP_RATE = 0.06;
+export const UPKEEP_RATE = 0.05;
 
 /** Each extra copy of a unit adds 5% upkeep to every copy. */
 export function armyUpkeep(a: ArmyState): number {
@@ -262,7 +267,10 @@ export function orderDelta(s: CampaignState, id: string): number {
 export function regionStance(s: CampaignState, a: ArmyState): 'own' | 'allied' | 'neutral' | 'hostile' {
   const o = s.regions[a.region]!.owner;
   if (o === a.faction) return 'own';
-  if (o === 'free') return regionDef(a.region).settlement ? 'hostile' : 'neutral';
+  if (o === 'free') {
+    if (a.faction === 'drift' && s.regions[a.region]!.mooring) return 'allied';
+    return regionDef(a.region).settlement ? 'hostile' : 'neutral';
+  }
   if (allied(s, a.faction, o)) return 'allied';
   if (relation(s, a.faction, o).stance === 'war') return 'hostile';
   return 'neutral';
@@ -441,7 +449,7 @@ export function blocksPath(s: CampaignState, a: ArmyState, region: string): bool
   const r = s.regions[region]!;
   if (!regionDef(region).settlement) return false;
   if (r.owner === a.faction) return false;
-  if (r.owner === 'free') return true;
+  if (r.owner === 'free') return !(a.faction === 'drift' && r.mooring);
   return hostile(s, a.faction, r.owner);
 }
 

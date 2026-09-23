@@ -19,13 +19,15 @@ export interface PlayerBattleOutcome {
   result: BattleResult;
   fought: boolean;
   driftChoice?: 'sack' | 'moor';
+  /** The attacker backed off: no battle. */
+  cancelled?: boolean;
 }
 
 export interface TurnHooks {
   /** The player takes part: fight it, or let the simulation decide. */
   playerBattle(s: CampaignState, pb: PendingBattle): Promise<PlayerBattleOutcome>;
-  /** Progress text while the AI moves. */
-  progress?(text: string): void;
+  /** Which AI faction is moving now. */
+  progress?(faction: FactionId): void;
 }
 
 export interface AiContext {
@@ -115,6 +117,7 @@ export async function resolveBattles(s: CampaignState, pbs: PendingBattle[], hoo
         reports.push(applyBattle(s, pb, job.prep, result, { fought: false }));
       } else {
         const o = outcomes[i]!;
+        if (o.cancelled) continue;
         reports.push(applyBattle(s, pb, o.prep, o.result, { fought: o.fought, driftChoice: o.driftChoice }));
       }
     }

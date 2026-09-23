@@ -68,6 +68,8 @@ export function factionLedger(s: CampaignState, f: FactionId): Ledger {
     let cr = 0;
     for (const a of s.armies) {
       if (a.faction !== 'drift') continue;
+      // Every wind-city trades as it sails; best on the open roads.
+      cc += 80 + (regionDef(a.region).galeRoad ? 40 : 0);
       const e = cityEffects(a);
       cc += sumEffect(e, 'coin');
       cr += sumEffect(e, 'res');

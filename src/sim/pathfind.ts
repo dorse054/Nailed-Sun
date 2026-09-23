@@ -10,8 +10,13 @@ const NAV = 8;
 export class NavGrid {
   readonly cols: number;
   readonly rows: number;
+  /** Foot soldiers: walls are climbable. */
   private blocked: Uint8Array;
+  /** Cavalry, beasts, monsters and engines: walls stop them. */
+  private blockedMounted: Uint8Array;
   private blockedHeavy: Uint8Array;
+  /** Wall cells cost extra: climbing is slow. */
+  private wall: Uint8Array;
   private gScore: Float64Array;
   private came: Int32Array;
   private closed: Uint8Array;
@@ -23,7 +28,9 @@ export class NavGrid {
     this.rows = Math.ceil(terrain.height / NAV);
     const n = this.cols * this.rows;
     this.blocked = new Uint8Array(n);
+    this.blockedMounted = new Uint8Array(n);
     this.blockedHeavy = new Uint8Array(n);
+    this.wall = new Uint8Array(n);
     this.gScore = new Float64Array(n);
     this.came = new Int32Array(n);
     this.closed = new Uint8Array(n);
@@ -37,18 +44,24 @@ export class NavGrid {
     for (let cy = 0; cy < this.rows; cy++) {
       for (let cx = 0; cx < this.cols; cx++) {
         let bad = 0;
+        let badMounted = 0;
         let badHeavy = 0;
+        let walls = 0;
         for (let oy = 1; oy < NAV; oy += 3) {
           for (let ox = 1; ox < NAV; ox += 3) {
             const x = cx * NAV + ox;
             const y = cy * NAV + oy;
             if (!t.passable(x, y, 'infantry')) bad++;
+            if (!t.passable(x, y, 'cavalry')) badMounted++;
             if (!t.passable(x, y, 'colossus')) badHeavy++;
+            if (t.isWall(x, y)) walls++;
           }
         }
         const i = cy * this.cols + cx;
         this.blocked[i] = bad >= 3 ? 1 : 0;
+        this.blockedMounted[i] = badMounted >= 3 ? 1 : 0;
         this.blockedHeavy[i] = badHeavy >= 3 ? 1 : 0;
+        this.wall[i] = walls > 0 ? 1 : 0;
       }
     }
   }
@@ -57,8 +70,7 @@ export class NavGrid {
     const cx = Math.floor(x / NAV);
     const cy = Math.floor(y / NAV);
     if (cx < 0 || cy < 0 || cx >= this.cols || cy >= this.rows) return true;
-    const i = cy * this.cols + cx;
-    return cat === 'colossus' ? this.blockedHeavy[i] === 1 : this.blocked[i] === 1;
+    return this.blockedAt(cy * this.cols + cx, cat);
   }
 
   /** True when the straight segment is clear on the nav grid. */
@@ -125,7 +137,7 @@ export class NavGrid {
         if (k >= 4 && (this.blockedAt(cy * cols + nx, cat) || this.blockedAt(ny * cols + cx, cat))) continue;
         this.touch(ni);
         if (this.closed[ni] === 1) continue;
-        const g = this.gScore[cur]! + (k >= 4 ? 1.4142 : 1) * NAV;
+        const g = this.gScore[cur]! + (k >= 4 ? 1.4142 : 1) * NAV * (this.wall[ni] === 1 ? 5 : 1);
         if (g < this.gScore[ni]!) {
           this.gScore[ni] = g;
           this.came[ni] = cur;
@@ -166,7 +178,9 @@ export class NavGrid {
   }
 
   private blockedAt(i: number, cat: Category): boolean {
-    return cat === 'colossus' ? this.blockedHeavy[i] === 1 : this.blocked[i] === 1;
+    if (cat === 'colossus') return this.blockedHeavy[i] === 1;
+    if (cat === 'infantry' || cat === 'character') return this.blocked[i] === 1;
+    return this.blockedMounted[i] === 1;
   }
 
   private touch(i: number): void {

@@ -245,7 +245,10 @@ export class Battle {
     updateStatus(this);
     updateMorale(this);
     updateVisibility(this);
-    if (this.tick % 20 === 0) this.checkVictory();
+    if (this.tick % 20 === 0) {
+      this.siegeTick();
+      this.checkVictory();
+    }
   }
 
   /** Run headless until the battle ends or a tick budget runs out. */
@@ -489,6 +492,68 @@ export class Battle {
       }
     }
     if (changed) {
+      this.terrain.stampWalls();
+      this.nav.rebuild();
+    }
+  }
+
+  /** Attackers at a gate batter it down; large creatures hit harder. */
+  private siegeTick(): void {
+    const f = this.terrain.fort;
+    if (!f) return;
+    const atk = (1 - f.defender) as Side;
+    for (const w of this.terrain.walls) {
+      if (w.broken || w.tower || !w.gate) continue;
+      const mx = (w.x1 + w.x2) / 2;
+      const my = (w.y1 + w.y2) / 2;
+      let dmg = 0;
+      for (const u of this.units) {
+        if (u.side !== atk || u.state !== 'ready' || u.alive <= 0) continue;
+        const cat = u.def.category;
+        if (cat === 'artillery' || cat === 'flyer') continue;
+        const d2 = (u.x - mx) * (u.x - mx) + (u.y - my) * (u.y - my);
+        if (d2 > 26 * 26) continue;
+        const heavy = cat === 'monster' || cat === 'colossus' || u.def.size !== 'small';
+        dmg += Math.min(u.alive, 40) * u.def.weapon.base * 0.05 * (heavy ? 3 : 1);
+      }
+      if (dmg > 0) this.hurtWall(w, dmg, atk);
+    }
+    if (this.wallsChanged) {
+      this.wallsChanged = false;
+      this.terrain.stampWalls();
+      this.nav.rebuild();
+    }
+  }
+
+  private wallsChanged = false;
+
+  private hurtWall(w: Terrain['walls'][number], dmg: number, side: Side): void {
+    w.hp -= dmg;
+    if (w.hp > 0) return;
+    w.broken = true;
+    this.wallsChanged = true;
+    const mx = (w.x1 + w.x2) / 2;
+    const my = (w.y1 + w.y2) / 2;
+    this.events.push({ t: 'shockwave', x: mx, y: my, r: 30, kind: 'dust' });
+    this.events.push({ t: 'text', x: mx, y: my, text: w.gate ? 'Gate broken!' : 'Wall breached!', side });
+  }
+
+  /** Engines and beams damage walls and gates near a point. */
+  damageWalls(x: number, y: number, r: number, dmg: number, side: Side, gatesOnly = false): void {
+    if (!this.terrain.fort || dmg <= 0) return;
+    for (const w of this.terrain.walls) {
+      if (w.broken || w.tower || (gatesOnly && !w.gate)) continue;
+      const dx = w.x2 - w.x1;
+      const dy = w.y2 - w.y1;
+      const l2 = dx * dx + dy * dy || 1;
+      const t = Math.max(0, Math.min(1, ((x - w.x1) * dx + (y - w.y1) * dy) / l2));
+      const px = w.x1 + dx * t - x;
+      const py = w.y1 + dy * t - y;
+      if (px * px + py * py > (r + 4) * (r + 4)) continue;
+      this.hurtWall(w, dmg, side);
+    }
+    if (this.wallsChanged) {
+      this.wallsChanged = false;
       this.terrain.stampWalls();
       this.nav.rebuild();
     }
