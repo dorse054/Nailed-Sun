@@ -108,6 +108,7 @@ export function checkVictory(s: CampaignState): void {
     const fs = s.factions[f];
     if (!fs.alive) {
       fs.hold = 0;
+      fs.finalStage = false;
       continue;
     }
     const st = victoryStatus(s, f);

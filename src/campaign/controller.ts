@@ -10,9 +10,10 @@ import { simulate } from '../sim/pool';
 import type { BattleReport, CampaignState, PendingBattle } from './types';
 import { applyBattle, prepareBattle, AUTO_SCALE, type PreparedBattle } from './battles';
 import { hostileArmiesIn, hostileSettlement } from './actions';
-import { armyById, log } from './state';
+import { armyById, log, relation } from './state';
 import { regionDef } from './regions';
 import { endRound } from './turn';
+import { accept, valueDeal, type Deal, type DealValue } from './diplomacy';
 
 export interface PlayerBattleOutcome {
   prep: PreparedBattle;
@@ -28,11 +29,32 @@ export interface TurnHooks {
   playerBattle(s: CampaignState, pb: PendingBattle): Promise<PlayerBattleOutcome>;
   /** Which AI faction is moving now. */
   progress?(faction: FactionId): void;
+  /**
+   * An AI faction puts a deal to the player; resolve true to accept. The
+   * proposer is the side that is not the player (`deal.from`, except for a
+   * tribute demand, `demand: true`, where the player `deal.to` would pay).
+   * `value` is the deal as the player's faction would weigh it. Without
+   * this hook the AI makes no offers to the player.
+   */
+  offer?(s: CampaignState, deal: Deal, value: DealValue): Promise<boolean>;
 }
 
 export interface AiContext {
   /** Settle a set of battles this faction started, then continue. */
   battles(pbs: PendingBattle[]): Promise<BattleReport[]>;
+  /** Put a deal to the player. Resolves false when declined or when no one is there to ask. */
+  offer?(deal: Deal): Promise<boolean>;
+}
+
+/** Ask the player about an AI offer; an accepted deal is applied at once. */
+export async function offerToPlayer(s: CampaignState, deal: Deal, hooks: TurnHooks): Promise<boolean> {
+  if (!hooks.offer) return false;
+  const yes = await hooks.offer(s, deal, valueDeal(s, deal));
+  if (yes) return accept(s, deal);
+  // A refused demand rankles; a refused offer a little.
+  const ai = deal.to === s.player ? deal.from : deal.to;
+  relation(s, ai, s.player).opinion -= deal.demand ? 5 : 1;
+  return false;
 }
 
 export type FactionAI = (s: CampaignState, f: FactionId, ctx: AiContext) => Promise<void>;
@@ -131,7 +153,7 @@ export async function endTurn(s: CampaignState, hooks: TurnHooks, ai: FactionAI)
     if (f === s.player || !s.factions[f].alive || s.winner) continue;
     hooks.progress?.(f);
     try {
-      await ai(s, f, { battles: (pbs) => resolveBattles(s, pbs, hooks) });
+      await ai(s, f, { battles: (pbs) => resolveBattles(s, pbs, hooks), offer: (deal) => offerToPlayer(s, deal, hooks) });
     } catch (e) {
       // An AI bug must never end the campaign.
       log(s, 'warning', `The ${f} hesitate this Toll.`);

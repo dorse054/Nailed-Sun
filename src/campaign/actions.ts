@@ -75,12 +75,11 @@ export function moveArmy(s: CampaignState, armyId: string, to: string): Result<M
   const path = findPath(s, a, to);
   if (!path) return fail('No route');
   let prev = a.region;
-  let spent = 0;
   const walked: string[] = [];
   for (const step of path) {
     const cost = stepCost(s, a, prev, step.region);
-    if (spent + cost > a.moves + 0.001) break;
-    spent += cost;
+    // arrive() spends each step's cost from a.moves as the army walks.
+    if (cost > a.moves + 0.001) break;
     const r = arrive(s, a, prev, step.region, cost, false);
     if (!r.ok) return r;
     walked.push(step.region);
@@ -172,20 +171,27 @@ export interface RecruitOption {
 }
 
 /** Where an army can recruit: its own settlement, or a Drift wind-city in friendly land. */
+/** Buildings that train troops (see recruitRequirement). */
+const RECRUIT_FROM = ['barracks', 'range', 'stables', 'foundry', 'kites', 'shrine', 'wonder'];
+
 export function recruitSite(s: CampaignState, a: ArmyState): { slots: (BuildingSlot | null)[]; level: number; region: string | null } | null {
   if (a.faction === 'drift' && a.city) {
     const st = regionStance(s, a);
     if (st === 'hostile' && !s.regions[a.region]!.mooring) return null;
     return { slots: a.city.slots, level: a.city.level, region: null };
   }
-  const r = s.regions[a.region]!;
-  if (r.owner === a.faction && regionDef(a.region).settlement) return { slots: r.slots, level: r.level, region: a.region };
-  // Troops march out from a neighboring settlement of our own.
+  // The army's own settlement, or troops march out from a neighboring one:
+  // the best-equipped of them (a bare village next to the capital should
+  // not stop the capital's barracks from sending recruits).
   let best: { slots: (BuildingSlot | null)[]; level: number; region: string } | null = null;
-  for (const n of neighbors(a.region)) {
+  let bs = -1;
+  for (const n of [a.region, ...neighbors(a.region)]) {
     const st = s.regions[n]!;
     if (st.owner !== a.faction || !regionDef(n).settlement) continue;
-    if (!best || st.level > best.level || (st.level === best.level && st.slots.filter(Boolean).length > best.slots.filter(Boolean).length)) {
+    let sc = st.level;
+    for (const k of RECRUIT_FROM) sc += chainLevel(st, k) * 10;
+    if (sc > bs) {
+      bs = sc;
       best = { slots: st.slots, level: st.level, region: n };
     }
   }
@@ -644,6 +650,8 @@ export function giftHouse(s: CampaignState, house: HouseId): Result {
 }
 
 export const GREAT_TOLL = { coin: 1000, res: 60 };
+/** Tolls the great bells rest after ringing: long enough for a determined push to move the Tilt. */
+export const GREAT_TOLL_REST = 7;
 
 export function greatToll(s: CampaignState): Result {
   const v = s.factions.vesperate;
@@ -652,7 +660,7 @@ export function greatToll(s: CampaignState): Result {
   if (v.coin < GREAT_TOLL.coin || v.res < GREAT_TOLL.res) return fail(`Needs ${GREAT_TOLL.coin} coin and ${GREAT_TOLL.res} Hours`);
   v.coin -= GREAT_TOLL.coin;
   v.res -= GREAT_TOLL.res;
-  v.greatTollCooldown = 5;
+  v.greatTollCooldown = GREAT_TOLL_REST;
   if (s.tilt !== 0) s.tilt += s.tilt > 0 ? -1 : 1;
   s.tiltProgress = 0;
   log(s, 'tilt', `The Great Toll rings from Vesper: the Tilt swings back to ${fmtTilt(s.tilt)}.`);
