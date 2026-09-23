@@ -26,6 +26,9 @@ import { audio } from '../../audio/audio';
 
 export type Phase = 'deploy' | 'battle' | 'over';
 
+/** Players who ask for less motion get no camera that moves by itself. */
+const REDUCED_MOTION = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 /** The enemy general thinks again at most every this many battle seconds, and this many times a battle. */
 const MID_GAP = 30;
 const MID_ASKS = 4;
@@ -462,7 +465,7 @@ export class BattleSession {
    * few quiet seconds.
    */
   private followCamera(dt: number, now: number): void {
-    if (this.req.mode !== 'demo' || this.phase !== 'battle' || now - this.userCamAt < 8000) return;
+    if (this.req.mode !== 'demo' || this.phase !== 'battle' || now - this.userCamAt < 8000 || REDUCED_MOTION) return;
     const b = this.battle;
     let sx = 0;
     let sy = 0;
