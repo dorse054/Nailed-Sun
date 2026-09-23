@@ -20,6 +20,7 @@ import { regionDef } from '../../campaign/regions';
 import { jevProvider } from '../../campaign/jev';
 import { claudeStatus } from '../claude';
 import { envoyDecision, envoyWords, writeSaga } from './claudeJev';
+import { guideBaseline } from './Guide';
 import { detachHero, heroById, heroReach, heroes, heroesNewToll, heroVision, moveHero } from '../../campaign/heroes';
 import { simulate } from '../../sim/pool';
 import { go, loadRaw, remove, save, settings } from '../store';
@@ -409,6 +410,7 @@ function expose(): void {
 
 export function startCampaign(faction: FactionId, difficulty: CampaignState['difficulty'], seed: number): CampaignSession {
   const s = newCampaign({ faction, difficulty, seed });
+  s.guide = guideBaseline(s);
   active = new CampaignSession(s);
   active.save();
   active.prompt.value = { kind: 'summary', turn: 1 };

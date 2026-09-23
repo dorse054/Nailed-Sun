@@ -15,6 +15,7 @@ import { BANDS } from '../../data/rules';
 import { regionBand } from '../../campaign/rules';
 import { heroes } from '../../campaign/heroes';
 import { HeroPanel } from './HeroPanel';
+import { Guide } from './Guide';
 
 /**
  * The campaign map: pan by dragging, zoom with the wheel or a pinch, click
@@ -288,6 +289,7 @@ export function CampaignScreen({ session }: { session: CampaignSession }) {
           ) : null}
         </aside>
       )}
+      <Guide session={session} />
       <div class="camp-end">
         <button class="btn primary big" disabled={!!session.busy.value || !!session.s.winner} onClick={() => void session.endToll()} title="End this Toll (Enter)">
           End Toll {session.s.turn}
