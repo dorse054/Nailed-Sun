@@ -3,6 +3,7 @@ import type { CampaignSession, Prompt } from './session';
 import { abandonCampaign, leaveCampaign } from './session';
 import type { ArmyState, BattleReport, Owner, PendingBattle } from '../../campaign/types';
 import { Moments, TaleOf, ToldTale } from '../battle/Tale';
+import { noteCampaign } from '../book';
 import { factionDef, unitDef } from '../../data/index';
 import { BANDS } from '../../data/rules';
 import { FACTION_IDS, WIND_NAMES, type FactionId } from '../../data/schema';
@@ -437,7 +438,7 @@ function ReportStory({ session, r, place }: { session: CampaignSession; r: Battl
   const player = notes.setup.armies.findIndex((a) => a.faction === session.player && a.controller === 'player');
   return (
     <div class="report-story">
-      <TaleOf setup={notes.setup} result={notes.result} moments={notes.moments} player={(player === 1 ? 1 : 0) as 0 | 1} title={`The battle at ${place}`} tale={r.tale} onTale={(t) => session.keepTale(r, t)} />
+      <TaleOf setup={notes.setup} result={notes.result} moments={notes.moments} player={(player === 1 ? 1 : 0) as 0 | 1} title={`The battle at ${place}`} tale={r.tale} onTale={(t) => session.keepTale(r, t)} toll={r.turn} />
       <Moments moments={notes.moments} open={false} />
     </div>
   );
@@ -457,6 +458,8 @@ function End({ session }: { session: CampaignSession }) {
   const writing = session.sagaBusy.value;
   useEffect(() => {
     void session.saga();
+    const s = session.s;
+    noteCampaign(`${s.seed}:${s.player}:${s.difficulty}`, s.player, s.winner?.faction === s.player, s.winner?.turn ?? s.turn);
   }, [session]);
   const s = session.s;
   const w = s.winner;

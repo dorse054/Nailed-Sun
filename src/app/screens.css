@@ -411,3 +411,67 @@
   font-size: 13px;
   text-shadow: 0 0 6px color-mix(in srgb, var(--gold) 60%, transparent);
 }
+
+/* Chronicles: the player's record and book of tales. */
+.head-spacer {
+  width: 80px;
+}
+.chronicles {
+  max-width: 900px;
+  margin: 0 auto;
+  display: grid;
+  gap: 12px;
+}
+.chron-record,
+.chron-book {
+  padding: 14px 16px;
+  display: grid;
+  gap: 10px;
+}
+.chron-record table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.chron-record th,
+.chron-record td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+.chron-record .r {
+  text-align: right;
+}
+.chron-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-right: 8px;
+  vertical-align: 1px;
+}
+.book-tale {
+  border-left: 3px solid color-mix(in srgb, var(--fc, var(--accent)) 70%, transparent);
+  padding: 4px 0 4px 14px;
+}
+.book-tale h3 {
+  font-size: 22px;
+  color: var(--gold);
+}
+.book-tale.saga h3 {
+  font-size: 26px;
+}
+.book-meta {
+  font-size: 12.5px;
+  margin-top: 2px;
+}
+.book-tale p {
+  margin: 6px 0 0;
+  font-family: var(--display);
+  font-size: 18px;
+  line-height: 1.45;
+}
+.chron-foot {
+  text-align: center;
+  font-size: 13px;
+}

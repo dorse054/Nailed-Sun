@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { SettingsPanel } from './Settings';
-import { go } from '../store';
+import { go, settings } from '../store';
+import { book } from '../book';
+import { claudeStatus } from '../claude';
 import { TAGLINE } from '../../data/lore';
 import { audio } from '../../audio/audio';
 import { quickBattle, demoBattle } from '../quick';
@@ -190,6 +192,10 @@ export function MainMenu() {
             <b>Codex</b>
             <span>How to play, the world and every unit</span>
           </button>
+          <button class="menu-item" onClick={click(() => go({ name: 'chronicles' }))}>
+            <b>Chronicles</b>
+            <span>{book.value.tales.length ? `Your record and ${book.value.tales.length} ${book.value.tales.length === 1 ? 'tale' : 'tales'}` : 'Your record and your tales'}</span>
+          </button>
           {import.meta.env.VITE_LAB !== 'off' && (
             <button class="menu-item" onClick={click(() => go({ name: 'lab' }))}>
               <b>Balance Lab</b>
@@ -198,7 +204,7 @@ export function MainMenu() {
           )}
           <button class="menu-item" onClick={click(() => demoBattle())}>
             <b>Watch a Battle</b>
-            <span>Two scripted generals</span>
+            <span>{settings.value.claudeAI && claudeStatus.value === 'ready' ? 'Two generals, advised by Claude' : 'Two scripted generals'}</span>
           </button>
           <button class="menu-item" onClick={click(() => setSettingsOpen(true))}>
             <b>Settings</b>

@@ -11,6 +11,7 @@ import { BattleAI } from '../../ai/battleAI';
 import { aiOptions } from '../../ai/plan';
 import { askAdvice, askCounsel, askGeneral, askGeneralMid, strengthRatio } from './claudeGeneral';
 import { MomentLog, type Moment } from './moments';
+import { noteBattle } from '../book';
 import { claudeStatus } from '../claude';
 import { layoutSlots, placeInFormation } from '../../sim/army';
 import { castBlocker, casterPos, findAbility } from '../../sim/abilities';
@@ -371,6 +372,7 @@ export class BattleSession {
       if (b.over) {
         this.phase = 'over';
         audio.battleEnd(b.result!.winner === this.side);
+        if (this.req.mode === 'custom' || this.req.mode === 'campaign') noteBattle(b.sides[this.side].faction, b.result!.winner === this.side);
         this.hud.value++;
       }
     }

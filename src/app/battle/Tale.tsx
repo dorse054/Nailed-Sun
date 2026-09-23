@@ -6,7 +6,8 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import type { BattleResult, BattleSetup, Side } from '../../sim/types';
 import { claudeStatus } from '../claude';
 import { clock, type Moment } from './moments';
-import { tellTale, type Tale } from './claudeTale';
+import { placeOf, tellTale, type Tale } from './claudeTale';
+import { addTale } from '../book';
 
 export function Moments({ moments, open = true }: { moments: Moment[]; open?: boolean }) {
   if (!moments.length) return null;
@@ -47,6 +48,7 @@ export function TaleOf({
   title,
   tale,
   onTale,
+  toll,
 }: {
   setup: BattleSetup;
   result: BattleResult;
@@ -56,6 +58,8 @@ export function TaleOf({
   /** A tale already told (a campaign report keeps its tale). */
   tale?: Tale;
   onTale?: (t: Tale) => void;
+  /** The campaign Toll, for the book. */
+  toll?: number;
 }) {
   const [told, setTold] = useState<Tale | null>(tale ?? null);
   const [state, setState] = useState<'idle' | 'busy' | 'failed'>('idle');
@@ -75,6 +79,17 @@ export function TaleOf({
     if (t) {
       setTold(t);
       onTale?.(t);
+      const foe = (1 - player) as Side;
+      addTale({
+        kind: 'battle',
+        title: t.title,
+        text: t.text,
+        faction: result.sides[player].faction,
+        foe: result.sides[foe].faction,
+        place: placeOf(setup, title),
+        won: result.winner === -1 ? null : result.winner === player,
+        ...(toll !== undefined ? { toll } : {}),
+      });
     } else setState('failed');
   };
   return (

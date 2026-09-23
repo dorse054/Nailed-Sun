@@ -8,6 +8,7 @@ import type { FactionId } from '../../data/schema';
 import type { BattleResult, BattleSetup } from '../../sim/types';
 import type { Moment } from '../battle/moments';
 import type { Tale } from '../battle/claudeTale';
+import { addTale } from '../book';
 import type { BattleReport, CampaignState, PendingBattle } from '../../campaign/types';
 import { accept, propose, refuse, valueDeal, type Deal, type DealValue } from '../../campaign/diplomacy';
 import { newCampaign } from '../../campaign/setup';
@@ -192,6 +193,8 @@ export class CampaignSession {
     this.sagaBusy.value = false;
     if (!story) return;
     this.s.saga = story;
+    const w = this.s.winner;
+    addTale({ kind: 'saga', title: story.title, text: story.text, faction: this.player, won: w ? w.faction === this.player : false, toll: w?.turn ?? this.s.turn });
     this.save();
     this.bump();
   }

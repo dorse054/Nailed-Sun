@@ -33,7 +33,8 @@ export type Screen =
   | { name: 'codex'; page?: string }
   | { name: 'lab' }
   | { name: 'campaign' }
-  | { name: 'tutorials' };
+  | { name: 'tutorials' }
+  | { name: 'chronicles' };
 
 export const screen = signal<Screen>({ name: 'menu' });
 

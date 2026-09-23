@@ -45,6 +45,14 @@ const LIGHT_WORDS: Record<(typeof LIGHT_NAMES)[number], string> = {
 };
 const WIND_WORDS: Record<(typeof WIND_NAMES)[number], string> = { Calm: 'no wind', Breeze: 'a breeze blowing', Gale: 'a gale blowing' };
 
+/** Where a battle was fought, in a few words: its name, else its landmark, else its band. */
+export function placeOf(setup: BattleSetup, title?: string): string {
+  const m = setup.map;
+  if (title) return title;
+  if (m.landmark) return LANDMARKS[m.landmark].name;
+  return BANDS[m.band].name;
+}
+
 /** The field in words: the landmark or town, the band, the light and the wind. */
 function field(setup: BattleSetup, title?: string): string {
   const m = setup.map;
