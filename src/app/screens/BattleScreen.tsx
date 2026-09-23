@@ -271,30 +271,37 @@ function HourPicker({ s }: { s: BattleSession }) {
   const iv = b.tick === 0 ? tollInterval(b, s.side) : st.tollInterval;
   const left = Number.isFinite(iv) ? Math.max(0, iv - st.tollTimer) : null;
   const active = b.time - st.lastToll < 6;
+  // Small screens fold the Hours away to one line; tutorials keep them open to point at.
+  void s.hud.value;
+  const open = !!s.req.tutorial || (hoursOpen.value ?? !matchMedia('(max-width: 720px), (max-height: 560px)').matches);
+  const hour = fac.hours!.find((h) => h.id === st.hour);
   return (
-    <div class="panel" data-tut="hours" style={{ position: 'absolute', right: '8px', top: 'calc(104px + env(safe-area-inset-top, 0px))', padding: '8px 10px', display: 'grid', gap: '6px', width: '210px' }}>
-      <div class="spread">
-        <b style={{ fontFamily: 'var(--display)', fontSize: '18px', color: 'var(--gold)' }}>The Toll</b>
+    <div class={`panel hour-picker ${open ? '' : 'folded'}`} data-tut="hours">
+      <button class="spread hour-head" onClick={() => (hoursOpen.value = !open)} aria-expanded={open} title={open ? 'Fold the Hours' : 'Choose the Hour'}>
+        <b>{open ? 'The Toll' : (hour?.name.replace('Hour of ', '').replace(/^the\b/, 'The') ?? 'The Toll')}</b>
         <span class={`chip ${active ? 'gold' : ''} num`}>{left === null ? 'silenced' : active ? 'ringing' : `${left.toFixed(0)} s`}</span>
-      </div>
+      </button>
       {left !== null && (
         <div class="bar" style={{ height: '4px' }}>
           <i style={{ width: `${(1 - left / iv) * 100}%`, background: 'var(--gold)' }} />
         </div>
       )}
-      <div style={{ display: 'grid', gap: '4px' }}>
+      {open && <div style={{ display: 'grid', gap: '4px' }}>
         {fac.hours!.map((h) => (
           <button key={h.id} class={`btn small ${st.hour === h.id ? 'on' : ''}`} style={{ justifyContent: 'space-between' }} onClick={() => s.setHour(h.id as HourId)} title={h.desc} data-tut={`hour-${h.id}`}>
-            <span>{h.name.replace('Hour of ', '')}</span>
+            <span>{h.name.replace('Hour of ', '').replace(/^the\b/, 'The')}</span>
             <span class="muted" style={{ fontSize: '11px' }}>
               {h.desc.replace('.', '')}
             </span>
           </button>
         ))}
-      </div>
+      </div>}
     </div>
   );
 }
+
+/** Whether the Toll panel shows its Hours (null: open on large screens, folded on small). */
+const hoursOpen = signal<boolean | null>(null);
 
 function UnitCards({ s }: { s: BattleSession }) {
   const units = s.own();
@@ -407,6 +414,9 @@ function modifierChips(s: BattleSession, u: Unit): { text: string; tone: string;
   return out;
 }
 
+/** Phones can fold the unit panel down to its name, abilities and orders. */
+const panelFolded = signal(false);
+
 /** The chip the player tapped for its exact numbers (touch screens have no hover). */
 const explain = signal<{ unit: number; text: string } | null>(null);
 
@@ -421,9 +431,12 @@ function UnitPanel({ s, u }: { s: BattleSession; u: Unit }) {
   const lead = u.soldiers.find((x) => x.alive);
   const fac = factionDef(u.faction);
   return (
-    <div class="panel unit-panel">
+    <div class={`panel unit-panel ${panelFolded.value ? 'folded' : ''}`}>
       <div class="spread">
         <div class="row" style={{ gap: '10px' }}>
+          <button class="btn small ghost panel-fold" onClick={() => (panelFolded.value = !panelFolded.value)} aria-expanded={!panelFolded.value} title={panelFolded.value ? 'Show stats and details' : 'Fold the panel to see more of the field'}>
+            {panelFolded.value ? '▸' : '▾'}
+          </button>
           <UnitIcon def={u.def} size={40} />
           <div>
             <h3>{u.def.name}</h3>

@@ -616,7 +616,7 @@ button {
     display: none;
   }
   .center-banner {
-    top: calc(100px + env(safe-area-inset-top, 0px));
+    top: calc(150px + env(safe-area-inset-top, 0px));
   }
   .unit-panel {
     width: 100%;
@@ -1978,6 +1978,54 @@ button {
   }
 }
 
+/* The Vesperate Toll and its Hours. */
+.hour-picker {
+  position: absolute;
+  right: 8px;
+  top: calc(104px + env(safe-area-inset-top, 0px));
+  padding: 8px 10px;
+  display: grid;
+  gap: 6px;
+  width: 210px;
+}
+.hour-picker.folded {
+  width: auto;
+  min-width: 132px;
+  padding: 5px 8px;
+}
+.hour-head {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+}
+.hour-head b {
+  font-family: var(--display);
+  font-size: 18px;
+  color: var(--gold);
+}
+.hour-picker.folded .hour-head b {
+  font-size: 15px;
+}
+/* The unit panel folds on small screens so more of the field shows. */
+.panel-fold {
+  display: none;
+  min-width: 28px;
+  padding: 3px 6px;
+}
+@media (max-width: 720px), (max-height: 560px) {
+  .panel-fold {
+    display: inline-flex;
+  }
+  .unit-panel.folded .stats,
+  .unit-panel.folded .mods,
+  .unit-panel.folded .chip-why,
+  .unit-panel.folded > .muted:last-child {
+    display: none;
+  }
+}
 /* Touch: what one finger does (pan, select, line), plus select-all. */
 .touch-modes {
   align-self: flex-end;
