@@ -94,7 +94,7 @@ export function unitSpeed(b: Battle, u: Unit): number {
   if (!u.running) v *= 0.5;
   if (hasMechanic(u.def, 'sailing')) v = sailingSpeed(b, u);
   if (isFlyer(u.def) && u.grounded <= 0 && u.soldiers.some((s) => s.airborne)) {
-    // Gale: flyers +25% speed downwind.
+    // Gale: flyers fly faster downwind (WIND_RULES[2].flyerDownwindSpeedPct).
     const down = Math.abs(angleDiff(u.facing, b.terrain.sunBearing)) < 0.9;
     if (down) v *= 1 + WIND_RULES[u.wind].flyerDownwindSpeedPct / 100;
   }

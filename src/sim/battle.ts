@@ -531,6 +531,9 @@ export class Battle {
   }
 
   private wallsChanged = false;
+  /** Both armies' remaining value at the last change in a siege, and when that was. */
+  private siegeValue = -1;
+  private siegeChangedAt = 0;
 
   private hurtWall(w: Terrain['walls'][number], dmg: number, side: Side): void {
     w.hp -= dmg;
@@ -592,10 +595,10 @@ export class Battle {
    * it brought and the enemy holds the field with far more: it leaves the field
    * instead of letting a lord, a battery or a hidden unit drag the battle out.
    */
-  private sideBroken(side: Side): boolean {
-    const mine = this.remainingValue(side);
+  private sideBroken(side: Side, rallying = false): boolean {
+    const mine = this.remainingValue(side, rallying);
     if (mine >= VICTORY.brokenBelow) return false;
-    const theirs = this.remainingValue((1 - side) as Side);
+    const theirs = this.remainingValue((1 - side) as Side, rallying);
     return theirs >= mine * VICTORY.brokenRatio + VICTORY.brokenMargin;
   }
 
@@ -623,8 +626,15 @@ export class Battle {
       else if (!atkIn) st.capture = Math.max(0, st.capture - 1);
       if (st.capture >= 60) return this.finish(atk, 'capture');
       // An assault that has spent itself against the walls is called off. (The defender
-      // holds its walls to the last: the attacker must still take the point.)
-      if (this.sideBroken(atk)) return this.finish(def, 'rout');
+      // holds its walls to the last: the attacker must still take the point.) Units that
+      // have only fallen back under the walls' fire still count: they rally and come again.
+      if (this.sideBroken(atk, true)) return this.finish(def, 'rout');
+      // A siege that has stalled (no losses on either side, no one on the point) is over.
+      const v = this.remainingValue(atk, true) + this.remainingValue(def, true);
+      if (Math.abs(v - this.siegeValue) > 0.002 || st.capture > 0) {
+        this.siegeValue = v;
+        this.siegeChangedAt = this.time;
+      } else if (this.time - this.siegeChangedAt > VICTORY.siegeStall) return this.finish(def, 'withdraw');
     } else {
       // Field battles only: a fortified defender holds its walls to the last.
       const b0 = this.sideBroken(0);
@@ -648,13 +658,14 @@ export class Battle {
    * colossus, monster or battery counts for what is left of it, and routing,
    * dead, fled and withdrawn units count for nothing.
    */
-  remainingValue(side: Side): number {
+  remainingValue(side: Side, rallying = false): number {
     let start = 0;
     let now = 0;
     for (const u of this.units) {
       if (u.side !== side) continue;
       start += u.cost;
-      if ((u.state === 'ready' || u.state === 'embarked') && !u.special.withdrawn) now += u.cost * unitHpShare(u);
+      const fighting = u.state === 'ready' || u.state === 'embarked' || (rallying && u.state === 'routing');
+      if (fighting && !u.special.withdrawn) now += u.cost * unitHpShare(u);
     }
     return start > 0 ? now / start : 0;
   }
@@ -718,6 +729,8 @@ export const VICTORY = {
   brokenMargin: 0.1,
   /** At the time limit, remaining values closer than this are a draw. */
   drawBand: 0.03,
+  /** A siege in which nothing has changed for this many seconds is over: the attacker withdraws. */
+  siegeStall: 120,
 };
 
 export { unitHpShare };

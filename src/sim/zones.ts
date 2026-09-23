@@ -9,7 +9,7 @@ import { zoneDef } from '../data/zones';
 import { WIND_RULES } from '../data/rules';
 import { dcos, dsin } from '../core/dmath';
 import type { Battle } from './battle';
-import type { Side, Unit, Zone } from './types';
+import type { Side, Soldier, Unit, Zone } from './types';
 import { applyDamage, typeMult } from './combat';
 
 export function addZone(
@@ -154,6 +154,9 @@ export function zonesAt(b: Battle, x: number, y: number, out: Zone[]): Zone[] {
   return out;
 }
 
+/** Scratch map for one burning tick: the hottest fire each soldier stands in. */
+const BURN = new Map<Soldier, { dmg: number; z: Zone }>();
+
 /** Per-tick zone upkeep: follow sources, expire, burn, spread fire. */
 export function updateZones(b: Battle): void {
   const zones = b.zones;
@@ -183,7 +186,10 @@ export function updateZones(b: Battle): void {
   }
   // Burning ground ticks twice a second. Armor turns part of the heat (as for any hit with
   // half its damage armor-piercing, at the mean armor roll), and fire vulnerability applies.
+  // Fires don't stack: where burning ground overlaps, a soldier burns in the hottest fire only
+  // (the zone rule: the higher intensity wins), so a salvo of firebombs is not a salvo of fires.
   if (b.tick % 10 === 0) {
+    BURN.clear();
     for (const z of zones) {
       if (!z.def.dps || !z.enabled) continue;
       const dps = z.def.dps;
@@ -194,14 +200,19 @@ export function updateZones(b: Battle): void {
         if (s.unit.def.mechanics?.some((m) => m.kind === 'heatImmune')) return;
         const armor = Math.max(0, Math.min(100, s.armor + s.unit.stats.armorAdd));
         const dmg = (z.dps ?? dps.damage) * 0.5 * (1 - (0.5 * 0.75 * armor) / 100) * typeMult(dps.type, s.unit);
-        // Anyone not locked in a fight steps out of the flames (see moveSoldiers).
-        s.hotUntil = z.until;
-        s.hotX = z.x;
-        s.hotY = z.y;
-        s.hotR = z.radius;
-        applyDamage(b, s, dmg, null, dps.type, z.source);
+        const cur = BURN.get(s);
+        if (!cur || dmg > cur.dmg) BURN.set(s, { dmg, z });
       });
     }
+    for (const [s, { dmg, z }] of BURN) {
+      // Anyone not locked in a fight steps out of the flames (see moveSoldiers).
+      s.hotUntil = z.until;
+      s.hotX = z.x;
+      s.hotY = z.y;
+      s.hotR = z.radius;
+      applyDamage(b, s, dmg, null, z.def.dps!.type, z.source);
+    }
+    BURN.clear();
   }
   // Fire spreads sunward in Breeze and Gale, on flammable ground.
   const spreadEvery = WIND_RULES[b.terrain.wind].fireSpreadSeconds;

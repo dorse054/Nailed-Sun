@@ -169,7 +169,7 @@ export function computeStats(b: Battle, u: Unit): void {
     if (hour) applyMods(s, hour.mods);
   }
 
-  // Blaze: non-Choir units tire 50% faster.
+  // Blaze: non-Choir units tire faster (LIGHT_RULES[4].fatigueMult).
   if (u.light === 4 && u.faction !== 'choir') s.fatigueRateMult *= LIGHT_RULES[4].fatigueMult;
 
   // Burning Faith: unbreakable in Bright and Blaze.

@@ -525,9 +525,16 @@ function resolveImpact(b: Battle, p: Projectile): void {
     else if (w.kind === 'stone' || w.kind === 'kite') b.events.push({ t: 'impact', x: p.x1, y: p.y1, kind: w.kind, splash: 0 });
   }
   if (w.ignite) {
-    const z = addZone(b, w.kind === 'glassPot' ? 'moltenGlass' : 'burning', u.side, p.x1, p.y1, w.ignite.duration, u);
-    z.radius = w.ignite.radius;
-    z.dps = w.ignite.dps;
+    const id = w.kind === 'glassPot' ? 'moltenGlass' : 'burning';
+    const ig = w.ignite;
+    // A bomb that lands in a fire of its own side's making keeps that fire going instead of lighting another.
+    const lit = b.zones.find((z) => z.def.id === id && z.side === u.side && z.dps === ig.dps && (z.x - p.x1) * (z.x - p.x1) + (z.y - p.y1) * (z.y - p.y1) < z.radius * z.radius * 0.25);
+    if (lit) lit.until = Math.max(lit.until, b.time + ig.duration);
+    else {
+      const z = addZone(b, id, u.side, p.x1, p.y1, ig.duration, u);
+      z.radius = ig.radius;
+      z.dps = ig.dps;
+    }
   }
   if (w.impactZone) addZone(b, w.impactZone.zone, u.side, p.x1, p.y1, w.impactZone.duration, u);
 }

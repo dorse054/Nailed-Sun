@@ -27,7 +27,7 @@ export const LIGHT_RULES: Record<LightLevel, LightRule> = {
   1: { name: 'Dim', glareAccuracyPct: 0, glareMa: 0, spotMult: 0.75, beamMult: 0.5, fatigueMult: 1, sunElevation: null, note: 'Spotting range -25%. Beams at 50%.' },
   2: { name: 'Dusk', glareAccuracyPct: -20, glareMa: -4, spotMult: 1, beamMult: 1, fatigueMult: 1, sunElevation: 6, note: 'Very long shadows. Beams at 100%.' },
   3: { name: 'Bright', glareAccuracyPct: -10, glareMa: 0, spotMult: 1, beamMult: 1.15, fatigueMult: 1, sunElevation: 32, note: 'Short shadows. Beams at 115%.' },
-  4: { name: 'Blaze', glareAccuracyPct: 0, glareMa: 0, spotMult: 1, beamMult: 1.3, fatigueMult: 1.5, sunElevation: 88, note: 'Non-Choir units tire 50% faster. Beams at 130%.' },
+  4: { name: 'Blaze', glareAccuracyPct: 0, glareMa: 0, spotMult: 1, beamMult: 1.3, fatigueMult: 1.2, sunElevation: 88, note: 'Non-Choir units tire 20% faster. Beams at 130%.' },
 };
 
 /** Glare applies when facing within this angle of the sun. */
@@ -52,7 +52,7 @@ export interface WindRule {
 export const WIND_RULES: Record<WindLevel, WindRule> = {
   0: { name: 'Calm', rangePct: 0, accuracyPct: 0, flyerDownwindSpeedPct: 0, fireSpreadSeconds: 0, note: 'Gliders lose altitude; smoke and spores linger.' },
   1: { name: 'Breeze', rangePct: 10, accuracyPct: 0, flyerDownwindSpeedPct: 0, fireSpreadSeconds: 9, note: 'Fire spreads sunward.' },
-  2: { name: 'Gale', rangePct: 20, accuracyPct: -5, flyerDownwindSpeedPct: 25, fireSpreadSeconds: 4, note: 'All missiles -5% accuracy. Fire spreads fast. Flyers +25% speed downwind.' },
+  2: { name: 'Gale', rangePct: 20, accuracyPct: -5, flyerDownwindSpeedPct: 20, fireSpreadSeconds: 4, note: 'All missiles -5% accuracy. Fire spreads fast. Flyers +20% speed downwind.' },
 };
 
 /** Shadow rule: units in shadow stay hidden until an enemy is this close. */
@@ -171,7 +171,7 @@ export const SIGNATURE = {
   /** The Umbral Mother's swoop: each soldier under it is struck once. */
   dive: { damage: 30, ap: 12 },
   /** The Dreadsail's ram: damage at 8 m/s (it scales with speed), and how far ahead of the bow it reaches. */
-  rammingRun: { damage: 45, ap: 30, reach: 14 },
+  rammingRun: { damage: 70, ap: 50, reach: 14 },
 };
 
 /** Morale constants. States: Steady, Wavering below 50%, Broken at 0. */

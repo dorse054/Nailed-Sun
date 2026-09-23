@@ -273,11 +273,35 @@ describe('burning ground', () => {
     expect(armored).toBeLessThan(plain);
     expect(armored).toBeGreaterThan(0);
   });
+
+  it('overlapping fires do not stack: a soldier burns in the hottest one only', () => {
+    const burn = (fires: number): number => {
+      const b = makeBattle({
+        map: { preset: 'open' },
+        armies: [
+          { faction: 'drift', units: [{ def: 'drift.windbows', x: 700, y: 600 }] },
+          { faction: 'vesperate', units: [{ def: 'vesperate.hourLevy', x: 700, y: 60 }] },
+        ],
+      });
+      const s = b.units[0]!.soldiers[0]!;
+      const hp = s.hp;
+      for (let k = 0; k < fires; k++) addZone(b, 'burning', 1, s.x, s.y, 30).radius = 0.5;
+      b.soldiers.forEach((o) => {
+        if (o !== s) o.x += 200;
+      });
+      b.rebuildHash();
+      for (let i = 0; i < 10; i++) b.step();
+      return hp - s.hp;
+    };
+    const one = burn(1);
+    expect(one).toBeGreaterThan(0);
+    expect(burn(6)).toBeCloseTo(one, 9);
+  });
 });
 
 describe('fortified battles', () => {
   const FORT: Partial<MapSetup> = { preset: 'open', fort: { defender: 1, radius: 170 } };
-  const outside = (b: Battle, _side: 0 | 1, i: number) => b.units[i]!.soldiers.every((s) => !s.alive || !b.terrain.insideFort(s.x, s.y));
+  const outside = (b: Battle, i: number) => b.units[i]!.soldiers.every((s) => !s.alive || !b.terrain.insideFort(s.x, s.y));
 
   it('a routing defender slips out through one of its own gates, even on horseback', () => {
     const b = makeBattle({
@@ -296,7 +320,7 @@ describe('fortified battles', () => {
     expect(u.state).toBe('shattered');
     // Riders cannot climb, and every wall and gate is standing: the only way out is a gate.
     expect(b.terrain.walls.some((w) => w.broken)).toBe(false);
-    expect(stepUntil(b, () => outside(b, 1, 1), 20 * 90)).toBe(true);
+    expect(stepUntil(b, () => outside(b, 1), 20 * 90)).toBe(true);
   });
 
   it('an attacker routing inside the walls climbs out over a wall instead of pressing against a shut gate', () => {
@@ -312,7 +336,7 @@ describe('fortified battles', () => {
     b.step();
     u.routs = MORALE.shatterRouts - 1;
     rout(b, u);
-    expect(stepUntil(b, () => outside(b, 0, 0), 20 * 120)).toBe(true);
+    expect(stepUntil(b, () => outside(b, 0), 20 * 120)).toBe(true);
   });
 
   it('an assault that has spent itself against the walls is called off', () => {
@@ -329,6 +353,22 @@ describe('fortified battles', () => {
     expect(r.reason).toBe('rout');
     expect(r.winner).toBe(1);
     expect(r.time).toBeLessThan(5);
+  });
+
+  it('a siege in which nothing happens for two minutes ends with the attacker withdrawing', () => {
+    const b = makeBattle({
+      timeLimit: 1500,
+      map: FORT,
+      armies: [
+        { faction: 'vesperate', units: [{ def: 'vesperate.hourLevy', x: 300, y: 950 }] },
+        { faction: 'choir', units: [{ def: 'choir.kilnAcolytes', x: 700, y: 500 }] },
+      ],
+    });
+    const r = b.run();
+    expect(r.reason).toBe('withdraw');
+    expect(r.winner).toBe(1);
+    expect(r.time).toBeGreaterThan(VICTORY.siegeStall);
+    expect(r.time).toBeLessThan(VICTORY.siegeStall + 10);
   });
 
   it('the attacking AI gathers its line at one gate and batters it down', () => {
