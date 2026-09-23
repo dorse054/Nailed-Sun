@@ -12,6 +12,8 @@ import { armyPower, regionBand, regionWind, wallLevel, battleLeadership } from '
 import { demandTribute, setStance } from '../../campaign/actions';
 import { garrisonPower } from '../../campaign/battles';
 import { victoryStatus } from '../../campaign/victory';
+import { effectWords, pendingDilemma, resolveDilemma } from '../../campaign/dilemmas';
+import { audio } from '../../audio/audio';
 import { UnitIcon } from '../../ui/UnitIcon';
 import { OWNER_COLOR } from './campaignMap';
 import { go } from '../store';
@@ -20,7 +22,7 @@ export function Prompts({ session, focus }: { session: CampaignSession; focus: (
   // Signal-aware components skip parent re-renders; subscribe to campaign changes.
   void session.version.value;
   const p = session.prompt.value;
-  if (!p) return null;
+  if (!p) return session.s.dilemma && !session.busy.value ? <DilemmaPrompt session={session} focus={focus} /> : null;
   switch (p.kind) {
     case 'battle':
       return <BattlePrompt session={session} p={p} focus={focus} />;
@@ -35,6 +37,41 @@ export function Prompts({ session, focus }: { session: CampaignSession; focus: (
     case 'end':
       return <End session={session} />;
   }
+}
+
+/** A choice the world puts to the player, with its price either way. */
+function DilemmaPrompt({ session, focus }: { session: CampaignSession; focus: (r: string) => void }) {
+  const d = pendingDilemma(session.s);
+  if (!d) return null;
+  const choose = (i: 0 | 1) => {
+    resolveDilemma(session.s, i);
+    audio.ui('click');
+    session.bump();
+  };
+  return (
+    <div class="modal-veil">
+      <div class="panel modal dilemma" role="dialog" aria-labelledby="dilemma-title">
+        <div class="spread">
+          <span class="label">Toll {session.s.turn}</span>
+          {d.region && (
+            <button class="btn small ghost" onClick={() => focus(d.region!)}>
+              Show on map
+            </button>
+          )}
+        </div>
+        <h2 id="dilemma-title">{d.title}</h2>
+        <p class="dilemma-text">{d.text}</p>
+        <div class="dilemma-choices">
+          {d.choices.map((c, i) => (
+            <button key={c.label} class={`btn ${i === 0 ? 'primary' : ''}`} onClick={() => choose(i as 0 | 1)}>
+              <b>{c.label}</b>
+              <span class="small">{effectWords(c.effect, session.s).join(' · ')}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function ownerName(o: Owner, region: string): string {

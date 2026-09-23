@@ -21,6 +21,7 @@ import { jevProvider } from '../../campaign/jev';
 import { claudeStatus } from '../claude';
 import { councilAdvice, envoyDecision, envoyWords, writeSaga } from './claudeJev';
 import { guideBaseline } from './Guide';
+import { maybeDilemma } from '../../campaign/dilemmas';
 import { detachHero, heroById, heroReach, heroes, heroesNewToll, heroVision, moveHero } from '../../campaign/heroes';
 import { simulate } from '../../sim/pool';
 import { go, loadRaw, remove, save, settings } from '../store';
@@ -425,6 +426,7 @@ export class CampaignSession {
     try {
       await endTurn(this.s, this.hooks(false), scriptedAI);
       heroesNewToll(this.s);
+      maybeDilemma(this.s);
     } finally {
       this.busy.value = null;
     }

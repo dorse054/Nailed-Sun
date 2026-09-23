@@ -1190,3 +1190,32 @@
 .council .jev-mark {
   margin-left: 0;
 }
+
+/* Dilemmas: a choice the world puts to the player. */
+.dilemma {
+  width: min(520px, 100%);
+}
+.dilemma h2 {
+  margin: 0;
+}
+.dilemma-text {
+  font-style: italic;
+  line-height: 1.45;
+  margin: 0;
+}
+.dilemma-choices {
+  display: grid;
+  gap: 8px;
+}
+.dilemma-choices .btn {
+  display: grid;
+  justify-content: start;
+  justify-items: start;
+  gap: 2px;
+  text-align: left;
+  padding: 9px 12px;
+}
+.dilemma-choices .btn .small {
+  opacity: 0.8;
+  font-weight: 400;
+}
