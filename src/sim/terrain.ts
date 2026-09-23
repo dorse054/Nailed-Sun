@@ -10,6 +10,13 @@ import { dcos, dsin, clamp, DEG } from '../core/dmath';
 import type { BandId, LightLevel, WindLevel, Category } from '../data/schema';
 import { BANDS, LIGHT_RULES } from '../data/rules';
 
+/** Hit points of a stretch of town wall, a gate and a tower. */
+export const WALL_HP = 6000;
+export const GATE_HP = 2600;
+export const TOWER_HP = 5000;
+/** Speed on a wall (climbing with ladders) as a share of speed on open ground. */
+export const WALL_CLIMB = 0.18;
+
 export const COVER = {
   None: 0,
   Forest: 1,
@@ -217,7 +224,7 @@ export class Terrain {
       return 0.8;
     }
     if (c === COVER.Shallow) return cat === 'colossus' ? 0.85 : 0.55;
-    if (c === COVER.Wall) return 0.18;
+    if (c === COVER.Wall) return WALL_CLIMB;
     if (c === COVER.Field) return 0.95;
     return 1;
   }
@@ -559,10 +566,11 @@ export class Terrain {
       const a = pts[k]!;
       const b = pts[(k + 1) % sides]!;
       const gate = k === 2 || k === 7 || k === 4 || k === 9;
-      this.walls.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y, hp: gate ? 2600 : 6000, maxHp: gate ? 2600 : 6000, gate, tower: false, broken: false });
+      const hp = gate ? GATE_HP : WALL_HP;
+      this.walls.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y, hp, maxHp: hp, gate, tower: false, broken: false });
     }
     for (const p of pts) {
-      this.walls.push({ x1: p.x, y1: p.y, x2: p.x, y2: p.y, hp: 5000, maxHp: 5000, gate: false, tower: true, broken: false });
+      this.walls.push({ x1: p.x, y1: p.y, x2: p.x, y2: p.y, hp: TOWER_HP, maxHp: TOWER_HP, gate: false, tower: true, broken: false });
     }
     this.capturePoint = { x: cx, y: cy, r: 28 };
     this.stampWalls();

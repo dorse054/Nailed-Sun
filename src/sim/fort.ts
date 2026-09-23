@@ -16,9 +16,9 @@ import { projectileSpeed } from './missiles';
 /** A tower's crossbows. Towers can't be killed, so they sting rather than slaughter. */
 export const TOWER_BOLT: MissileWeapon = { kind: 'bolt', trajectory: 'direct', range: 150, ammo: 1, reload: 1, accuracy: 0.75, damage: 20, ap: 12 };
 /** Bolts per tower per second. */
-const TOWER_SHOTS = 3;
+export const TOWER_SHOTS = 3;
 /** How close Old Midnight's hull must come to a wall to dock. */
-const DOCK_REACH = 14;
+export const DOCK_REACH = 14;
 
 export function fortTick(b: Battle): void {
   const f = b.terrain.fort;
