@@ -30,6 +30,7 @@ import { regionDef, REGIONS } from '../../campaign/regions';
 import { UnitIcon } from '../../ui/UnitIcon';
 import { OWNER_COLOR } from './campaignMap';
 import { effectText } from './RegionPanel';
+import { isHero } from '../../campaign/heroes';
 
 export function ArmyPanel({ session, army }: { session: CampaignSession; army: ArmyState }) {
   // Signal-aware components skip parent re-renders; subscribe to campaign changes.
@@ -183,6 +184,11 @@ export function ArmyPanel({ session, army }: { session: CampaignSession; army: A
                   </div>
                 </div>
                 <div class="ap-row-btns">
+                  {isHero(u.def) && (
+                    <button class="btn ghost small" title="Send out to act alone: travel, rally, sabotage, scout" onClick={() => session.sendHero(army.id, i)}>
+                      ✦
+                    </button>
+                  )}
                   {friends.length > 0 && (
                     <button class="btn ghost small" title={`Send to ${friends[0]!.name}`} onClick={() => act(transfer(s, army.id, i, friends[0]!.id))}>
                       ⇄

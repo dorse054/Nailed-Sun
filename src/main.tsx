@@ -7,6 +7,7 @@ import { Guard } from './app/Guard';
 import { go } from './app/store';
 import { demoBattle, quickBattle } from './app/quick';
 import { active, resumeCampaign, startCampaign } from './app/campaign/session';
+import { syncClaudeJev } from './app/campaign/claudeJev';
 import type { FactionId } from './data/schema';
 import type { CampaignState } from './campaign/types';
 
@@ -16,6 +17,9 @@ render(
   </Guard>,
   document.getElementById('app')!,
 );
+
+// The AI factions may take Claude's counsel, when the page can reach Claude and the player allows it.
+syncClaudeJev();
 
 // When the published page is updated, a running campaign carries over.
 interface Hot {
@@ -34,6 +38,9 @@ const resume = (data: unknown) => {
 };
 if (hot?.ready) hot.ready(resume);
 else if (hot?.data) resume(hot.data);
+
+// For browser tests in development: start any screen or battle directly.
+if (import.meta.env.DEV) (globalThis as unknown as { __go?: typeof go }).__go = go;
 
 // Shortcuts: #demo, #demo:a=choir,b=hush,band=gloaming,seed=3 and #quick start straight into a battle.
 const hash = location.hash.slice(1);

@@ -346,6 +346,17 @@ export interface ArmySetup {
   name?: string;
   /** AI style: 'default' uses the faction personality. */
   ai?: 'default' | 'aggressive' | 'defensive' | 'passive';
+  /** The AI general's plan, chosen before the battle (by Claude, when asked). Part of the setup, so replays follow it. */
+  plan?: ArmyPlan;
+}
+
+export interface ArmyPlan {
+  /** Bring the enemy to battle, or hold and let them come. */
+  stance: 'attack' | 'defend';
+  /** Seconds a holding army waits for the enemy before it advances anyway. */
+  patience?: number;
+  /** What the general tells the army before the battle. */
+  speech?: string;
 }
 
 export interface BattleSetup {

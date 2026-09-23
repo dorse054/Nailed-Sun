@@ -70,10 +70,12 @@ export function HowToPage({ nav }: { nav: Nav }) {
           items={[
             { name: 'Tolls', desc: 'Each turn is a Toll. Move your armies, recruit, build, then End Toll: the other factions move, battles are fought, and the economy turns.' },
             { name: 'Armies', desc: `Select an army and click a region to march. An army holds up to ${ARMY.maxUnits} units plus its lord. Each extra copy of the same unit costs more upkeep, so mixed armies are cheaper.` },
+            { name: 'Heroes', desc: 'Heroes fight in armies, or the ✦ button sends one out alone: up to two regions a Toll past any army, and once a Toll it can rally a friendly town, sabotage an enemy one or scout. It rejoins any friendly army it meets.' },
             { name: 'Settlements', desc: 'Build chains in each settlement’s plots. Buildings unlock units, raise coin and food, and keep public order up; low order means revolts.' },
             { name: 'Battles', desc: 'When armies meet, fight the battle yourself or auto-resolve it with the same simulation. The direction you attack from decides where the sun stands.' },
             { name: 'The Tilt', desc: 'Faction actions push the world sunward or nightward, shifting every region’s light and harvest. After Toll 70 the Great Shudder shakes it at random.' },
-            { name: 'Diplomacy', desc: 'Trade, alliances, peace and gifts. Every offer is valued before it is sent, from insult to generous.' },
+            { name: 'Diplomacy', desc: 'Trade, alliances, peace and gifts. Every offer is valued before it is sent, from insult to generous. The other factions make offers and demands of their own.' },
+            { name: 'Claude as counsel', desc: 'Played on claude.ai, Settings can let the AI factions take Claude’s advice: every other Toll each asks Claude, in character, whether to change its wars, treaties or plans, and envoys decide your closer proposals and answer in their own words. In battles, the enemy general reads the field while you deploy, chooses to attack, hold or lie in ambush, and speaks. Choices made on its advice are marked ✦ Claude in the chronicle.' },
           ]}
         />
         <p class="cx-note">

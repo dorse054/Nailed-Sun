@@ -77,13 +77,22 @@ export function withRng<T>(s: CampaignState, fn: (rng: Rng) => T): T {
   return out;
 }
 
-export function log(s: CampaignState, kind: EventKind, text: string, faction?: FactionId, region?: string): void {
+export function log(s: CampaignState, kind: EventKind, text: string, faction?: FactionId, region?: string, by?: CampaignEvent['by']): void {
   const e: CampaignEvent = { turn: s.turn, kind, text };
   if (faction) e.faction = faction;
   if (region) e.region = region;
+  if (by) e.by = by;
   s.events.push(e);
   if (s.events.length > 300) s.events.splice(0, s.events.length - 300);
+  // The world's big news, kept for the whole campaign (the chronicle forgets).
+  if (!faction && ANNALS.has(kind)) {
+    const a = (s.annals ??= []);
+    a.push({ turn: s.turn, kind, text });
+    if (a.length > 240) a.splice(0, a.length - 240);
+  }
 }
+
+const ANNALS = new Set<EventKind>(['capture', 'loss', 'tilt', 'diplomacy', 'revolt', 'shudder', 'victory']);
 
 /** Events the player should hear about: their own, and the world's big news. */
 export function playerEvents(s: CampaignState, turn = s.turn): CampaignEvent[] {

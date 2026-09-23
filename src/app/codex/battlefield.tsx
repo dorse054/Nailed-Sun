@@ -21,6 +21,8 @@ import {
 } from '../../data/rules';
 import { ANTI_FRUSTRATION, COUNTERS, PILLARS, SIGNATURE_MOMENTS } from '../../data/lore';
 import { ZONES } from '../../data/zones';
+import { GATE_HP, WALL_CLIMB, WALL_HP } from '../../sim/terrain';
+import { DOCK_REACH, TOWER_BOLT, TOWER_SHOTS } from '../../sim/fort';
 import { Rose, roseLines } from '../../ui/Rose';
 import { DAMAGE_NAMES, meters, num, onHitText, pct, secs, signed, unitDamageTypes, zoneEffects, zoneLight, zoneMakers } from './format';
 import { FactionLink, Items, type Nav, PageHead, Section, TableWrap, Toc, UnitLink, UnitLinks } from './ui';
@@ -46,6 +48,7 @@ export function BattlefieldPage({ nav }: { nav: Nav }) {
             { id: 'cx-b-math', label: 'Combat math' },
             { id: 'cx-b-damage', label: 'Damage types' },
             { id: 'cx-b-morale', label: 'Morale' },
+            { id: 'cx-b-fort', label: 'Fortified battles' },
             { id: 'cx-b-counters', label: 'Counters' },
             { id: 'cx-b-moments', label: 'Signature moments' },
             { id: 'cx-b-fair', label: 'Anti-frustration' },
@@ -62,6 +65,7 @@ export function BattlefieldPage({ nav }: { nav: Nav }) {
       <MathSection nav={nav} />
       <DamageSection nav={nav} />
       <MoraleSection />
+      <FortSection nav={nav} />
       <Section id="cx-b-counters" title="Counters">
         <p class="cx-note">Every role beats some roles and loses to others. Each unit page shows where that unit sits.</p>
         <TableWrap label="Counters">
@@ -462,6 +466,39 @@ function DamageSection({ nav }: { nav: Nav }) {
           </div>
         ))}
       </div>
+    </Section>
+  );
+}
+
+function FortSection({ nav }: { nav: Nav }) {
+  const bolt = TOWER_BOLT;
+  const link = (id: string) => (hasUnit(id) ? <UnitLink u={unitDef(id)} nav={nav} /> : null);
+  return (
+    <Section id="cx-b-fort" title="Fortified battles">
+      <p class="cx-note">
+        Assaulting a town: the attacker wins by holding the town square for a minute with no defender in it; the defender wins by holding out until time runs out, or by
+        routing the attack.
+      </p>
+      <Items
+        items={[
+          {
+            name: 'Walls',
+            desc: `${num(WALL_HP)} hit points a stretch, 9 m high. Any foot soldier can climb one with ladders, at ${pct(WALL_CLIMB)} of their speed; horses, beasts, colossi and engines need a gate or a breach.`,
+          },
+          {
+            name: 'Gates',
+            desc: `${num(GATE_HP)} hit points. Attackers standing at a gate batter it, and big units hit three times as hard. Beams burn gates; engines break gates and walls alike. Routing defenders slip out through their own gates.`,
+          },
+          {
+            name: 'Towers',
+            desc: `Each tower shoots ${TOWER_SHOTS} crossbow bolts a second at the nearest attacker within ${meters(bolt.range)}: ${num(bolt.damage)} damage, ${num(bolt.ap)} armour-piercing, leading moving targets. Towers see over the walls, but not into shadow or stealth. They can't be destroyed; they fall silent once no defender is left to man them.`,
+          },
+        ]}
+      />
+      <p class="cx-note">
+        Colossi change a siege. {link('vesperate.oldMidnight')} docks like a siege tower when it comes within {meters(DOCK_REACH)} of a wall and lets its garrison down on the far
+        side. {link('drift.dreadsail')} rams walls and gates down at speed.
+      </p>
     </Section>
   );
 }

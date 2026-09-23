@@ -1,12 +1,12 @@
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import type { CampaignSession, Prompt } from './session';
 import { abandonCampaign, leaveCampaign } from './session';
 import type { ArmyState, Owner, PendingBattle } from '../../campaign/types';
 import { factionDef, unitDef } from '../../data/index';
 import { BANDS } from '../../data/rules';
-import { WIND_NAMES } from '../../data/schema';
+import { FACTION_IDS, WIND_NAMES, type FactionId } from '../../data/schema';
 import { regionDef } from '../../campaign/regions';
-import { armyById, fmtNum } from '../../campaign/state';
+import { armyById, fmtNum, ownedRegions } from '../../campaign/state';
 import { attackerPower, defenderPower, garrisonFor, sunForAttacker } from '../../campaign/battles';
 import { armyPower, regionBand, regionWind, wallLevel, battleLeadership } from '../../campaign/rules';
 import { demandTribute, setStance } from '../../campaign/actions';
@@ -343,6 +343,7 @@ function Summary({ session }: { session: CampaignSession }) {
             {events.map((e, i) => (
               <li key={i} class={`ev ev-${e.kind}`}>
                 {e.text}
+                {e.by === 'jev' && <JevMark />}
               </li>
             ))}
           </ul>
@@ -390,20 +391,91 @@ function Reports({ session, p }: { session: CampaignSession; p: Extract<Prompt, 
   );
 }
 
+/** How the world ends, told the same whether the player won or watched. */
+const EPILOGUE: Record<string, string> = {
+  choir: 'The Last Lens catches the sun and holds it. Noon spreads from the Nail Spire until no shadow is left anywhere in the world.',
+  hush: 'The Candles gutter out one by one. The world turns its face from the sun, and the long night the Hush waited for begins.',
+  vesperate: 'The bells ring the Hour, and the Hour holds. The world stays at dusk: balanced, counted and kept.',
+  drift: 'The wind-cities gather at the Kite Fields for the Great Moot. The roads belong to whoever can ride the wind, and that is the Drift.',
+};
+
 function End({ session }: { session: CampaignSession }) {
+  // Signal-aware components skip parent re-renders; subscribe to campaign changes.
+  void session.version.value;
+  const writing = session.sagaBusy.value;
+  useEffect(() => {
+    void session.saga();
+  }, [session]);
   const s = session.s;
   const w = s.winner;
   const alive = s.factions[session.player].alive;
   const won = w?.faction === session.player;
   const st = victoryStatus(s, session.player);
+  const epilogue = w ? (w.kind === 'Domination' ? `${factionDef(w.faction).name} rule the world by force. Whatever the sun does next, it does over their banners.` : EPILOGUE[w.faction]) : null;
+  // The winner first, then the living by how close they came, then the fallen.
+  const order = [...FACTION_IDS].sort((a, b) => {
+    const rank = (f: FactionId) => (w?.faction === f ? 2 : s.factions[f].alive ? 1 : 0);
+    return rank(b) - rank(a) || victoryStatus(s, b).progress - victoryStatus(s, a).progress;
+  });
   return (
     <div class="modal-veil">
       <div class="panel modal end" role="dialog">
         <h1 class={won ? 'gold' : 'bad'}>{won ? 'Victory' : !alive ? 'Your people are gone' : 'Defeat'}</h1>
-        <p>
+        <p class="end-sub">
           {w ? `${factionDef(w.faction).name} win on Toll ${w.turn}: ${w.kind}.` : !alive ? 'Your last army and your last settlement are lost.' : ''}
         </p>
-        {!won && <p class="muted">{st.desc}</p>}
+        {epilogue && <p class="end-epilogue">{epilogue}</p>}
+        {s.saga ? (
+          <section class="end-saga">
+            <h2>{s.saga.title}</h2>
+            <p>{s.saga.text}</p>
+            <span class="jev-mark" title="Written by Claude from this campaign's annals">
+              ✦ Claude
+            </span>
+          </section>
+        ) : (
+          writing && <p class="end-saga waiting">The chronicler writes the saga of your war…</p>
+        )}
+        {!won && !w && <p class="muted">{st.desc}</p>}
+        <table class="end-standings">
+          <thead>
+            <tr>
+              <th scope="col">Faction</th>
+              <th scope="col">Holds</th>
+              <th scope="col" title="Battles won and lost">
+                Won · lost
+              </th>
+              <th scope="col">Victory</th>
+            </tr>
+          </thead>
+          <tbody>
+            {order.map((f) => {
+              const fs = s.factions[f];
+              const v = victoryStatus(s, f);
+              const held = f === 'drift' ? `${Object.values(s.regions).filter((r) => r.mooring).length} moorings` : `${ownedRegions(s, f).length} regions`;
+              return (
+                <tr key={f} class={fs.alive ? '' : 'fallen'}>
+                  <th scope="row" style={{ color: OWNER_COLOR[f] }}>
+                    {factionDef(f).name}
+                    {f === session.player && <span class="muted small"> (you)</span>}
+                  </th>
+                  <td>{fs.alive ? held : 'fallen'}</td>
+                  <td class="num" title={`${fs.wins} battles won, ${fs.losses} lost`}>
+                    {fs.wins} · {fs.losses}
+                  </td>
+                  <td>
+                    <div class="bar" title={`${v.name}: ${v.lines.filter((l) => l.ok).length} of ${v.lines.length} conditions`}>
+                      <div style={{ width: `${Math.round((w?.faction === f ? 1 : v.progress) * 100)}%`, background: w?.faction === f ? 'var(--gold)' : OWNER_COLOR[f] }} />
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        <p class="muted small">
+          {s.turn} Tolls · the Tilt stands {s.tilt === 0 ? 'at the Hour' : `${s.tilt > 0 ? 'sunward' : 'nightward'} (${s.tilt > 0 ? '+' : '−'}${Math.abs(s.tilt)})`}
+        </p>
         <div class="row" style={{ justifyContent: 'center' }}>
           <button class="btn" onClick={() => (session.prompt.value = null)}>
             Look at the world
@@ -429,5 +501,14 @@ function End({ session }: { session: CampaignSession }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/** Marks a choice the AI made on Claude's advice. */
+export function JevMark() {
+  return (
+    <span class="jev-mark" title="This faction's council took Claude's advice">
+      ✦ Claude
+    </span>
   );
 }

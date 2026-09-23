@@ -149,6 +149,27 @@ export interface FactionState {
   losses: number;
   /** Last Toll's income breakdown for the UI. */
   last?: Ledger;
+  /** What the campaign AI is set on, carried from Toll to Toll (AI factions only). */
+  ai?: AiMemory;
+}
+
+export type AiFocusKind = 'expand' | 'defend' | 'victory' | 'war' | 'economy';
+
+export interface AiMemory {
+  /** A strategic focus chosen for a few Tolls (by the scripted AI or Jev). */
+  focus?: { kind: AiFocusKind; target?: FactionId; until: number; by: 'script' | 'jev' };
+  /** Each army's current objective region, so marches are not abandoned halfway. */
+  orders?: Record<string, string>;
+  /** Last Toll Jev was asked for advice. */
+  jevTurn?: number;
+  /** A war Jev chose: the script will not sue for peace with them before this Toll. */
+  holdWar?: { target: FactionId; until: number };
+  /** Last Toll this faction put a deal to the player. */
+  lastOffer?: number;
+  /** Last Toll the player refused each kind of deal from this faction ('demand' for a tribute demand). */
+  refused?: Partial<Record<string, number>>;
+  /** Wars joined only to stop a rival's victory, by the Toll they were declared. */
+  coalition?: Partial<Record<FactionId, number>>;
 }
 
 export interface Ledger {
@@ -180,6 +201,8 @@ export interface CampaignEvent {
   /** Faction the event matters to, or everyone. */
   faction?: FactionId;
   region?: string;
+  /** Set when the Jev advisor made the choice behind it. */
+  by?: 'jev';
 }
 
 /** A battle waiting for the player: fight it, or let the sim auto-resolve it. */
@@ -232,6 +255,10 @@ export interface CampaignState {
   reports: BattleReport[];
   shudder: { active: boolean; next: number; stillness: number };
   winner?: { faction: FactionId; kind: string; turn: number };
+  /** The world's big news over the whole campaign, oldest first (older saves have none). */
+  annals?: { turn: number; kind: EventKind; text: string }[];
+  /** The campaign's story, written at its end when Claude is on. */
+  saga?: { title: string; text: string };
   nextId: number;
   rng: [number, number, number, number];
   /** Options set at the start. */

@@ -105,7 +105,15 @@ const MAJOR_COIN = [0, 200, 280, 380, 500];
 const MINOR_COIN = [0, 110, 160, 220];
 const BAND_FOOD = [0, 1, 4, 2, 0];
 const FARM_MULT = [0.25, 0.6, 1.3, 1, 0.25];
+/** The Choir's salt gardens and sun orchards grow best under a bright sky. */
+const CHOIR_FARM_MULT = [0.2, 0.5, 1, 1.3, 1.3];
 const DIFFICULTY_AI = { easy: 0.85, normal: 1, hard: 1.25 } as const;
+
+/** How much of a farm's food the light of a band lets its owner reap (Hush lodges hunt, in any band). */
+export function farmMult(f: FactionId, band: number): number {
+  if (f === 'hush') return 1;
+  return (f === 'choir' ? CHOIR_FARM_MULT : FARM_MULT)[band]!;
+}
 
 export interface RegionYield {
   coin: number;
@@ -149,7 +157,7 @@ export function regionYield(s: CampaignState, id: string): RegionYield {
   let food = f === 'hush' ? 0 : BAND_FOOD[band]!;
   const farm = sumEffect(eff, 'food');
   const farmKind = eff.length ? farm : 0;
-  food += f === 'hush' ? farmKind : farmKind * FARM_MULT[band]!;
+  food += farmKind * farmMult(f, band);
   food += RESOURCES[def.resource].food ?? 0;
   if (f === 'hush') {
     const herd = herdIn(s, id);
@@ -208,8 +216,13 @@ export function armyUpkeep(a: ArmyState): number {
     t += d.cost * UPKEEP_RATE * (1 + 0.05 * ((counts.get(u.def) ?? 1) - 1));
   }
   if (a.crusade) t *= 0.7;
+  // A wind-city trades as it sails and pays its crews on the move: the
+  // landless Drift keep their hosts for a fifth less.
+  if (a.faction === 'drift') t *= DRIFT_UPKEEP;
   return Math.round(t);
 }
+
+export const DRIFT_UPKEEP = 0.8;
 
 export function duplicatePenalty(a: ArmyState, def: string): number {
   const n = a.units.filter((u) => u.def === def).length;
@@ -221,6 +234,11 @@ export function duplicatePenalty(a: ArmyState, def: string): number {
 export interface OrderLine {
   label: string;
   value: number;
+}
+
+/** The "recently conquered" public order penalty, by Tolls since the capture. */
+export function conquestUnrest(since: number): number {
+  return since < 8 ? -Math.ceil((8 - since) / 3) : 0;
 }
 
 export function orderLines(s: CampaignState, id: string): OrderLine[] {
@@ -236,7 +254,7 @@ export function orderLines(s: CampaignState, id: string): OrderLine[] {
   add('City size', -(r.level - 1));
   if (armiesIn(s, id, f).length > 0) add('Garrisoned army', 2);
   const since = s.turn - r.takenTurn;
-  if (since < 8) add('Recently conquered', -Math.ceil((8 - since) / 3));
+  if (since < 8) add('Recently conquered', conquestUnrest(since));
   if (r.culture !== f) add('Foreign people', -1);
   if (f !== 'hush' && s.factions.hush.alive && s.factions.hush.res >= 50) {
     const near = neighbors(id).some((n) => s.regions[n]!.owner === 'hush' || armiesIn(s, n, 'hush').length > 0) || armiesIn(s, id, 'hush').length > 0;

@@ -7,7 +7,8 @@ import { CANDLES, REGIONS, regionDef } from '../../campaign/regions';
 import { factionArmies, fmtNum, ownedRegions, relation } from '../../campaign/state';
 import { armyPower, currentObservance } from '../../campaign/rules';
 import { victoryStatus } from '../../campaign/victory';
-import { factionLedger } from '../../campaign/turn';
+import { factionLedger, MIGRATION_RENOWN } from '../../campaign/turn';
+import { JevMark } from './Prompts';
 import {
   HYMNS,
   OBSERVANCES,
@@ -21,7 +22,7 @@ import {
   singHymn,
   armyCap,
 } from '../../campaign/actions';
-import { declareWar, propose, valueDeal, type Deal, type DealKind } from '../../campaign/diplomacy';
+import { declareWar, valueDeal, type Deal, type DealKind } from '../../campaign/diplomacy';
 import { OWNER_COLOR } from './campaignMap';
 
 const TITLES: Record<Exclude<Panel, 'none'>, string> = {
@@ -278,7 +279,7 @@ function Drift({ session }: { session: CampaignSession }) {
           {a.name}: bands visited this migration {(a.bandsVisited ?? []).length} / 5
         </p>
       ))}
-      <p class="small muted">A sail that passes through all five bands completes a migration: +100 Renown. Every 2 points of Tilt in either direction raise the wind everywhere.</p>
+      <p class="small muted">A sail that passes through all five bands completes a migration: +{MIGRATION_RENOWN} Renown. Every 2 points of Tilt in either direction raise the wind everywhere.</p>
     </div>
   );
 }
@@ -291,12 +292,11 @@ function Diplomacy({ session }: { session: CampaignSession }) {
     if (d.kind === 'war') {
       const r = declareWar(s, me, d.to);
       if (!r.ok) session.say(r.reason);
-    } else {
-      const r = propose(s, d);
-      session.say(r.accepted ? `${factionDef(d.to).short} accept.` : `${factionDef(d.to).short} refuse: they find it ${r.value.label}.`);
-    }
-    session.bump();
+      else void session.envoy(d, true, []);
+      session.bump();
+    } else void session.propose(d);
   };
+  const words = session.envoys.value;
   return (
     <div class="fp-body">
       {FACTION_IDS.filter((f) => f !== me).map((o) => {
@@ -328,13 +328,18 @@ function Diplomacy({ session }: { session: CampaignSession }) {
               {rel.opinion}
               {s.factions[o].finalStage ? ' · in their final victory stage' : ''}
             </small>
+            {words[o] && (
+              <p class={`envoy ${words[o]!.text ? '' : 'waiting'}`}>
+                {words[o]!.text ? <>“{words[o]!.text}”</> : 'Their envoy considers…'}
+              </p>
+            )}
             {alive && (
               <div class="row">
                 {opts.map((x) => {
                   const d = deal(x.kind, o, x.coin);
                   const v = x.kind === 'war' || x.kind === 'breakAlliance' ? null : valueDeal(s, d);
                   return (
-                    <button key={x.label} class={`btn small ${x.kind === 'war' ? 'danger' : ''}`} title={v ? `They would find it ${v.label}: ${v.why.join('; ')}` : ''} onClick={() => tryDeal(d)}>
+                    <button key={x.label} class={`btn small ${x.kind === 'war' ? 'danger' : ''}`} disabled={session.envoyBusy(o)} title={v ? `They would find it ${v.label}: ${v.why.join('; ')}` : ''} onClick={() => tryDeal(d)}>
                       {x.label}
                       {v && <em class={`deal ${v.label}`}> {v.label}</em>}
                     </button>
@@ -359,6 +364,7 @@ function Chronicle({ session, focus }: { session: CampaignSession; focus: (r: st
       {events.map((e, i) => (
         <li key={i} class={`ev ev-${e.kind}`}>
           <span class="muted num">T{e.turn}</span> {e.text}
+          {e.by === 'jev' && <JevMark />}
           {e.region && (
             <button
               class="btn ghost small"

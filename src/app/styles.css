@@ -2,6 +2,11 @@
  * Nailed Sun UI. One committed look: the eternal sunset over the Evernight.
  * Indigo ground, dusk panels, sunset amber and Nail gold, bone-white text.
  */
+/* The hidden attribute always hides, whatever display a class gives. */
+[hidden] {
+  display: none !important;
+}
+
 :root {
   color-scheme: dark;
   --ink: #120f1e;
@@ -2039,4 +2044,45 @@ button {
   display: flex;
   gap: 4px;
   padding: 4px;
+}
+
+/* A choice an AI faction made on Claude's advice. */
+.jev-mark {
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  color: var(--accent);
+  font-size: 0.72em;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  vertical-align: 1px;
+}
+
+@keyframes envoy-wait {
+  from { opacity: 0.45; }
+  to { opacity: 1; }
+}
+
+/* The enemy general's words at deployment (Claude). */
+.general-says {
+  margin: 6px 0 4px;
+  padding: 6px 9px;
+  border-left: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  font-style: italic;
+  font-size: 14px;
+  line-height: 1.35;
+}
+.general-says .muted {
+  font-style: normal;
+}
+.general-says.waiting {
+  color: var(--muted);
+  animation: envoy-wait 1.4s ease-in-out infinite alternate;
+}
+@media (prefers-reduced-motion: reduce) {
+  .general-says.waiting {
+    animation: none;
+  }
 }

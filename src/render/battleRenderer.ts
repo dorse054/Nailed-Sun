@@ -122,6 +122,7 @@ export class BattleRenderer {
       this.drawColossusUnit(ctx, u, alpha);
     }
     this.drawDarkZones(ctx);
+    this.drawClashes(ctx);
     this.drawBeams(ctx);
     this.drawLighting(ctx, k, tx, ty);
     ctx.setTransform(k, 0, 0, k, tx, ty);
@@ -408,12 +409,86 @@ export class BattleRenderer {
         ctx.beginPath();
         ctx.arc(z.x, z.y, z.radius, 0, Math.PI * 2);
         ctx.fill();
+      } else if (v === 'noon' || v === 'sunpatch') {
+        // Light zones show their edge in every band, not only where the dark makes them glow.
+        const noon = v === 'noon';
+        const pulse = 0.5 + 0.5 * Math.sin(t * 1.6 + z.id);
+        ctx.strokeStyle = `rgba(255,226,150,${(noon ? 0.32 : 0.24) + 0.12 * pulse})`;
+        ctx.lineWidth = noon ? 1.4 : 1;
+        ctx.beginPath();
+        ctx.arc(z.x, z.y, z.radius, 0, Math.PI * 2);
+        ctx.stroke();
+        if (noon) {
+          // Slow rays turning around the colossus that carries its own noon.
+          ctx.lineWidth = 1;
+          ctx.strokeStyle = `rgba(255,236,170,${0.18 + 0.1 * pulse})`;
+          ctx.beginPath();
+          for (let i = 0; i < 16; i++) {
+            const a = (i / 16) * Math.PI * 2 + t * 0.12;
+            const r0 = z.radius * (i % 2 ? 0.8 : 0.72);
+            ctx.moveTo(z.x + Math.cos(a) * r0, z.y + Math.sin(a) * r0);
+            ctx.lineTo(z.x + Math.cos(a) * z.radius * 0.94, z.y + Math.sin(a) * z.radius * 0.94);
+          }
+          ctx.stroke();
+        }
       } else if (v === 'gust') {
         ctx.strokeStyle = 'rgba(230,245,255,0.18)';
         ctx.lineWidth = 0.8;
         ctx.beginPath();
         ctx.arc(z.x, z.y, z.radius, 0, Math.PI * 2);
         ctx.stroke();
+      }
+    }
+  }
+
+  /** Zone pairs whose meeting has been announced. */
+  private readonly clashes = new Set<string>();
+
+  /**
+   * Where the strongest light meets the strongest dark (Walking Noon against
+   * an Eclipse: the two colossi), they cancel and the fight returns to steel.
+   * Say so once, and mark the ground where it holds.
+   */
+  private drawClashes(ctx: CanvasRenderingContext2D): void {
+    const zs = this.battle.zones;
+    for (const a of zs) {
+      const la = a.def.light;
+      if (!a.enabled || !la || la.mode !== 'floor' || la.intensity < 3) continue;
+      for (const c of zs) {
+        const lc = c.def.light;
+        if (!c.enabled || !lc || lc.mode !== 'ceiling' || lc.intensity !== la.intensity) continue;
+        const d = Math.hypot(a.x - c.x, a.y - c.y);
+        const overlap = a.radius + c.radius - d;
+        if (overlap <= 0) continue;
+        // The middle of the lens where the two circles overlap.
+        const k = d > 0.01 ? (a.radius - overlap / 2) / d : 0;
+        const mx = a.x + (c.x - a.x) * k;
+        const my = a.y + (c.y - a.y) * k;
+        const r = Math.min(overlap / 2, a.radius, c.radius);
+        const key = `${a.id}:${c.id}`;
+        if (!this.clashes.has(key)) {
+          this.clashes.add(key);
+          this.effects.text(mx, my - 12, 'Light and dark cancel', '#e4ebf2', true);
+          this.effects.rings.push({ x: mx, y: my, r: Math.max(20, r * 1.4), life: 1.4, max: 1.4, color: 'rgba(210,222,235,0.9)', width: 3 });
+          this.effects.shakes.push({ x: mx, y: my, amp: 3 });
+        }
+        if (!this.camera.visible(mx, my, r)) continue;
+        // Steel-grey shimmer: neither the noon's gold nor the eclipse's dark.
+        const pulse = 0.5 + 0.5 * Math.sin(this.time * 2.2 + a.id);
+        const g = ctx.createRadialGradient(mx, my, 0, mx, my, r);
+        g.addColorStop(0, `rgba(200,212,226,${0.16 + 0.06 * pulse})`);
+        g.addColorStop(1, 'rgba(200,212,226,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(mx, my, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.setLineDash([3, 5]);
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = `rgba(215,225,238,${0.35 + 0.2 * pulse})`;
+        ctx.beginPath();
+        ctx.arc(mx, my, r, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
       }
     }
   }

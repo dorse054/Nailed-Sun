@@ -21,6 +21,8 @@ export interface Deal {
   coin?: number;
   /** Mooring rights: the region offered to the Drift. */
   region?: string;
+  /** A demand rather than an offer: for tribute, `to` pays `from`. */
+  demand?: boolean;
 }
 
 export type DealLabel = 'insult' | 'poor' | 'fair' | 'good' | 'generous';
@@ -73,9 +75,10 @@ export function valueDeal(s: CampaignState, d: Deal): DealValue {
   }
   switch (d.kind) {
     case 'peace': {
+      // A long war wearies even the side that is winning it.
       const tired = (s.turn - rel.since) * 0.8;
       const fear = (ratio - 1) * 40;
-      v += (fear + Math.min(20, tired)) * p.peace - 10 * p.pride;
+      v += (fear + Math.min(30, tired)) * p.peace - 10 * p.pride;
       why.push(ratio > 1.2 ? 'They are stronger' : ratio < 0.8 ? 'We are winning' : 'Evenly matched');
       if (d.coin) v += d.coin / 50;
       break;
@@ -92,8 +95,14 @@ export function valueDeal(s: CampaignState, d: Deal): DealValue {
       break;
     }
     case 'tribute':
-      v += ((d.coin ?? 0) / 10) * 1;
-      why.push('Coin every Toll');
+      if (d.demand) {
+        // Paying them: only fear makes it worth it.
+        v += -(d.coin ?? 0) / 4 + (ratio - 1.5) * 30 - 10 * p.pride;
+        why.push(ratio > 2 ? 'They could crush us' : 'We pay them every Toll');
+      } else {
+        v += ((d.coin ?? 0) / 10) * 1;
+        why.push('Coin every Toll');
+      }
       break;
     case 'gift':
       v += (d.coin ?? 0) / 20;
@@ -149,8 +158,20 @@ export function propose(s: CampaignState, d: Deal): { accepted: boolean; value: 
   const value = valueDeal(s, d);
   const accepted = value.value >= 0 && canApply(s, d);
   if (accepted) apply(s, d);
-  if (!accepted && d.kind !== 'war') relation(s, d.from, d.to).opinion -= value.label === 'insult' ? 5 : 1;
+  else refuse(s, d, value);
   return { accepted, value };
+}
+
+/** A refused proposal costs the proposer a little standing; an insult more. */
+export function refuse(s: CampaignState, d: Deal, value: DealValue): void {
+  if (d.kind !== 'war') relation(s, d.from, d.to).opinion -= value.label === 'insult' ? 5 : 1;
+}
+
+/** The other side said yes (a player answering an AI offer): apply it if it still stands. */
+export function accept(s: CampaignState, d: Deal): boolean {
+  if (!canApply(s, d)) return false;
+  apply(s, d);
+  return true;
 }
 
 function canApply(s: CampaignState, d: Deal): boolean {
@@ -165,6 +186,7 @@ function canApply(s: CampaignState, d: Deal): boolean {
     case 'breakAlliance':
       return rel.stance === 'alliance';
     case 'tribute':
+      return s.factions[d.demand ? d.to : d.from].coin >= (d.coin ?? 0);
     case 'gift':
       return s.factions[d.from].coin >= (d.coin ?? 0);
     case 'mooring':
@@ -209,9 +231,14 @@ export function apply(s: CampaignState, d: Deal): void {
       log(s, 'diplomacy', `${A} end their alliance with ${B}.`);
       break;
     case 'tribute':
-      rel.tribute = { from: d.from, amount: d.coin ?? 0, turns: 10 };
-      rel.opinion += 5;
-      log(s, 'diplomacy', `${A} agree to pay ${B} ${d.coin} coin a Toll for 10 Tolls.`);
+      if (d.demand) {
+        rel.tribute = { from: d.to, amount: d.coin ?? 0, turns: 10 };
+        log(s, 'diplomacy', `${B} bow to ${A}'s demand and pay ${d.coin} coin a Toll for 10 Tolls.`);
+      } else {
+        rel.tribute = { from: d.from, amount: d.coin ?? 0, turns: 10 };
+        rel.opinion += 5;
+        log(s, 'diplomacy', `${A} agree to pay ${B} ${d.coin} coin a Toll for 10 Tolls.`);
+      }
       break;
     case 'gift':
       s.factions[d.from].coin -= d.coin ?? 0;

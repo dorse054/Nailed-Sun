@@ -7,16 +7,20 @@ import { signal } from '@preact/signals';
 import type { FactionId } from '../../data/schema';
 import type { BattleResult } from '../../sim/types';
 import type { BattleReport, CampaignState, PendingBattle } from '../../campaign/types';
-import type { Deal, DealValue } from '../../campaign/diplomacy';
+import { accept, propose, refuse, valueDeal, type Deal, type DealValue } from '../../campaign/diplomacy';
 import { newCampaign } from '../../campaign/setup';
 import { endTurn, resolveBattles, type PlayerBattleOutcome, type TurnHooks } from '../../campaign/controller';
 import { scriptedAI } from '../../campaign/ai';
 import { AUTO_SCALE, prepareBattle } from '../../campaign/battles';
 import { assault, makeBattle, moveArmy } from '../../campaign/actions';
 import { findPath, reachable } from '../../campaign/rules';
-import { armyById, playerEvents } from '../../campaign/state';
+import { armyById, log, playerEvents } from '../../campaign/state';
 import { armyVisible, visibleRegions } from '../../campaign/vision';
 import { regionDef } from '../../campaign/regions';
+import { jevProvider } from '../../campaign/jev';
+import { claudeStatus } from '../claude';
+import { envoyDecision, envoyWords, writeSaga } from './claudeJev';
+import { detachHero, heroById, heroReach, heroes, heroesNewToll, heroVision, moveHero } from '../../campaign/heroes';
 import { simulate } from '../../sim/pool';
 import { go, loadRaw, remove, save, settings } from '../store';
 import { factionDef } from '../../data/index';
@@ -41,9 +45,14 @@ export class CampaignSession {
   version = signal(0);
   selArmy = signal<string | null>(null);
   selRegion = signal<string | null>(null);
+  /** A lone hero selected on the map. */
+  selHero = signal<string | null>(null);
   prompt = signal<Prompt | null>(null);
   busy = signal<string | null>(null);
   toast = signal<{ text: string; id: number } | null>(null);
+  /** The last words of each faction's envoy to the player (Claude's voice); empty text while they come. */
+  envoys = signal<Partial<Record<FactionId, { text: string; turn: number; seq: number }>>>({});
+  private envoySeq = 0;
   panel = signal<Panel>('none');
   hover: string | null = null;
   hoverArmy: string | null = null;
@@ -65,6 +74,7 @@ export class CampaignSession {
   visibility(): { regions: Set<string>; armies: Set<string> } {
     if (this.vis) return this.vis;
     const regions = visibleRegions(this.s, this.player);
+    for (const r of heroVision(this.s, this.player)) regions.add(r);
     const armies = new Set(this.s.armies.filter((a) => armyVisible(this.s, this.player, a, regions)).map((a) => a.id));
     this.vis = { regions, armies };
     return this.vis;
@@ -78,10 +88,97 @@ export class CampaignSession {
     }, 3200);
   }
 
+  /** Is this faction's envoy still weighing the player's last proposal? */
+  envoyBusy(f: FactionId): boolean {
+    const e = this.envoys.value[f];
+    return !!e && !e.text;
+  }
+
+  /**
+   * The player proposes a deal. With Claude on, a close call (a deal valued
+   * poor, fair or good) goes to the other side's envoy, who decides in
+   * character, as the design asks; clear cases, and any failure, are decided
+   * by the deal's value alone.
+   */
+  async propose(deal: Deal): Promise<void> {
+    const to = deal.to;
+    const short = factionDef(to).short;
+    const value = valueDeal(this.s, deal);
+    const close = value.label === 'poor' || value.label === 'fair' || value.label === 'good';
+    if (!close || !this.counsel()) {
+      const r = propose(this.s, deal);
+      this.say(r.accepted ? `${short} accept.` : `${short} refuse: they find it ${r.value.label}.`);
+      this.bump();
+      void this.envoy(deal, r.accepted, r.value.why);
+      return;
+    }
+    const turn = this.s.turn;
+    const seq = this.envoyWaits(to);
+    const answer = await envoyDecision(this.s, deal, value);
+    if (this.envoys.value[to]?.seq !== seq) return;
+    if (this.s.turn !== turn) {
+      // The Toll ended while the envoy weighed it: the moment has passed.
+      this.envoyAnswers(to, seq, null);
+      return;
+    }
+    let accepted: boolean;
+    if (answer) {
+      accepted = answer.accept && accept(this.s, deal);
+      if (!accepted) refuse(this.s, deal, value);
+    } else accepted = propose(this.s, deal).accepted;
+    this.say(accepted ? `${short} accept.` : `${short} refuse.`);
+    this.envoyAnswers(to, seq, answer?.reply ?? null);
+  }
+
+  /** With Claude on, the other side's envoy puts a decided answer into words. */
+  async envoy(deal: Deal, accepted: boolean, why: string[]): Promise<void> {
+    if (!this.counsel()) return;
+    const seq = this.envoyWaits(deal.to);
+    const text = await envoyWords(this.s, deal, accepted, why);
+    // A later proposal to the same faction answers instead.
+    if (this.envoys.value[deal.to]?.seq === seq) this.envoyAnswers(deal.to, seq, text);
+  }
+
+  /** Claude's chronicler is writing the campaign's saga. */
+  sagaBusy = signal(false);
+
+  /** At the end, with Claude on, have the chronicler write the campaign's story (once). */
+  async saga(): Promise<void> {
+    if (this.s.saga || this.sagaBusy.value || !this.counsel()) return;
+    this.sagaBusy.value = true;
+    const story = await writeSaga(this.s);
+    this.sagaBusy.value = false;
+    if (!story) return;
+    this.s.saga = story;
+    this.save();
+    this.bump();
+  }
+
+  private counsel(): boolean {
+    return settings.value.claudeAI && claudeStatus.value === 'ready';
+  }
+
+  private envoyWaits(to: FactionId): number {
+    const seq = ++this.envoySeq;
+    this.envoys.value = { ...this.envoys.value, [to]: { text: '', turn: this.s.turn, seq } };
+    return seq;
+  }
+
+  private envoyAnswers(to: FactionId, seq: number, text: string | null): void {
+    const next = { ...this.envoys.value };
+    if (text) {
+      next[to] = { text, turn: this.s.turn, seq };
+      log(this.s, 'diplomacy', `${factionDef(to).short} envoy: “${text}”`, this.player, undefined, 'jev');
+    } else delete next[to];
+    this.envoys.value = next;
+    this.bump();
+  }
+
   // ------------------------------------------------------------ selection
 
   selectArmy(id: string | null): void {
     this.selArmy.value = id;
+    if (id) this.selHero.value = null;
     if (id) {
       const a = armyById(this.s, id);
       this.selRegion.value = a ? a.region : null;
@@ -93,6 +190,7 @@ export class CampaignSession {
   selectRegion(id: string | null): void {
     this.selRegion.value = id;
     this.selArmy.value = null;
+    this.selHero.value = null;
     this.path = null;
     this.bump();
   }
@@ -153,6 +251,46 @@ export class CampaignSession {
     await this.fightThrough([pb], true);
   }
 
+  // ----------------------------------------------------------- lone heroes
+
+  selectHero(id: string | null): void {
+    this.selHero.value = id;
+    this.selArmy.value = null;
+    const h = id ? heroById(this.s, id) : null;
+    if (h) this.selRegion.value = h.region;
+    this.path = null;
+    this.bump();
+  }
+
+  /** Where the selected hero can travel this Toll. */
+  heroReach(): Record<string, number> | null {
+    const h = this.selHero.value ? heroById(this.s, this.selHero.value) : null;
+    return h && h.faction === this.player ? heroReach(this.s, h) : null;
+  }
+
+  heroOrder(r: { ok: boolean; reason?: string }): void {
+    if (!r.ok && r.reason) this.say(r.reason);
+    this.save();
+    this.bump();
+  }
+
+  moveHeroTo(region: string): void {
+    const id = this.selHero.value;
+    if (!id || this.busy.value) return;
+    const r = moveHero(this.s, id, region);
+    if (r.ok) this.selRegion.value = region;
+    this.heroOrder(r);
+  }
+
+  /** Send a hero out of an army: it is selected, ready to travel next Toll. */
+  sendHero(armyId: string, index: number): void {
+    const before = new Set(heroes(this.s).map((h) => h.id));
+    const r = detachHero(this.s, armyId, index);
+    this.heroOrder(r);
+    const h = heroes(this.s).find((x) => !before.has(x.id));
+    if (h) this.selectHero(h.id);
+  }
+
   /** An AI faction puts a deal to the player: resolves true if they accept. */
   askOffer(deal: Offer, value: DealValue): Promise<boolean> {
     return new Promise<boolean>((resolve) => {
@@ -175,8 +313,9 @@ export class CampaignSession {
           this.prompt.value = { kind: 'battle', pb, attacking: attacking && pb.attacker.faction === this.player, resolve };
         }),
       progress: (f) => {
-        this.busy.value = `${factionDef(f).name} are moving…`;
+        this.busy.value = settings.value.claudeAI && jevProvider() ? `${factionDef(f).name} take counsel…` : `${factionDef(f).name} are moving…`;
       },
+      offer: (_s, deal, value) => this.askOffer(deal, value),
     };
   }
 
@@ -238,11 +377,15 @@ export class CampaignSession {
   async endToll(): Promise<void> {
     if (this.busy.value || this.s.winner) return;
     this.selArmy.value = null;
+    this.selHero.value = null;
     this.path = null;
     this.busy.value = 'The world turns…';
     audio.toll();
+    // The AI factions take Claude's counsel when the player has switched it on.
+    this.s.options.jev = settings.value.claudeAI;
     try {
       await endTurn(this.s, this.hooks(false), scriptedAI);
+      heroesNewToll(this.s);
     } finally {
       this.busy.value = null;
     }

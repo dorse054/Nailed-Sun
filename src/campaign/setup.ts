@@ -194,6 +194,13 @@ export function newCampaign(o: NewCampaignOptions): CampaignState {
     ['hush.grueHunters', 1],
     ['hush.veilweavers', 1],
   ]);
+  // The Long Hunt: the Hush have the least free land in reach and a war
+  // with the Choir from the first Toll, so a second, lighter host rides out.
+  army('hush', 'glowgardens', false, [
+    ['hush.glowkinLurers', 2],
+    ['hush.hushbows', 1],
+    ['hush.rimeHounds', 1],
+  ]);
   army('vesperate', 'vesper', true, [
     ['vesperate.hourLevy', 2],
     ['vesperate.lanternGuard', 1],

@@ -32,6 +32,9 @@ export interface MapView {
   visibleArmies: Set<string>;
   visibleRegions: Set<string>;
   player: Owner;
+  /** The player's lone heroes, and the selected one. */
+  heroes?: { id: string; region: string; faction: Owner; resting: boolean }[];
+  selectedHero?: string | null;
 }
 
 export class CampaignMap {
@@ -150,6 +153,75 @@ export class CampaignMap {
         into.set(a.id, [bx + Math.cos(ang) * d, byy + Math.sin(ang) * d]);
       });
     }
+  }
+
+  /** Where each lone hero stands: left of its region's settlement, side by side. */
+  heroSpots(view: MapView): Map<string, P> {
+    const out = new Map<string, P>();
+    const count = new Map<string, number>();
+    for (const h of view.heroes ?? []) {
+      const r = REGION_BY_ID[h.region]!;
+      const sh = SHAPES[h.region]!;
+      const n = count.get(h.region) ?? 0;
+      count.set(h.region, n + 1);
+      const bx = r.settlement ? r.x - 30 : sh.cx - 26;
+      const by = r.settlement ? r.y + 12 : sh.cy + 10;
+      out.set(h.id, [bx - n * 18, by]);
+    }
+    return out;
+  }
+
+  private drawHero(f: Owner, [x, y]: P, selected: boolean, resting: boolean, t: number): void {
+    const ctx = this.ctx;
+    const r = 8;
+    if (selected) {
+      ctx.strokeStyle = 'rgba(255,236,170,0.9)';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.arc(x, y, r + 5 + Math.sin(t * 4) * 1.2, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = resting ? 0.55 : 1;
+    ctx.fillStyle = OWNER_COLOR[f];
+    ctx.strokeStyle = '#120e1c';
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.moveTo(x, y - r);
+    ctx.lineTo(x + r, y);
+    ctx.lineTo(x, y + r);
+    ctx.lineTo(x - r, y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // A four-pointed star: a hero, not an army.
+    ctx.fillStyle = '#120e1c';
+    ctx.beginPath();
+    ctx.moveTo(x, y - 4.5);
+    ctx.lineTo(x + 1.3, y - 1.3);
+    ctx.lineTo(x + 4.5, y);
+    ctx.lineTo(x + 1.3, y + 1.3);
+    ctx.lineTo(x, y + 4.5);
+    ctx.lineTo(x - 1.3, y + 1.3);
+    ctx.lineTo(x - 4.5, y);
+    ctx.lineTo(x - 1.3, y - 1.3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  /** The lone hero under a screen point, if any. */
+  pickHero(view: MapView, sx: number, sy: number): string | null {
+    const [mx, my] = this.toMap(sx, sy);
+    let best: string | null = null;
+    let bd = (14 / this.zoom) ** 2 + 90;
+    for (const [id, p] of this.heroSpots(view)) {
+      const d = (p[0] - mx) ** 2 + (p[1] - my) ** 2;
+      if (d < bd) {
+        bd = d;
+        best = id;
+      }
+    }
+    return best;
   }
 
   armyAt(id: string): P | null {
@@ -306,6 +378,11 @@ export class CampaignMap {
       const p = this.positions.get(a.id);
       if (!p) continue;
       this.drawBanner(a, p, a.id === view.selectedArmy, a.id === view.hoverArmy, t, view);
+    }
+    // Lone heroes: small diamonds beside the settlement.
+    for (const [id, p] of this.heroSpots(view)) {
+      const h = view.heroes!.find((x) => x.id === id)!;
+      this.drawHero(h.faction, p, id === view.selectedHero, h.resting, t);
     }
 
     // Labels on top, in screen space so they stay crisp.

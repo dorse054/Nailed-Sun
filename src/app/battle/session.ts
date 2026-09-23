@@ -8,11 +8,16 @@ import { Battle } from '../../sim/battle';
 import { DT } from '../../sim/constants';
 import type { BattleSetup, Command, Side, Unit, UnitSpec } from '../../sim/types';
 import { BattleAI } from '../../ai/battleAI';
+import { aiOptions } from '../../ai/plan';
+import { askGeneral } from './claudeGeneral';
+import { claudeStatus } from '../claude';
 import { layoutSlots, placeInFormation } from '../../sim/army';
 import { castBlocker, casterPos, findAbility } from '../../sim/abilities';
 import { BattleRenderer, emptyOverlay, type Overlay } from '../../render/battleRenderer';
 import { groupMove, lineFormation, type Placement } from './orders';
 import type { BattleRequest } from '../store';
+import { settings } from '../store';
+import type { FactionId } from '../../data/schema';
 import { audio } from '../../audio/audio';
 
 export type Phase = 'deploy' | 'battle' | 'over';
@@ -76,6 +81,7 @@ export class BattleSession {
     this.phase = req.skipDeploy ? 'battle' : 'deploy';
     if (req.mode === 'replay' || req.mode === 'demo') this.renderer.showAll = req.mode === 'demo';
     this.attachControllers();
+    if (this.phase === 'deploy' && !req.tutorial && req.mode !== 'replay' && req.mode !== 'demo') this.consultGeneral();
     this.resize();
     this.frameCamera();
     if (this.phase === 'deploy') this.overlay.deployZone = this.battle.terrain.deployZone(this.side);
@@ -96,7 +102,7 @@ export class BattleSession {
       const ctrl = b.setup.armies[s].controller;
       // Replays re-run the AI wherever it played, including both sides of a watched battle.
       const auto = this.req.mode === 'demo' || (ctrl === 'ai' && s !== this.side) || (this.req.mode === 'replay' && (s !== this.side || ctrl === 'ai'));
-      if (auto) b.setController(s, new BattleAI());
+      if (auto) b.setController(s, new BattleAI(aiOptions(b.setup.armies[s])));
     }
   }
 
@@ -128,8 +134,31 @@ export class BattleSession {
 
   dispose(): void {
     this.disposed = true;
+    this.general.abort?.abort();
     cancelAnimationFrame(this.raf);
     this.unbind();
+  }
+
+  /**
+   * The enemy general's plan and words, from Claude when it is on, asked
+   * while the player deploys. `waiting` shows until it answers; a plan that
+   * comes after the battle starts is dropped.
+   */
+  readonly general: { abort?: AbortController; waiting: boolean; speech?: string; faction?: FactionId } = { waiting: false };
+
+  private consultGeneral(): void {
+    const s = ([0, 1] as Side[]).find((x) => x !== this.side && this.req.setup.armies[x].controller === 'ai' && !this.req.setup.armies[x].plan);
+    if (s === undefined || !settings.value.claudeAI || claudeStatus.value !== 'ready') return;
+    const abort = new AbortController();
+    Object.assign(this.general, { abort, waiting: true, faction: this.battle.sides[s].faction });
+    void askGeneral(this.battle, s, abort.signal).then((plan) => {
+      this.general.waiting = false;
+      if (plan && this.phase === 'deploy' && !this.disposed) {
+        this.req.setup.armies[s].plan = plan;
+        this.general.speech = plan.speech;
+      }
+      this.hud.value++;
+    });
   }
 
   // ------------------------------------------------------------------ loop
@@ -296,6 +325,11 @@ export class BattleSession {
   /** Leave deployment: rebuild the battle from the deployed positions so replays are exact. */
   startBattle(): void {
     if (this.phase !== 'deploy') return;
+    // Too late for the general's counsel: the scripted general decides.
+    if (this.general.waiting) {
+      this.general.abort?.abort();
+      this.general.waiting = false;
+    }
     const setup = structuredCloneSetup(this.req.setup);
     const own = this.battle.units.filter((u) => u.side === this.side);
     setup.armies[this.side].units = own.map((u, i): UnitSpec => ({

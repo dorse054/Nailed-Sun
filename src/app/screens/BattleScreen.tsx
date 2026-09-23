@@ -230,6 +230,20 @@ function DeployPanel({ s }: { s: BattleSession }) {
           {factionDef(me).short} vs {factionDef(enemy).short}
         </span>
       </div>
+      {(s.general.waiting || s.general.speech) && (
+        <p class={`general-says ${s.general.speech ? '' : 'waiting'}`}>
+          {s.general.speech ? (
+            <>
+              <span class="muted">{factionDef(enemy).short} general:</span> “{s.general.speech}”{' '}
+              <span class="jev-mark" title="The enemy general's plan and words come from Claude">
+                ✦ Claude
+              </span>
+            </>
+          ) : (
+            'The enemy general studies the field…'
+          )}
+        </p>
+      )}
       {open && (
         <div class="deploy-tips">
           <ul>

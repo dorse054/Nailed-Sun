@@ -298,6 +298,38 @@ class AudioEngine {
     o.stop(t0 + dur);
   }
 
+  /**
+   * Something big is coming: a low swell that rises to the moment of impact,
+   * so an enemy windup is heard as well as seen.
+   */
+  warn(gain: number, dur: number): void {
+    const ctx = this.ctx;
+    if (!ctx || !this.sfx) return;
+    const t0 = ctx.currentTime;
+    const end = t0 + Math.max(0.6, dur);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.linearRampToValueAtTime(gain, end - 0.05);
+    g.gain.exponentialRampToValueAtTime(0.0001, end + 0.25);
+    g.connect(this.sfx);
+    for (const [from, to, type] of [
+      [55, 110, 'sawtooth'],
+      [82.5, 165, 'triangle'],
+    ] as const) {
+      const o = ctx.createOscillator();
+      o.type = type;
+      o.frequency.setValueAtTime(from, t0);
+      o.frequency.exponentialRampToValueAtTime(to, end);
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.setValueAtTime(300, t0);
+      lp.frequency.exponentialRampToValueAtTime(1400, end);
+      o.connect(lp).connect(g);
+      o.start(t0);
+      o.stop(end + 0.3);
+    }
+  }
+
   /** Howling kites: breathy noise whose pitch rises and sags with the gusts. */
   howl(gain: number, dur: number): void {
     const ctx = this.ctx;
@@ -470,6 +502,9 @@ class AudioEngine {
             this.burst(3000, 18, 0.03 * g, 0.05);
           } else if (f === 'vesperate') this.bell(165, 0.2 * g, 2.5);
           else this.glass([880, 1175], 0.08 * g, 1.2);
+          // An enemy's big windup swells until it lands.
+          const windup = u.def.abilities?.find((a) => a.name === e.name)?.windup ?? 0;
+          if (e.side !== viewer && windup >= 1) this.warn(0.07, windup);
           break;
         }
         case 'rout':
