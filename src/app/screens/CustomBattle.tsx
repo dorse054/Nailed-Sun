@@ -38,7 +38,16 @@ interface Config {
   kind: BattleKind;
   /** A battle Claude made up: its name and briefing. */
   scenario?: { title: string; text: string } | null;
+  /** The enemy's budget as a share of yours: the battle's difficulty. */
+  odds?: number;
 }
+
+const ODDS: { v: number; label: string; note: string }[] = [
+  { v: 0.8, label: 'Weaker', note: 'The enemy has four fifths of your budget.' },
+  { v: 1, label: 'Even', note: 'Both armies have the same budget.' },
+  { v: 1.25, label: 'Stronger', note: 'The enemy has a quarter more than you.' },
+  { v: 1.5, label: 'Far stronger', note: 'The enemy has half as much again.' },
+];
 
 const SUNS: { id: SunChoice; label: string; bearing: number }[] = [
   { id: 'eyes', label: 'In your eyes', bearing: -Math.PI / 2 },
@@ -134,7 +143,11 @@ export function CustomBattle() {
   const bearing = bearingFor(c);
   const light = BANDS[c.band].light;
   const lines = roseLines(light, c.wind);
-  const enemy = useMemo(() => c.theirs ?? generateArmy(c.foe, c.budget, new Rng(`${c.seed}:${c.foe}:${c.budget}`)).map((s) => s.def), [c.theirs, c.foe, c.budget, c.seed]);
+  const odds = c.odds ?? 1;
+  const foeBudget = Math.round((c.budget * odds) / 50) * 50;
+  // A stronger enemy may field a few more units than the usual limit, so its budget is spent.
+  const foeOpts = { maxUnits: odds >= 1.5 ? ARMY.maxUnits + 4 : odds > 1 ? ARMY.maxUnits + 2 : ARMY.maxUnits };
+  const enemy = useMemo(() => c.theirs ?? generateArmy(c.foe, foeBudget, new Rng(`${c.seed}:${c.foe}:${foeBudget}`), foeOpts).map((s) => s.def), [c.theirs, c.foe, foeBudget, c.seed]);
   const spent = cost(c.mine);
   const lord = FACTIONS[c.me].lord;
   const units = c.mine.filter((id) => id !== lord.id);
@@ -374,9 +387,17 @@ export function CustomBattle() {
           <h2>The enemy</h2>
           <FactionTabs value={c.foe} onPick={(f) => set(f === c.foe ? {} : { foe: f, theirs: null, scenario: null })} />
           {matchupNote(c.me, c.foe) && <p class="muted" style={{ margin: 0 }}>{matchupNote(c.me, c.foe)}</p>}
+          <div class="label">their strength</div>
+          <div class="seg" role="radiogroup" aria-label="Enemy strength">
+            {ODDS.map((o) => (
+              <button key={o.v} role="radio" aria-checked={odds === o.v} class={`btn small ${odds === o.v ? 'on' : ''}`} title={o.note} onClick={() => set({ odds: o.v, theirs: null })}>
+                {o.label}
+              </button>
+            ))}
+          </div>
           <div class="spread">
             <span class="label">their army, built by the AI</span>
-            <button class="btn small" onClick={() => set({ theirs: generateArmy(c.foe, c.budget, new Rng(Math.random())).map((s) => s.def) })}>
+            <button class="btn small" onClick={() => set({ theirs: generateArmy(c.foe, foeBudget, new Rng(Math.random()), foeOpts).map((s) => s.def) })}>
               Re-roll
             </button>
           </div>
