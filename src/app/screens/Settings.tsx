@@ -138,6 +138,11 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
                 ? "Claude is not allowed for this page right now, so the scripted AI plays."
                 : "In a campaign, every other Toll each AI faction asks Claude to choose its wars, treaties and plans, in character, and their envoys decide your closer proposals and answer them in their own words. In battles, the enemy general reads the field with Claude while you deploy, picks a plan and speaks, and thinks again at the turning points of the fight. Choices made on Claude's advice are marked ✦ Claude in the chronicle, and at the end Claude writes the saga of your war. It uses your Claude usage, and the scripted AI takes over whenever Claude is slow or unavailable."}
             </p>
+            {claude !== "refused" && (
+              <p class="muted small">
+                Either way, the ✦ buttons (Counsel, your adviser, Tell the tale, Invent a battle, the council) ask Claude only when you press them.
+              </p>
+            )}
           </section>
         )}
         <section>
