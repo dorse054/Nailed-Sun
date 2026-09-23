@@ -10,6 +10,7 @@ import type { BattleSetup, Command, Side, Unit, UnitSpec } from '../../sim/types
 import { BattleAI } from '../../ai/battleAI';
 import { aiOptions } from '../../ai/plan';
 import { askGeneral, askGeneralMid, strengthRatio } from './claudeGeneral';
+import { MomentLog, type Moment } from './moments';
 import { claudeStatus } from '../claude';
 import { layoutSlots, placeInFormation } from '../../sim/army';
 import { castBlocker, casterPos, findAbility } from '../../sim/abilities';
@@ -172,6 +173,12 @@ export class BattleSession {
     });
   }
 
+  /** The battle's turning points, as they happen. */
+  private momentLog: MomentLog | null = null;
+  get moments(): Moment[] {
+    return this.momentLog?.list ?? [];
+  }
+
   /** The scripted general playing each side, where one does. */
   private ais: [BattleAI | null, BattleAI | null] = [null, null];
   /**
@@ -263,6 +270,7 @@ export class BattleSession {
     this.last = now;
     const b = this.battle;
     if (this.phase === 'battle' && !this.paused) {
+      if (this.momentLog?.battle !== b) this.momentLog = new MomentLog(b);
       this.acc += dt * this.speed;
       let n = 0;
       while (this.acc >= DT && n < 16) {
@@ -272,6 +280,7 @@ export class BattleSession {
           this.renderer.effects.consume(ev, (id) => b.units[id]?.def.name ?? '', this.side);
           audio.events(ev, this.renderer.camera, this.side, (id) => b.units[id]);
           for (const e of ev) if (e.t === 'plan' && e.speech) this.heard(e.side, e.stance, e.speech);
+          this.momentLog.consume(ev);
         }
         this.acc -= DT;
         n++;

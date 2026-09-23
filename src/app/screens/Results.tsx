@@ -8,6 +8,8 @@ import { signal } from '@preact/signals';
 import { useEffect } from 'preact/hooks';
 import { saveFile } from '../claude';
 import { replayJson, replayName } from '../replayFile';
+import type { Moment } from '../battle/moments';
+import { Moments, TaleOf } from '../battle/Tale';
 
 /** What happened to the last "Save replay". */
 const saved = signal<string | null>(null);
@@ -36,7 +38,7 @@ function placeName(map: BattleSetup['map']): string | null {
   return LANDMARKS[lm].name.replace(/^The /, 'the ');
 }
 
-export function Results({ req, result, log, setup }: { req: BattleRequest; result: BattleResult; log: TimedCommand[]; setup: BattleSetup }) {
+export function Results({ req, result, log, setup, moments = [] }: { req: BattleRequest; result: BattleResult; log: TimedCommand[]; setup: BattleSetup; moments?: Moment[] }) {
   const me = req.playerSide;
   const won = result.winner === me;
   const draw = result.winner === -1;
@@ -101,6 +103,12 @@ export function Results({ req, result, log, setup }: { req: BattleRequest; resul
             </button>
           </div>
         </div>
+        {(moments.length > 0 || null) && (
+          <div class="panel results-story">
+            <TaleOf key={String(setup.seed)} setup={setup} result={result} moments={moments} player={me} title={req.title} />
+            <Moments moments={moments} />
+          </div>
+        )}
         <div class="results-sides">
           <SideTable title="Your army" s={mine} side={me} />
           <SideTable title="The enemy" s={theirs} side={(1 - me) as 0 | 1} />

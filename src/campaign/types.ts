@@ -232,6 +232,8 @@ export interface BattleReport {
   startD: number;
   fought: boolean;
   result?: BattleResult;
+  /** The tale of the battle, when the player had Claude tell it. */
+  tale?: { title: string; text: string };
 }
 
 export type Difficulty = 'easy' | 'normal' | 'hard';

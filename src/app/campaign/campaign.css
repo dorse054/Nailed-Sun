@@ -775,6 +775,14 @@
 .report h2 {
   font-size: 28px;
 }
+.report-story {
+  display: grid;
+  gap: 8px;
+  margin-top: 6px;
+}
+.report-story .tale p {
+  font-size: 16.5px;
+}
 .end {
   text-align: center;
   width: min(640px, 100%);

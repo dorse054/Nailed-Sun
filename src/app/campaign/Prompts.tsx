@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'preact/hooks';
 import type { CampaignSession, Prompt } from './session';
 import { abandonCampaign, leaveCampaign } from './session';
-import type { ArmyState, Owner, PendingBattle } from '../../campaign/types';
+import type { ArmyState, BattleReport, Owner, PendingBattle } from '../../campaign/types';
+import { Moments, TaleOf, ToldTale } from '../battle/Tale';
 import { factionDef, unitDef } from '../../data/index';
 import { BANDS } from '../../data/rules';
 import { FACTION_IDS, WIND_NAMES, type FactionId } from '../../data/schema';
@@ -415,6 +416,7 @@ function Reports({ session, p }: { session: CampaignSession; p: Extract<Prompt, 
                 You lost {iAtk ? r.lossesA : r.lossesD} of {iAtk ? r.startA : r.startD} soldiers; the enemy lost {iAtk ? r.lossesD : r.lossesA} of {iAtk ? r.startD : r.startA}.
                 {!r.fought && ' (Auto-resolved.)'}
               </p>
+              <ReportStory session={session} r={r} place={place} />
             </div>
           );
         })}
@@ -424,6 +426,19 @@ function Reports({ session, p }: { session: CampaignSession; p: Extract<Prompt, 
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** A fought battle's turning points, and its tale when the player asks for it. */
+function ReportStory({ session, r, place }: { session: CampaignSession; r: BattleReport; place: string }) {
+  const notes = session.notesOf(r);
+  if (!notes || !r.result) return r.tale ? <ToldTale tale={r.tale} /> : null;
+  const player = notes.setup.armies.findIndex((a) => a.faction === session.player && a.controller === 'player');
+  return (
+    <div class="report-story">
+      <TaleOf setup={notes.setup} result={r.result} moments={notes.moments} player={(player === 1 ? 1 : 0) as 0 | 1} title={`The battle at ${place}`} tale={r.tale} onTale={(t) => session.keepTale(r, t)} />
+      <Moments moments={notes.moments} open={false} />
     </div>
   );
 }

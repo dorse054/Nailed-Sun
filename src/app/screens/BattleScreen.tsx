@@ -713,8 +713,8 @@ function EndOverlay({ s }: { s: BattleSession }) {
   const title = draw ? 'Stalemate' : won ? (theirs.costLost / Math.max(1, theirs.costStart) > 0.7 && mine.costLost / Math.max(1, mine.costStart) < 0.3 ? 'Heroic Victory' : 'Victory') : 'Defeat';
   const reason = r.reason === 'rout' ? (won ? 'The enemy army is broken.' : 'Your army is broken.') : r.reason === 'capture' ? 'The settlement has fallen.' : r.reason === 'withdraw' ? 'The field was conceded.' : 'Time ran out.';
   const done = () => {
-    if (s.req.onDone) s.req.onDone(r, s.battle.log, s.req.setup);
-    else go({ name: 'results', req: s.req, result: r, log: s.battle.log, setup: s.req.setup });
+    if (s.req.onDone) s.req.onDone(r, s.battle.log, s.req.setup, s.moments);
+    else go({ name: 'results', req: s.req, result: r, log: s.battle.log, setup: s.req.setup, moments: s.moments });
   };
   return (
     <div class="modal-veil">

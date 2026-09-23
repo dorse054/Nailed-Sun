@@ -234,6 +234,51 @@
 .results-hero h1 {
   font-size: clamp(40px, 6vw, 64px);
 }
+/* The battle's turning points and its tale. */
+.results-story {
+  padding: 14px 16px;
+  display: grid;
+  gap: 10px;
+}
+.tale h3 {
+  font-size: 22px;
+  color: var(--gold);
+}
+.tale p {
+  margin: 4px 0 0;
+  font-family: var(--display);
+  font-size: 18px;
+  line-height: 1.45;
+  max-width: 70ch;
+}
+.tale-ask {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.moments summary {
+  cursor: pointer;
+  font-family: var(--label);
+  color: var(--muted);
+}
+.moments ol {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 3px;
+  font-size: 13.5px;
+}
+.moments li {
+  display: grid;
+  grid-template-columns: 3.2em 1fr;
+  gap: 8px;
+}
+.moments li .num {
+  color: var(--faint);
+  text-align: right;
+}
 .results-sides {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

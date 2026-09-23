@@ -5,7 +5,9 @@
  */
 import { signal } from '@preact/signals';
 import type { FactionId } from '../../data/schema';
-import type { BattleResult } from '../../sim/types';
+import type { BattleResult, BattleSetup } from '../../sim/types';
+import type { Moment } from '../battle/moments';
+import type { Tale } from '../battle/claudeTale';
 import type { BattleReport, CampaignState, PendingBattle } from '../../campaign/types';
 import { accept, propose, refuse, valueDeal, type Deal, type DealValue } from '../../campaign/diplomacy';
 import { newCampaign } from '../../campaign/setup';
@@ -388,12 +390,32 @@ export class CampaignSession {
         playerSide: prep.playerSide ?? 0,
         mode: 'campaign',
         title: `Battle of ${place}`,
-        onDone: (result: BattleResult) => {
+        onDone: (result: BattleResult, _log, setup, moments) => {
+          this.fieldNotes.set(`${this.s.turn}:${p.pb.region}`, { setup, moments });
           p.resolve({ prep, result, fought: true, driftChoice });
           go({ name: 'campaign' });
         },
       },
     });
+  }
+
+  /** What the player saw of the battles they fought this session: the field and its turning points. */
+  private fieldNotes = new Map<string, { setup: BattleSetup; moments: Moment[] }>();
+
+  notesOf(r: BattleReport): { setup: BattleSetup; moments: Moment[] } | null {
+    return this.fieldNotes.get(`${r.turn}:${r.region}`) ?? null;
+  }
+
+  /** Keep a battle's tale: on its report, in the chronicle, and in the annals the saga is told from. */
+  keepTale(r: BattleReport, t: Tale): void {
+    r.tale = t;
+    const place = regionDef(r.region).settlement || regionDef(r.region).name;
+    log(this.s, 'battle', `Your chroniclers call the battle at ${place} “${t.title}”.`, this.player, r.region);
+    const first = t.text.match(/^.*?[.!?](\s|$)/)?.[0]?.trim() ?? t.text.slice(0, 160);
+    const a = (this.s.annals ??= []);
+    a.push({ turn: r.turn, kind: 'battle', text: `${factionDef(this.player).name} remember the battle at ${place} as “${t.title}”: ${first}` });
+    if (a.length > 240) a.splice(0, a.length - 240);
+    this.bump();
   }
 
   /** The player chose: let the simulation decide. */
