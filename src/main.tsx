@@ -55,3 +55,4 @@ else if (hash.startsWith('camp:')) {
   startCampaign(hash.slice(5) as FactionId, 'normal', 7);
   go({ name: 'campaign' });
 }
+else if (hash === 'lab') go({ name: 'lab' });

@@ -6,6 +6,7 @@ import { Results } from './screens/Results';
 import { Placeholder } from './screens/Placeholder';
 import { Codex } from './screens/Codex';
 import { CampaignRoot } from './campaign/CampaignStart';
+import { BalanceLab } from './screens/BalanceLab';
 
 export function App() {
   const s = screen.value;
@@ -23,7 +24,7 @@ export function App() {
     case 'campaign':
       return <CampaignRoot />;
     case 'lab':
-      return <Placeholder name="Balance Lab" />;
+      return <BalanceLab />;
     default:
       return <Placeholder name={s.name} />;
   }
