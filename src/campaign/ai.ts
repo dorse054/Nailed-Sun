@@ -19,6 +19,7 @@ import { neighbors, stepsFrom } from './geometry';
 import { chainDef, factionChains, type ChainDef, type ChainKind } from './buildings';
 import { allied, armyById, atWar, factionArmies, ownedRegions, overlordOf, relation } from './state';
 import {
+  BAND_FOOD,
   GROWTH_NEEDED,
   armyPower,
   armyUpkeep,
@@ -60,6 +61,7 @@ import {
   demandTribute,
   demolish,
   disband,
+  transfer,
   extinguish,
   giftHouse,
   greatToll,
@@ -86,7 +88,7 @@ import { attackerPower, defenderPower, garrisonPower, sunForAttacker, MAX_SIDE_U
 import { declareWar, factionStrength, propose, valueDeal, type Deal } from './diplomacy';
 import { OFFER_REFUSED_REST, offerKind, offeredThisToll, type AiContext } from './controller';
 import { GREAT_SHUDDER_TOLL, factionLedger, ledgerNet } from './turn';
-import { HOLD_NEEDED, VICTORY_OPENS, gloamingSettlements, kiteFieldsHeld, victoryStatus } from './victory';
+import { HOLD_NEEDED, MOOT_RENOWN, VICTORY_OPENS, gloamingSettlements, kiteFieldsHeld, lensConditions, victoryStatus } from './victory';
 import { consultJev } from './jev';
 
 // -------------------------------------------------------------- character
@@ -114,17 +116,18 @@ const PERSONA: Record<FactionId, Persona> = {
  * Re-measure when the battle simulation or the unit data change.
  */
 const EDGE: Record<FactionId, number[]> = {
-  choir: [0.88, 0.97, 1.13, 1.12, 1.14],
-  hush: [0.95, 0.97, 0.92, 0.93, 0.89],
-  vesperate: [1.22, 1.2, 1.12, 1.13, 1.13],
-  drift: [0.97, 0.87, 0.83, 0.82, 0.84],
+  choir: [0.91, 0.98, 1.12, 1.15, 1.15],
+  hush: [0.99, 0.98, 0.92, 0.86, 0.88],
+  vesperate: [1.22, 1.2, 1.12, 1.11, 1.14],
+  drift: [0.91, 0.87, 0.86, 0.9, 0.84],
 };
 
 /**
- * Walled garrisons do worse in auto-resolved assaults than their numbers
- * suggest (attackers often seize the square), unwalled ones a little.
+ * How a garrison fights in an auto-resolved assault, against its raw
+ * numbers: behind walls, with towers shooting, it is worth more than its
+ * men (measured on test sieges); in an open town a little less.
  */
-const GARRISON_EFF = { walled: 0.85, open: 0.9 };
+const GARRISON_EFF = { walled: 1.3, open: 0.95 };
 
 /** Army make-up per 16 units, by battle role. */
 const DOCTRINE: Record<FactionId, Partial<Record<Role, number>>> = {
@@ -148,6 +151,7 @@ export async function scriptedAI(s: CampaignState, f: FactionId, ctx: AiContext)
   await offers(s, f, look(s, f), ctx);
   let v = look(s, f);
   mechanics(s, f, v);
+  consolidate(s, f);
   if (v.urgent) {
     recruitment(s, f, v);
     economy(s, f, v);
@@ -203,6 +207,8 @@ interface View {
   /** Our towns that train the line (a barracks or a range), and the land within two steps of one. */
   hubs: string[];
   nearHub: Set<string>;
+  /** The last pieces of our own victory (goalRegions): worth a harder fight. */
+  goals: string[];
 }
 
 /** A wonder we could raise soon: the chain, and a town with room for it. */
@@ -230,13 +236,21 @@ function colossusDue(s: CampaignState, f: FactionId): boolean {
 }
 
 function savingFor(s: CampaignState, f: FactionId, urgent: boolean): number {
-  if (urgent) return 0;
-  let save = 0;
+  // The Lens: coin for the next two stages (the war around the Spire will
+  // want the rest); once begun, the next stage is kept even under attack.
+  const lens = f === 'choir' && s.turn >= VICTORY_OPENS - 3 && lensWithin(s) ? LENS_COST.coin * Math.min(2, 5 - s.factions.choir.lens) : 0;
+  if (urgent) return s.factions.choir.lens >= 1 ? Math.min(lens, LENS_COST.coin) : 0;
+  let save = lens;
   const w = wonderPlan(s, f);
   if (w) save = Math.max(save, w.chain.costs[0]!);
   if (colossusDue(s, f)) save = Math.max(save, 3200);
-  if (f === 'choir' && s.turn >= VICTORY_OPENS - 3 && s.factions.choir.lens < 5 && s.regions[NAIL_SPIRE]!.owner === 'choir' && CANDLES.every((c) => s.regions[c]!.owner === 'choir')) save = Math.max(save, LENS_COST.coin * (s.factions.choir.lens >= 1 ? 1 : 2));
   return save;
+}
+
+/** The Choir hold what the Lens needs, bar the Tilt: the Spire, and the three Candles to begin it. */
+function lensWithin(s: CampaignState): boolean {
+  const c = s.factions.choir;
+  return c.lens < 5 && s.regions[NAIL_SPIRE]!.owner === 'choir' && (c.lens >= 1 || CANDLES.every((x) => s.regions[x]!.owner === 'choir'));
 }
 
 /** Tolls a faction still needs to win once in its final stage (Infinity if not in it). */
@@ -280,6 +294,7 @@ function look(s: CampaignState, f: FactionId): View {
     saving: 0,
     hubs: [],
     nearHub: new Set(),
+    goals: goalRegions(s, f),
   };
   if (f !== 'drift') {
     v.hubs = ownedRegions(s, f).filter((r) => regionDef(r).settlement && (chainLevel(s.regions[r]!, 'barracks') > 0 || chainLevel(s.regions[r]!, 'range') > 0));
@@ -468,8 +483,10 @@ function victoryBonus(s: CampaignState, f: FactionId, v: View): Record<string, n
       for (const g of gloamingSettlements(s)) if (s.regions[g]!.owner === 'vesperate') deny(g, w);
       if (s.regions[STOPPED_DIAL]!.owner === 'vesperate') deny(STOPPED_DIAL, w * 0.8);
     } else if (o === 'choir') {
-      for (const c of CANDLES) if (s.regions[c]!.owner === 'choir') deny(c, w);
-      if (s.regions[NAIL_SPIRE]!.owner === 'choir') deny(NAIL_SPIRE, w);
+      // Once the Lens has begun, the Spire is what matters; the Candles still feed the pilgrims.
+      const begun = s.factions.choir.lens >= 1;
+      for (const c of CANDLES) if (s.regions[c]!.owner === 'choir') deny(c, begun ? w * 0.5 : w);
+      if (s.regions[NAIL_SPIRE]!.owner === 'choir') deny(NAIL_SPIRE, begun ? w * 1.3 : w);
     } else if (o === 'hush') {
       if (s.regions[NAIL_SPIRE]!.owner === 'hush') deny(NAIL_SPIRE, w * 1.2);
       if (f === 'choir') for (const c of CANDLES) if (!s.regions[c]!.lit) deny(c, w * 0.8);
@@ -488,10 +505,10 @@ function victoryBonus(s: CampaignState, f: FactionId, v: View): Record<string, n
  */
 function closeToWinning(s: CampaignState, o: FactionId): boolean {
   const r = s.regions;
-  if (o === 'drift') return s.factions.drift.res >= 1000 && kiteFieldsHeld(s);
+  if (o === 'drift') return s.factions.drift.res >= MOOT_RENOWN && kiteFieldsHeld(s);
   if (o === 'vesperate') return r[STOPPED_DIAL]!.owner === 'vesperate' && Math.abs(s.tilt) <= 1 && gloamingSettlements(s).every((g) => r[g]!.owner === 'vesperate');
   if (o === 'hush') return r[NAIL_SPIRE]!.owner === 'hush' && s.tilt <= -3 && CANDLES.every((c) => !r[c]!.lit);
-  return r[NAIL_SPIRE]!.owner === 'choir' && s.tilt >= 3 && CANDLES.every((c) => r[c]!.owner === 'choir' && r[c]!.lit);
+  return lensConditions(s);
 }
 
 /**
@@ -505,7 +522,7 @@ function goalRegions(s: CampaignState, f: FactionId): string[] {
   let need: string[];
   let tiltOk: boolean;
   if (f === 'choir') {
-    need = [NAIL_SPIRE, ...CANDLES].filter((x) => r[x]!.owner !== 'choir');
+    need = (s.factions.choir.lens >= 1 ? [NAIL_SPIRE] : [NAIL_SPIRE, ...CANDLES]).filter((x) => r[x]!.owner !== 'choir');
     tiltOk = s.tilt >= 2;
   } else if (f === 'hush') {
     // Dark Candles in other hands stay dark: only the lit ones must fall.
@@ -515,7 +532,9 @@ function goalRegions(s: CampaignState, f: FactionId): string[] {
     need = [...gloamingSettlements(s), STOPPED_DIAL].filter((x) => r[x]!.owner !== 'vesperate');
     tiltOk = Math.abs(s.tilt) <= 1;
   } else return [];
-  return need.length <= 2 && tiltOk ? need : [];
+  // A victory that rides the Tilt (Choir, Hush) may still lack the Candles: all of them are worth a campaign.
+  const most = f === 'vesperate' ? 2 : 3;
+  return need.length <= most && tiltOk ? need : [];
 }
 
 /** The regions a rival's victory rests on. */
@@ -523,7 +542,8 @@ function criticalRegions(s: CampaignState, o: FactionId): string[] {
   if (o === 'drift') return [KITE_FIELDS];
   if (o === 'vesperate') return [...gloamingSettlements(s), STOPPED_DIAL].filter((g) => s.regions[g]!.owner === 'vesperate');
   if (o === 'hush') return [NAIL_SPIRE, ...CANDLES].filter((g) => s.regions[g]!.owner === 'hush');
-  return [NAIL_SPIRE, ...CANDLES].filter((g) => s.regions[g]!.owner === 'choir');
+  // Once the Lens has begun only the Spire matters (and the Tilt).
+  return (s.factions.choir.lens >= 1 ? [NAIL_SPIRE] : [NAIL_SPIRE, ...CANDLES]).filter((g) => s.regions[g]!.owner === 'choir');
 }
 
 /** How much a region is worth to faction f. */
@@ -570,7 +590,7 @@ function farmFood(s: CampaignState, id: string): number {
 function foodIfOurs(s: CampaignState, f: FactionId, id: string): number {
   const def = regionDef(id);
   const band = bandIndex(s, id);
-  let food = f === 'hush' ? herdIn(s, id) * 2 : [0, 1, 4, 2, 0][band]!;
+  let food = f === 'hush' ? herdIn(s, id) * 2 : BAND_FOOD[band]!;
   food += RESOURCES[def.resource].food ?? 0;
   return food - Math.max(1, s.regions[id]!.level);
 }
@@ -614,10 +634,9 @@ function diplomacy(s: CampaignState, f: FactionId, v: View): void {
     const rel = relation(s, f, o);
     const them = v.strength[o];
     const theirs = s.factions[o];
-    // Everyone gangs up on a faction in its final victory stage (but the
-    // landless Drift, who cannot take the towns a victory rests on and
-    // would only draw its armies onto their sails).
-    if (theirs.finalStage && f !== 'drift') {
+    // A rival in its final victory stage: the strongest power answers at
+    // once, its neighbours as the danger grows (answersCall).
+    if (theirs.finalStage && answersCall(s, f, o, v)) {
       if (rel.stance !== 'war') {
         declareWar(s, f, o);
         (mem.coalition ??= {})[o] = s.turn;
@@ -639,14 +658,14 @@ function diplomacy(s: CampaignState, f: FactionId, v: View): void {
       const losing = them > me * (oldFoes ? 2 : 1.35) || lostTo(s, f, o, 6) >= 2;
       const idle = age > 12 && recentFighting(s, f, o, 8) === 0 && !bordering(s, f, o);
       const twoFronts = v.wars.length >= 2 && them < me * 0.8 && recentFighting(s, f, o, 5) === 0;
-      const leaderElsewhere = v.leader && v.leader !== o;
-      if (losing || idle || twoFronts || leaderElsewhere) suePeace(s, f, o, losing);
+      // Fighting the leader: settle the other wars (but not one for the last pieces of our own victory).
+      const leaderElsewhere = v.leader && v.leader !== o && atWar(s, f, v.leader);
+      const forVictory = goalRegions(s, f).some((g) => s.regions[g]!.owner === o);
+      if (losing || (!forVictory && (idle || twoFronts || leaderElsewhere))) suePeace(s, f, o, losing);
       continue;
     }
-    // Late-game: the others band together against a runaway leader (the
-    // landless Drift have nothing to defend and everything to lose by it).
-    if (f !== 'drift' && v.leader === o && s.turn >= 50 && v.wars.length <= 1 && s.turn - rel.since > 5) {
-      if (rel.stance === 'alliance') propose(s, { kind: 'breakAlliance', from: f, to: o });
+    // They hold the last pieces of our victory: go and take them, unless the war is hopeless.
+    if (me >= them * 0.6 && goalRegions(s, f).some((g) => s.regions[g]!.owner === o)) {
       declareWar(s, f, o);
       continue;
     }
@@ -663,6 +682,31 @@ function diplomacy(s: CampaignState, f: FactionId, v: View): void {
       if (common && s.turn - rel.since > 2) propose(s, { kind: 'alliance', from: f, to: o });
     }
   }
+}
+
+/**
+ * Who answers a rival's final victory stage. Against the strongest power in
+ * the world, every neighbour strong enough to matter marches at once.
+ * Against anyone else the strongest of its rivals marches at once and the
+ * others join as the danger grows (half its hold done, or two Lens stages
+ * raised). The settled powers laugh at the Drift's moot until it has stood
+ * a Toll. A Choir that cannot raise its next Lens stage is no danger this
+ * Toll. The Drift never join: they cannot take the towns a victory rests
+ * on. (If every rival always marched at once, few campaigns would end: the
+ * +15% leadership every rival gains is enough.)
+ */
+function answersCall(s: CampaignState, f: FactionId, o: FactionId, v: View): boolean {
+  if (f === 'drift' || !closeToWinning(s, o)) return false;
+  const fo = s.factions[o];
+  const grown = o === 'choir' ? fo.lens >= 2 : fo.hold * 2 >= HOLD_NEEDED[o];
+  const able = bordering(s, f, o) && v.strength[f] >= v.strength[o] * 0.4;
+  if (o === 'drift') return fo.hold >= 1;
+  const top = FACTION_IDS.filter((x) => s.factions[x].alive).sort((a, b) => v.strength[b] - v.strength[a] || (a < b ? -1 : 1))[0];
+  if (top === o && able) return true;
+  const rivals = FACTION_IDS.filter((x) => x !== o && x !== 'drift' && s.factions[x].alive && overlordOf(s, x) !== o);
+  const first = rivals.sort((a, b) => v.strength[b] - v.strength[a] || (a < b ? -1 : 1))[0];
+  if (f === first) return true;
+  return grown && able;
 }
 
 /**
@@ -801,23 +845,34 @@ function mechanics(s: CampaignState, f: FactionId, v: View): void {
   else if (f === 'vesperate') vesperateMechanics(s, v);
 }
 
+/**
+ * The Last Lens: once begun, the strongest powers march on the Choir. Begin
+ * (with all three Candles) only with Radiance and coin in hand to raise the
+ * stages back to back; after that, raise one whenever the Spire and the
+ * Tilt allow.
+ */
+function raiseLens(s: CampaignState, v: View): void {
+  const c = s.factions.choir;
+  if (lensReady(s).ok && (c.lens >= 1 || (c.res >= LENS_COST.res * 3 && c.coin >= LENS_COST.coin * 2 + v.reserve))) buildLensStage(s);
+}
+
 function choirMechanics(s: CampaignState, v: View): void {
   const c = s.factions.choir;
   // Relight our Candles, then climb in pilgrimage: the Tilt must go sunward.
   for (const id of CANDLES) if (s.regions[id]!.owner === 'choir' && !s.regions[id]!.lit) relight(s, id);
-  // The Last Lens: once begun, every rival marches on the Choir. Begin only
-  // with Radiance and coin in hand to raise the stages back to back.
-  const begun = c.lens >= 1;
-  if (lensReady(s).ok && (begun || (c.res >= LENS_COST.res * 3 && c.coin >= LENS_COST.coin * 2 + v.reserve))) buildLensStage(s);
-  const lensSoon = c.lens < 5 && CANDLES.every((x) => s.regions[x]!.owner === 'choir') && s.regions[NAIL_SPIRE]!.owner === 'choir';
-  // With the Tilt already high enough, Radiance goes to the Lens, not more pilgrims.
-  const lensKeep = s.tilt >= 3 && s.turn >= VICTORY_OPENS - 3 ? LENS_COST.res * Math.min(3, 5 - c.lens) : LENS_COST.res;
+  raiseLens(s, v);
+  const lensSoon = lensWithin(s);
+  // With the Tilt safely high (a Great Toll only takes one step back), or the
+  // Lens begun, Radiance goes to the Lens, not more pilgrims.
+  const lensKeep = c.lens >= 1 ? LENS_COST.res * (5 - c.lens) : s.tilt >= 4 && s.turn >= VICTORY_OPENS - 3 ? LENS_COST.res * 3 : LENS_COST.res;
   const keep = lensSoon ? lensKeep : colossusDue(s, 'choir') && s.turn >= 20 ? 300 : 0;
   // Bread before glory: a hungry Choir sings the Harvest first.
   const hungry = (c.food < 60 && v.foodNet < 1) || (c.food < 150 && v.foodNet < -3);
   if (!c.hymn && hungry && c.res >= 120) singHymn(s, 'harvest');
-  // Past +3 the pilgrims win nothing more: a blinding sky only scorches the fields.
-  for (const id of s.tilt >= 4 ? [] : [NAIL_SPIRE, ...CANDLES]) {
+  // Past +3 the pilgrims win nothing more (a blinding sky only scorches the
+  // fields), unless the Lens is near: then a Tilt of +4 keeps it safe from a
+  // Great Toll.
+  for (const id of s.tilt >= (lensSoon ? 5 : 4) ? [] : [NAIL_SPIRE, ...CANDLES]) {
     if (c.res - PILGRIMAGE_COST < keep) break;
     const r = s.regions[id]!;
     if (r.owner !== 'choir' || (r.ritualCooldown ?? 0) > 0) continue;
@@ -852,19 +907,38 @@ function hushMechanics(s: CampaignState, v: View): void {
 
 function vesperateMechanics(s: CampaignState, v: View): void {
   const ves = s.factions.vesperate;
-  // The Great Toll: keep the world near the Hour, above all while we hold for victory.
-  const hold = ves.finalStage || victoryStatus(s, 'vesperate').lines.filter((l) => !l.ok).length <= 2;
+  // The Great Toll rings for the Vesperate's own ends: to keep the Hour while
+  // their victory is near, or, answering a rival's final stage, to throw back
+  // a victory that rides the Tilt. Otherwise the bells rest: ringing at every
+  // lean would leave no victory for anyone who rides the Tilt.
+  const r = s.regions;
+  const near = ves.finalStage || (r[STOPPED_DIAL]!.owner === 'vesperate' && gloamingSettlements(s).filter((g) => r[g]!.owner !== 'vesperate').length <= 1);
   const drift = Math.abs(s.tilt);
   const pushingAway = s.tilt !== 0 && Math.sign(s.tiltProgress) === Math.sign(s.tilt) && Math.abs(s.tiltProgress) >= 40;
   // A Tilt of one either way does not trouble the Gloaming: let it be until the endgame.
   const late = s.turn >= VICTORY_OPENS - 5;
   // Once the Great Shudder shakes the world, a Tilt of one is a Shudder away from two.
   const shaken = ves.finalStage && s.turn >= GREAT_SHUDDER_TOLL;
-  const want = drift >= 2 || (drift === 1 && late && hold && (pushingAway || shaken)) || (drift === 0 && ves.finalStage && Math.abs(s.tiltProgress) >= 70);
-  if (want && ves.greatTollCooldown === 0 && ves.coin >= GREAT_TOLL.coin + v.reserve * 0.5 && ves.res >= GREAT_TOLL.res) greatToll(s);
-  // Keep the Houses content, and none too proud.
+  const own = near && (drift >= 2 || (drift === 1 && late && (pushingAway || shaken)) || (drift === 0 && ves.finalStage && Math.abs(s.tiltProgress) >= 70));
+  const rider = (['choir', 'hush'] as const).find((o) => s.factions[o].finalStage && answersCall(s, 'vesperate', o, v));
+  const against = rider !== undefined && (rider === 'choir' ? s.tilt >= 3 : s.tilt <= -3);
+  if ((own || against) && ves.greatTollCooldown === 0 && ves.coin >= GREAT_TOLL.coin + v.reserve * 0.5 && ves.res >= GREAT_TOLL.res) greatToll(s);
+  // Keep the Houses content, and none too proud: a House past 92 (or under
+  // 15) may take a town out of the realm. Guildhalls raise every House each
+  // Toll, so a proud one sees the humblest guildhall pulled down.
   for (const hId of ['carillon', 'lantern', 'weir'] as const) {
     if (ves.houses[hId] < 32 && ves.coin > 450 + v.reserve) giftHouse(s, hId);
+  }
+  if (Math.max(ves.houses.carillon, ves.houses.lantern, ves.houses.weir) > 84) {
+    let low: { id: string; slot: number; level: number } | null = null;
+    for (const id of ownedRegions(s, 'vesperate')) {
+      const slots = s.regions[id]!.slots;
+      for (let i = 0; i < slots.length; i++) {
+        const x = slots[i];
+        if (x && x.chain === 'vesperate.guildhall' && !x.building && (!low || x.level < low.level)) low = { id, slot: i, level: x.level };
+      }
+    }
+    if (low) demolish(s, low.id, low.slot);
   }
   planCalendar(s, v);
 }
@@ -1148,6 +1222,15 @@ function buildScore(s: CampaignState, f: FactionId, v: View, id: string, o: Buil
   return (u * 100) / Math.max(1, o.cost + o.resCost * RES_WORTH[f] * 10);
 }
 
+/**
+ * A deep treasury values more coin less: past 10,000 a market is worth less
+ * than bread, order or better troops, so rich realms turn to those.
+ */
+function coinWorth(s: CampaignState, f: FactionId): number {
+  const c = s.factions[f].coin;
+  return c > 20000 ? 0.35 : c > 10000 ? 0.6 : 1;
+}
+
 /** Food is dear when short, and when coin waits on bread for more troops. */
 function foodWorthOf(s: CampaignState, f: FactionId, v: View): number {
   const fs = s.factions[f];
@@ -1164,7 +1247,7 @@ function effectWorth(s: CampaignState, f: FactionId, v: View, id: string, c: Cha
   const d = (k: 'coin' | 'food' | 'order' | 'growth' | 'res' | 'replenish' | 'walls' | 'garrison' | 'herdFood' | 'rank' | 'recruitPct' | 'vision') => ((e[k] as number | undefined) ?? 0) - ((prev[k] as number | undefined) ?? 0);
   const band = bandIndex(s, id);
   const hub = isHub(s, f, id, v);
-  let u = d('coin');
+  let u = d('coin') * coinWorth(s, f);
   const foodWorth = foodWorthOf(s, f, v);
   u += d('food') * farmMult(f, band) * foodWorth;
   if (f === 'hush' && d('herdFood') > 0) {
@@ -1198,6 +1281,7 @@ function effectWorth(s: CampaignState, f: FactionId, v: View, id: string, c: Cha
     const quality = s.factions[f].coin > 5000 && foodWorthOf(s, f, v) >= 28 ? 2.5 : 1;
     u += kindWorth * (fresh ? Math.max(hub, 0.7) : hub) * tierUnlock * dup * none * quality * [0.8, 1.4, 1.6][v.phase]! * (level - from);
   }
+  if (c.id === 'vesperate.guildhall' && Math.max(s.factions.vesperate.houses.carillon, s.factions.vesperate.houses.lantern, s.factions.vesperate.houses.weir) > 70) return -1;
   if (e.bellRange && !prev.bellRange) u += frontier ? 12 : 4;
   if (e.canal && !prev.canal) u += 8;
   u += d('rank') * 12 * hub;
@@ -1274,9 +1358,10 @@ function upgradeUnits(s: CampaignState, f: FactionId, v: View, purse: Purse): vo
   const capped = armies.length >= armyCap(s, f) || purse.food - 4.5 < foodFloor(fs.food);
   if (!capped) return;
   let swaps = 0;
+  const most = fs.coin > 20000 ? 10 : fs.coin > 10000 ? 6 : 4;
   for (const a of armies.sort((x, y) => armyPower(y) - armyPower(x))) {
-    if (a.units.length < 8 || !recruitSite(s, a)) continue;
-    while (swaps < 4 && fs.coin > 4000 + v.reserve) {
+    if (a.units.length < 4 || !recruitSite(s, a)) continue;
+    while (swaps < most && fs.coin > 4000 + v.reserve) {
       // The cheapest unit in the army.
       let worst = -1;
       for (let i = 0; i < a.units.length; i++) {
@@ -1299,6 +1384,37 @@ function upgradeUnits(s: CampaignState, f: FactionId, v: View, purse: Purse): vo
       if (!recruit(s, a.id, pick.def.id).ok) break;
       purse.net -= upkeepAdd;
       swaps++;
+    }
+  }
+}
+
+/**
+ * Spent hosts standing together pool their men: the fullest of them takes
+ * the others' units, and the emptied lords go home to recruit. A dozen men
+ * under one banner hold a town, and refit, better than four bands of three.
+ * (Not the Drift: each sail is a wind-city.)
+ */
+function consolidate(s: CampaignState, f: FactionId): void {
+  if (f === 'drift') return;
+  const byRegion = new Map<string, ArmyState[]>();
+  for (const a of factionArmies(s, f)) {
+    if (a.fought) continue;
+    const list = byRegion.get(a.region) ?? [];
+    list.push(a);
+    byRegion.set(a.region, list);
+  }
+  for (const list of byRegion.values()) {
+    const open = list.filter((a) => a.units.length < MAX_UNITS).sort((a, b) => b.units.length - a.units.length || (a.id < b.id ? -1 : 1));
+    const host = open[0];
+    if (!host) continue;
+    for (const g of open.slice(1)) {
+      if (fill(g) >= 0.6) continue;
+      for (let i = g.units.length - 1; i >= 0 && host.units.length < MAX_UNITS; i--) {
+        const d = unitDef(g.units[i]!.def);
+        // One colossus and one of each hero to a host.
+        if ((d.category === 'colossus' || d.category === 'character') && host.units.some((u) => u.def === d.id || (d.category === 'colossus' && unitDef(u.def).category === 'colossus'))) continue;
+        transfer(s, g.id, i, host.id);
+      }
     }
   }
 }
@@ -1577,7 +1693,7 @@ function rate(s: CampaignState, f: FactionId, v: View, a: ArmyState, t: Target, 
   if (tolls > (deny >= 7 ? 6 : 3)) return null;
   const now = tolls === 0;
   const mine = armyPower(a) * edgeOf(s, f, t.region, t.enemy, a);
-  const urgency = urgencyOf(deny);
+  const urgency = Math.min(urgencyOf(deny), v.goals.includes(t.region) ? GOAL_URGENCY : 1);
   // The late game rewards boldness: stalemates end in someone's victory.
   const late = (v.phase === 2 ? 0.9 : 1) * (v.focus?.kind === 'defend' || v.focus?.kind === 'economy' ? 1.15 : 1);
   if (v.focus?.kind === 'defend' && tolls > 1 && deny < 7) return null;
@@ -1618,6 +1734,9 @@ function rate(s: CampaignState, f: FactionId, v: View, a: ArmyState, t: Target, 
   if (score <= 0) return null;
   return { a, t, score, cost: rt.cost, now };
 }
+
+/** The odds taken for the last pieces of our own victory, against the usual nerve. */
+const GOAL_URGENCY = 0.8;
 
 /**
  * How far below its usual odds an army will fight for a region a rival's
@@ -1674,7 +1793,7 @@ function military(s: CampaignState, f: FactionId, v: View, done: Set<string>): P
   }
 
   // One step from our own victory: the last pieces are taken before anything else is guarded.
-  const goals = goalRegions(s, f);
+  const goals = v.goals;
   if (goals.length) {
     for (const o of options.filter((x) => goals.includes(x.t.region)).sort((x, y) => y.score - x.score || (x.a.id < y.a.id ? -1 : 1))) {
       if (busy.has(o.a.id) || claimed.has(o.t.region) || o.a.fought) continue;
@@ -1688,7 +1807,15 @@ function military(s: CampaignState, f: FactionId, v: View, done: Set<string>): P
     }
     // Two hosts together where one is not enough.
     combined(s, f, v, free, busy, claimed, targets.filter((x) => goals.includes(x.region)), pbs, orders);
+    // Too strong for the hosts at hand: gather beside it for next Toll.
+    for (const g of goals) {
+      const t = targets.find((x) => x.region === g);
+      if (t && !claimed.has(g)) gatherFor(s, f, t, free, busy, done, orders);
+    }
   }
+  // A rival about to win: gather beside the weakest of the towns its victory rests on.
+  const denied = targets.filter((x) => (v.deny[x.region] ?? 0) >= 7 && !claimed.has(x.region)).sort((x, y) => x.need - y.need)[0];
+  if (denied) gatherFor(s, f, denied, free, busy, done, orders);
 
   // Defence: a threatened region of worth pulls armies home. When a rival is
   // about to win first, only the capital keeps a guard: everyone else marches.
@@ -1759,6 +1886,43 @@ function military(s: CampaignState, f: FactionId, v: View, done: Set<string>): P
     idle(s, f, v, a, targets, orders);
   }
   return pbs;
+}
+
+/**
+ * A last piece of our victory that no host at hand can take: gather beside
+ * it. The nearest hosts march to a spot next to it (open to us, no enemy in
+ * it) until together they would carry the assault; next Toll combined()
+ * leads them in. Hosts more than six Tolls away are left where they are.
+ */
+function gatherFor(s: CampaignState, f: FactionId, t: Target, free: ArmyState[], busy: Set<string>, done: Set<string>, orders: Record<string, string>): void {
+  const spots = neighbors(t.region).filter((n) => !hostileSettlement(s, n, f) && !hostileArmiesIn(s, n, f).length);
+  if (!spots.length) return;
+  const cands: { a: ArmyState; spot: string; cost: number; step: string }[] = [];
+  for (const a of free) {
+    if (busy.has(a.id) || a.fought || a.moves <= 0 || needsRefit(a, f)) continue;
+    let best: { spot: string; cost: number; step: string } | null = null;
+    for (const spot of spots) {
+      const r = route(s, a, spot);
+      if (!r || r.cost > maxMoves(a) * 6) continue;
+      const cost = r.cost - (s.regions[spot]!.owner === f ? 30 : 0);
+      if (!best || cost < best.cost) best = { spot, cost, step: r.step };
+    }
+    if (best) cands.push({ a, ...best });
+  }
+  cands.sort((x, y) => x.cost - y.cost || (x.a.id < y.a.id ? -1 : 1));
+  const want = t.need * PERSONA[f].nerve * 1.1 * GOAL_URGENCY;
+  const group: typeof cands = [];
+  for (const c of cands) {
+    group.push(c);
+    if (sidePower(group.map((x) => x.a)) * edgeOf(s, f, t.region, t.enemy, group[0]!.a) >= want || group.length >= 3) break;
+  }
+  if (!group.length || sidePower(group.map((x) => x.a)) * edgeOf(s, f, t.region, t.enemy, group[0]!.a) < want) return;
+  for (const c of group) {
+    busy.add(c.a.id);
+    done.add(c.a.id);
+    orders[c.a.id] = c.spot;
+    if (c.a.region !== c.spot && !spots.includes(c.a.region)) moveArmy(s, c.a.id, c.step);
+  }
 }
 
 function defenceNeeds(s: CampaignState, f: FactionId, v: View): { region: string; threat: number; value: number }[] {
@@ -1850,7 +2014,7 @@ function combined(s: CampaignState, f: FactionId, v: View, free: ArmyState[], bu
     const pair = [near[0]!.a, near[1]!.a];
     const mine = sidePower(pair) * edgeOf(s, f, t.region, t.enemy, pair[0]!);
     const deny = v.deny[t.region] ?? 0;
-    const urgency = urgencyOf(deny);
+    const urgency = Math.min(urgencyOf(deny), v.goals.includes(t.region) ? GOAL_URGENCY : 1);
     if (mine < t.need * PERSONA[f].nerve * 1.05 * urgency) continue;
     const pb = execute(s, f, { a: pair[0]!, t, score: 0, cost: 0, now: true }, orders);
     busy.add(pair[0]!.id);
@@ -1981,7 +2145,7 @@ function refitSite(s: CampaignState, f: FactionId, a: ArmyState, v: View): strin
 /** Late in the game the sails gather on the Kite Fields and hold the moot. */
 function driftHold(s: CampaignState, v: View, free: ArmyState[], busy: Set<string>, done: Set<string>): void {
   const d = s.factions.drift;
-  const ready = s.turn >= VICTORY_OPENS - 2 && d.res >= 900;
+  const ready = s.turn >= VICTORY_OPENS - 2 && d.res >= MOOT_RENOWN - 100;
   if (!ready) return;
   const orders = (memory(s, 'drift').orders ??= {});
   // Only stand when the sails can hold the moot: every host near enough to
@@ -2005,7 +2169,7 @@ function driftHold(s: CampaignState, v: View, free: ArmyState[], busy: Set<strin
   }
   const armies = free.filter((a) => !busy.has(a.id)).sort((a, b) => armyPower(b) - armyPower(a));
   // Keep the strongest sails at the Fields; one keeps sailing for Renown if short of it.
-  const keepSailing = d.res < 1000 ? 1 : 0;
+  const keepSailing = d.res < MOOT_RENOWN ? 1 : 0;
   let sent = 0;
   for (const a of armies) {
     if (sent >= armies.length - keepSailing && a.region !== KITE_FIELDS) break;
@@ -2037,11 +2201,15 @@ function sailDanger(s: CampaignState, region: string): number {
   const steps = stepsFrom(region);
   const band = bandIndex(s, region);
   const sides: number[] = [];
-  for (const o of FACTION_IDS) {
-    if (o === 'drift' || !s.factions[o].alive || allied(s, 'drift', o)) continue;
+  // Hosts already at war with us strike at once, from two or three steps.
+  // The others answer the moot only once it has stood a Toll (answersCall):
+  // by then only a host close by can still break it.
+  const rivals = FACTION_IDS.filter((o) => o !== 'drift' && s.factions[o].alive && !allied(s, 'drift', o));
+  for (const o of rivals) {
     const by = (reach: number) => sidePower(s.armies.filter((x) => x.faction === o && (steps[x.region] ?? 9) <= reach).sort((x, y) => armyPower(y) - armyPower(x)));
-    const [p2, p3, p4] = [by(2), by(3), by(4)];
-    const p = p2 + (p3 - p2) * 0.85 + (p4 - p3) * 0.6;
+    const war = atWar(s, 'drift', o);
+    const [p2, p3] = [by(2), by(3)];
+    const p = war ? p2 + (p3 - p2) * 0.7 : p2 * 0.8;
     if (p > 0) sides.push(p * EDGE[o][band]! * 1.07);
   }
   sides.sort((x, y) => y - x);
@@ -2054,7 +2222,7 @@ function sailDanger(s: CampaignState, region: string): number {
  * moot, and bring every rival's war down on it, before the sails are ready.
  */
 function mootNear(s: CampaignState): boolean {
-  return s.turn >= VICTORY_OPENS - 4 && s.factions.drift.res >= 900;
+  return s.turn >= VICTORY_OPENS - 4 && s.factions.drift.res >= MOOT_RENOWN - 100;
 }
 
 function strandsOnFields(s: CampaignState, a: ArmyState, to: string): boolean {
@@ -2115,7 +2283,11 @@ function driftIdle(s: CampaignState, v: View, a: ArmyState, orders: Record<strin
 function afterMarch(s: CampaignState, f: FactionId, v: View): void {
   const fs = s.factions[f];
   if (f === 'hush') for (const c of CANDLES) if (s.regions[c]!.owner === 'hush' && s.regions[c]!.lit) extinguish(s, c);
-  if (f === 'choir') for (const c of CANDLES) if (s.regions[c]!.owner === 'choir' && !s.regions[c]!.lit) relight(s, c);
+  if (f === 'choir') {
+    for (const c of CANDLES) if (s.regions[c]!.owner === 'choir' && !s.regions[c]!.lit) relight(s, c);
+    // A Candle or the Spire won back this Toll: raise the next stage before anyone takes it again.
+    raiseLens(s, v);
+  }
   // New conquests need order before they riot.
   if (f !== 'drift') orderCare(s, f, v);
   // Armies that stopped in hostile land live off it.

@@ -417,10 +417,11 @@ function houses(s: CampaignState, rnd: () => number): void {
       const towns = REGIONS.filter((r) => s.regions[r.id]!.owner === 'vesperate' && r.id !== 'vesper' && !s.armies.some((a) => a.region === r.id && a.faction === 'vesperate'));
       if (!towns.length) continue;
       const t = towns[Math.floor(rnd() * towns.length)]!;
+      const proud = hs[k] > 50;
       s.regions[t.id]!.owner = 'free';
       s.regions[t.id]!.takenTurn = s.turn;
       hs[k] = 50;
-      log(s, 'revolt', `House ${k[0]!.toUpperCase()}${k.slice(1)} ${hs[k] > 50 ? 'grows too proud' : 'is slighted'} and takes ${t.settlement} out of the Vesperate.`, undefined, t.id);
+      log(s, 'revolt', `House ${k[0]!.toUpperCase()}${k.slice(1)} ${proud ? 'grows too proud' : 'is slighted'} and takes ${t.settlement} out of the Vesperate.`, undefined, t.id);
     }
   }
 }

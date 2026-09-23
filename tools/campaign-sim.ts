@@ -15,6 +15,7 @@ import { ownedRegions } from '../src/campaign/state';
 import { armyPower } from '../src/campaign/rules';
 import { factionLedger, ledgerNet } from '../src/campaign/turn';
 import { chainDef } from '../src/campaign/buildings';
+import { MOOT_RENOWN, victoryStatus } from '../src/campaign/victory';
 
 const seed = Number(process.argv[2] ?? 1);
 const tolls = Number(process.argv[3] ?? 60);
@@ -60,13 +61,24 @@ const milestones = () => {
     if (fs.colossus.built) mark(f, 'colossus');
     if (fs.finalStage) mark(f, 'final');
     if (!fs.alive) mark(f, 'fell');
-    if (f === 'drift' && fs.res >= 1000) mark(f, 'renown1000');
+    if (f === 'drift' && fs.res >= MOOT_RENOWN) mark(f, 'renown');
   }
   if (s.tilt !== 0) mark('world', `tilt${s.tilt > 0 ? '+' : '-'}1`);
   if (Math.abs(s.tilt) >= 2) mark('world', `tilt${s.tilt > 0 ? '+' : '-'}2`);
   if (Math.abs(s.tilt) >= 3) mark('world', `tilt${s.tilt > 0 ? '+' : '-'}3`);
 };
 firsts.world = {};
+// The endgame: Tolls each faction spent in its final stage, and the longest hold (Lens stages for the Choir).
+const endgame: Record<string, { final: number; best: number }> = Object.fromEntries(FACTION_IDS.map((f) => [f, { final: 0, best: 0 }]));
+const trackEndgame = () => {
+  for (const f of FACTION_IDS) {
+    const fs = s.factions[f];
+    if (!fs.alive) continue;
+    const e = endgame[f]!;
+    if (fs.finalStage) e.final++;
+    e.best = Math.max(e.best, f === 'choir' ? fs.lens : fs.hold);
+  }
+};
 const t0 = Date.now();
 for (let t = 0; t < tolls && !s.winner; t++) {
   // The player's own Toll, played by the AI.
@@ -75,6 +87,7 @@ for (let t = 0; t < tolls && !s.winner; t++) {
   await endTurn(s, hooks, scriptedAI);
   countReports();
   milestones();
+  trackEndgame();
   if (verbose) {
     // The big news of the Toll that just ended.
     for (const e of s.events) {
@@ -91,7 +104,9 @@ for (let t = 0; t < tolls && !s.winner; t++) {
       const units = arm.reduce((x, a) => x + a.units.length, 0);
       regions[f] = ownedRegions(s, f).length;
       const net = ledgerNet(factionLedger(s, f));
-      return `${f.slice(0, 4)}:${fs.alive ? '' : 'DEAD '}r${regions[f]} a${arm.length}/${units}u(${pow}k) c${Math.round(fs.coin)}${net.coin >= 0 ? '+' : ''}${Math.round(net.coin)} f${Math.round(fs.food)}${net.food >= 0 ? '+' : ''}${Math.round(net.food)} x${Math.round(fs.res)}${fs.finalStage ? ' FINAL' : ''}`;
+      const vs = victoryStatus(s, f);
+      const vic = ` v${vs.lines.filter((l) => l.ok).length}/${vs.lines.length}${f === 'choir' ? ` L${fs.lens}` : fs.hold ? ` h${fs.hold}` : ''}`;
+      return `${f.slice(0, 4)}:${fs.alive ? '' : 'DEAD '}r${regions[f]} a${arm.length}/${units}u(${pow}k) c${Math.round(fs.coin)}${net.coin >= 0 ? '+' : ''}${Math.round(net.coin)} f${Math.round(fs.food)}${net.food >= 0 ? '+' : ''}${Math.round(net.food)} x${Math.round(fs.res)}${vic}${fs.finalStage ? ' FINAL' : ''}`;
     }).join(' | ');
     history.push({ turn: s.turn, tilt: s.tilt, regions });
     const wars = Object.entries(s.relations)
@@ -107,4 +122,5 @@ console.log(kinds);
 console.log('regions by Toll:', FACTION_IDS.map((f) => `${f.slice(0, 4)} ${history.map((h) => h.regions[f]).join(',')}`).join(' | '));
 console.log('tilt by Toll:', history.map((h) => `T${h.turn}:${h.tilt}`).join(' '));
 console.log('firsts:', Object.entries(firsts).map(([f, m]) => `${f.slice(0, 5)} ${Object.entries(m).map(([k, t]) => `${k}@${t}`).join(' ') || '-'}`).join(' | '));
+console.log('endgame:', FACTION_IDS.map((f) => `${f.slice(0, 5)} final ${endgame[f]!.final} Tolls, best ${f === 'choir' ? 'Lens' : 'hold'} ${endgame[f]!.best}`).join(' | '));
 for (const e of s.events.slice(-25)) console.log(`  T${e.turn} [${e.kind}] ${e.text}`);

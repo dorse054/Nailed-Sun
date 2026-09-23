@@ -6,7 +6,7 @@ import type { HouseId, ObservanceId } from '../../campaign/types';
 import { CANDLES, REGIONS, regionDef } from '../../campaign/regions';
 import { factionArmies, fmtNum, ownedRegions, relation } from '../../campaign/state';
 import { armyPower, currentObservance } from '../../campaign/rules';
-import { victoryStatus } from '../../campaign/victory';
+import { MOOT_RENOWN, victoryStatus } from '../../campaign/victory';
 import { factionLedger, MIGRATION_RENOWN } from '../../campaign/turn';
 import { JevMark } from './Prompts';
 import { claudeStatus } from '../claude';
@@ -291,7 +291,7 @@ function Drift({ session }: { session: CampaignSession }) {
   return (
     <div>
       <p>
-        Renown <b>{fmtNum(d.res)}</b> / 1,000 · full migrations: <b>{d.migrations}</b> · sails allowed: <b>{armyCap(s, 'drift')}</b>
+        Renown <b>{fmtNum(d.res)}</b> / {fmtNum(MOOT_RENOWN)} · full migrations: <b>{d.migrations}</b> · sails allowed: <b>{armyCap(s, 'drift')}</b>
       </p>
       <p class="small">
         Moorings:{' '}
