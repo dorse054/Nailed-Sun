@@ -27,7 +27,7 @@ import type {
   Unit,
   Zone,
 } from './types';
-import { autoDeploy, createUnit, layoutSlots, placeInFormation } from './army';
+import { autoDeploy, createUnit, layoutSlots, placeInFormation, unitHpShare } from './army';
 import { computeStats } from './stats';
 import { addZone } from './zones';
 import { updateZones } from './zones';
@@ -35,7 +35,7 @@ import { updateToll } from './toll';
 import { castAbility } from './abilities';
 import { updateAbilities } from './abilities';
 import { updateSpecials } from './specials';
-import { moveSoldiers, resolveCollisions, setMoveOrder, updateAnchors } from './movement';
+import { moveSoldiers, resolveCollisions, setMoveOrder, settleSoldiers, updateAnchors } from './movement';
 import { updateMelee, updateStatus } from './melee';
 import { effectiveRange as effRange, updateMissileUnits, updateProjectiles, weaponOf as missileWeaponOf } from './missiles';
 import { updateMorale } from './morale';
@@ -146,6 +146,8 @@ export class Battle {
     }
     this.hash = new SpatialHash(this.terrain.width, this.terrain.height, 4, this.soldiers.length + 16);
     this.visited = new Uint32Array(this.soldiers.length + 16);
+    // Nobody starts inside a building, a cliff or deep water.
+    for (const u of this.units) settleSoldiers(this, u);
     for (const u of this.units) this.attachMechanicZones(u);
     for (const u of this.units) {
       computeStats(this, u);
@@ -467,6 +469,7 @@ export class Battle {
     u.order = { kind: 'hold' };
     layoutSlots(u);
     placeInFormation(u);
+    settleSoldiers(this, u);
     if (forced) {
       // Thrown from a falling tower or ship.
       for (const s of u.soldiers) if (s.alive && this.rng.next() < 0.3) applyDamage(this, s, s.hp, null, 'normal', null);
@@ -582,6 +585,18 @@ export class Battle {
     return true;
   }
 
+  /**
+   * An army is broken when what it still has standing is a small remnant of what
+   * it brought and the enemy holds the field with far more: it leaves the field
+   * instead of letting a lord, a battery or a hidden unit drag the battle out.
+   */
+  private sideBroken(side: Side): boolean {
+    const mine = this.remainingValue(side);
+    if (mine >= VICTORY.brokenBelow) return false;
+    const theirs = this.remainingValue((1 - side) as Side);
+    return theirs >= mine * VICTORY.brokenRatio + VICTORY.brokenMargin;
+  }
+
   private checkVictory(): void {
     const a0 = this.sideActive(0);
     const a1 = this.sideActive(1);
@@ -605,6 +620,14 @@ export class Battle {
       if (atkIn && !defIn) st.capture += 1;
       else if (!atkIn) st.capture = Math.max(0, st.capture - 1);
       if (st.capture >= 60) return this.finish(atk, 'capture');
+      // An assault that has spent itself against the walls is called off. (The defender
+      // holds its walls to the last: the attacker must still take the point.)
+      if (this.sideBroken(atk)) return this.finish(def, 'rout');
+    } else {
+      // Field battles only: a fortified defender holds its walls to the last.
+      const b0 = this.sideBroken(0);
+      const b1 = this.sideBroken(1);
+      if (b0 !== b1) return this.finish(b0 ? 1 : 0, 'rout');
     }
     if (this.time >= this.timeLimit) this.finish(this.timeoutWinner(), 'timeout');
   }
@@ -613,18 +636,23 @@ export class Battle {
     if (this.terrain.fort) return this.terrain.fort.defender;
     const v0 = this.remainingValue(0);
     const v1 = this.remainingValue(1);
-    if (Math.abs(v0 - v1) < 0.03) return -1;
+    if (Math.abs(v0 - v1) < VICTORY.drawBand) return -1;
     return v0 > v1 ? 0 : 1;
   }
 
-  /** Share of the army's starting value still fighting. */
+  /**
+   * Share of the army's starting value still fighting: every unit in the fight
+   * counts its cost times the share of its hit points left, so a badly hurt
+   * colossus, monster or battery counts for what is left of it, and routing,
+   * dead, fled and withdrawn units count for nothing.
+   */
   remainingValue(side: Side): number {
     let start = 0;
     let now = 0;
     for (const u of this.units) {
       if (u.side !== side) continue;
       start += u.cost;
-      if (u.state === 'ready' || u.state === 'embarked') now += u.cost * (u.alive / u.initial);
+      if ((u.state === 'ready' || u.state === 'embarked') && !u.special.withdrawn) now += u.cost * unitHpShare(u);
     }
     return start > 0 ? now / start : 0;
   }
@@ -661,6 +689,7 @@ export class Battle {
         alive: u.alive,
         kills: u.kills,
         damageDealt: Math.round(u.damageDealt),
+        valueDealt: Math.round(u.valueDealt),
         state: u.state,
         cost: u.cost,
         hp: hpShare(u),
@@ -678,12 +707,19 @@ export class Battle {
   }
 }
 
+/** Rules that end a field battle before the time limit, and the timeout draw band. */
+export const VICTORY = {
+  /** An army with less than this share of its value still fighting may be broken... */
+  brokenBelow: 0.25,
+  /** ...when the enemy has at least this many times as much, plus the margin. */
+  brokenRatio: 2,
+  brokenMargin: 0.1,
+  /** At the time limit, remaining values closer than this are a draw. */
+  drawBand: 0.03,
+};
+
+export { unitHpShare };
+
 function hpShare(u: Unit): number {
-  let now = 0;
-  let max = 0;
-  for (const s of u.soldiers) {
-    max += s.maxHp;
-    if (s.alive) now += Math.max(0, s.hp);
-  }
-  return max > 0 ? Math.round((now / max) * 1000) / 1000 : 0;
+  return Math.round(unitHpShare(u) * 1000) / 1000;
 }

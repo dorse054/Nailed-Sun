@@ -185,6 +185,27 @@ export class Terrain {
     return this.cover[this.idx(x, y)] === COVER.Wall;
   }
 
+  isGate(x: number, y: number): boolean {
+    if (!this.inBounds(x, y)) return false;
+    return this.cover[this.idx(x, y)] === COVER.Gate;
+  }
+
+  /** Inside the fort's wall line (on the town side of every wall segment). */
+  insideFort(x: number, y: number): boolean {
+    if (!this.fort) return false;
+    const cx = this.width / 2;
+    const cy = this.height / 2;
+    for (const w of this.walls) {
+      if (w.tower) continue;
+      const ex = w.x2 - w.x1;
+      const ey = w.y2 - w.y1;
+      const sp = ex * (y - w.y1) - ey * (x - w.x1);
+      const sc = ex * (cy - w.y1) - ey * (cx - w.x1);
+      if (sp * sc < 0) return false;
+    }
+    return true;
+  }
+
   /** Movement speed multiplier for a category at a point. */
   speedMult(x: number, y: number, cat: Category, flying = false): number {
     if (flying) return 1;

@@ -7,12 +7,12 @@
  * on the ground) of at least 2 s before it lands.
  */
 import type { AbilityDef, Area, Effect } from '../data/schema';
-import { beamMult } from '../data/rules';
+import { beamMult, SIGNATURE } from '../data/rules';
 import { angleDiff, clamp, datan2, dcos, dsin, PI } from '../core/dmath';
 import { segDist2 } from '../core/vec';
 import type { Battle } from './battle';
 import { DT } from './constants';
-import type { AbilityState, Telegraph, Unit } from './types';
+import type { AbilityState, Soldier, Telegraph, Unit } from './types';
 import { applyDamage, applyOnHit, armorRoll, groundFlyer, knockDown, typeMult } from './combat';
 import { addZone, beamBlockedAt, ownZone } from './zones';
 import { hasMechanic, isFlyer } from './mechanics';
@@ -580,8 +580,8 @@ function channelTick(b: Battle, u: Unit, a: AbilityState): void {
     // Sweep a beam across a 90 degree arc out to 300 m.
     const base = a.tx;
     const ang = base - PI / 4 + (PI / 2) * f;
-    let ex = o.x + dcos(ang) * 300;
-    let ey = o.y + dsin(ang) * 300;
+    let ex = o.x + dcos(ang) * SIGNATURE.noonLance.range;
+    let ey = o.y + dsin(ang) * SIGNATURE.noonLance.range;
     const bt = beamBlockedAt(b, o.x, o.y, ex, ey);
     if (bt >= 0) {
       ex = o.x + (ex - o.x) * bt;
@@ -589,17 +589,27 @@ function channelTick(b: Battle, u: Unit, a: AbilityState): void {
     }
     const power = beamMult(u.light);
     if (b.tick % 2 === 0) b.events.push({ t: 'beam', kind: 'lance', x1: o.x, y1: o.y, x2: ex, y2: ey, power, blocked: bt >= 0, side: u.side });
+    // The beam burns through the first few bodies in its path; those behind them are shielded.
     const hitSet = a.hitSet!;
+    const inBeam: { s: Soldier; d2: number }[] = [];
     for (const t of b.units) {
       if (t.side === u.side || t.alive <= 0 || t.state === 'dead' || t.state === 'fled' || t.state === 'embarked') continue;
       for (const s of t.soldiers) {
-        if (!s.alive || hitSet.has(s.id)) continue;
-        const lim = 2.5 + s.radius;
+        if (!s.alive) continue;
+        const lim = SIGNATURE.noonLance.halfWidth + s.radius;
         if (segDist2(s.x, s.y, o.x, o.y, ex, ey) > lim * lim) continue;
-        hitSet.add(s.id);
-        const dmg = armorRoll(b.rng, 38, 52, s.armor + t.stats.armorAdd) * power * u.stats.dmgMult * typeMult('fire', t);
-        applyDamage(b, s, dmg, null, 'fire', u);
+        inBeam.push({ s, d2: (s.x - o.x) * (s.x - o.x) + (s.y - o.y) * (s.y - o.y) });
       }
+    }
+    inBeam.sort((p, q) => p.d2 - q.d2 || p.s.id - q.s.id);
+    const n = Math.min(inBeam.length, SIGNATURE.noonLance.pierce);
+    for (let k = 0; k < n; k++) {
+      const s = inBeam[k]!.s;
+      if (hitSet.has(s.id)) continue;
+      hitSet.add(s.id);
+      const t = s.unit;
+      const dmg = armorRoll(b.rng, SIGNATURE.noonLance.damage, SIGNATURE.noonLance.ap, s.armor + t.stats.armorAdd) * power * u.stats.dmgMult * typeMult('fire', t);
+      applyDamage(b, s, dmg, null, 'fire', u);
     }
   } else if (script === 'hourThatNeverComes') {
     // A ring expands to 120 m and knocks down every unit, friend and foe.
@@ -614,7 +624,7 @@ function channelTick(b: Battle, u: Unit, a: AbilityState): void {
         const d = Math.sqrt((s.x - o.x) * (s.x - o.x) + (s.y - o.y) * (s.y - o.y));
         if (d < r0 || d > r1 + s.radius) continue;
         if (hasMechanic(t.def, 'brittle')) {
-          applyDamage(b, s, armorRoll(b.rng, 30, 30, s.armor) * 1.5, null, 'resonance', u);
+          applyDamage(b, s, armorRoll(b.rng, SIGNATURE.hourThatNeverComes.damage, SIGNATURE.hourThatNeverComes.ap, s.armor) * 1.5, null, 'resonance', u);
         }
         if (s.airborne) grounded = true;
         if (!ironFriend && s.alive) {
@@ -646,7 +656,7 @@ function channelTick(b: Battle, u: Unit, a: AbilityState): void {
           const dd = (s.x - x) * (s.x - x) + (s.y - y) * (s.y - y);
           if (dd > 10 * 10) continue;
           hitSet.add(s.id);
-          applyDamage(b, s, armorRoll(b.rng, 30, 12, s.armor), null, 'normal', u);
+          applyDamage(b, s, armorRoll(b.rng, SIGNATURE.dive.damage, SIGNATURE.dive.ap, s.armor), null, 'normal', u);
           if (t.def.category === 'infantry' || t.def.size === 'small') {
             const ang = datan2(s.y - y, s.x - x);
             knockDown(b, s, dcos(ang), dsin(ang), 2, 1.8);

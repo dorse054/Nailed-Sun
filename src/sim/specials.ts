@@ -9,6 +9,7 @@ import type { Battle } from './battle';
 import type { Unit } from './types';
 import { applyDamage, armorRoll, knockDown } from './combat';
 import { hasMechanic, mechanic } from './mechanics';
+import { SIGNATURE } from '../data/rules';
 import { fire, validMissileTarget } from './missiles';
 
 const BROADSIDE_BOLT: MissileWeapon = {
@@ -16,7 +17,7 @@ const BROADSIDE_BOLT: MissileWeapon = {
   trajectory: 'direct',
   range: 220,
   ammo: 999,
-  reload: 2.4,
+  reload: 3.2,
   accuracy: 0.7,
   damage: 60,
   ap: 34,
@@ -35,7 +36,7 @@ const BROADSIDE_KITE: MissileWeapon = {
   ap: 8,
   type: 'fire',
   splash: 8,
-  ignite: { radius: 10, duration: 14, dps: 6 },
+  ignite: { radius: 10, duration: 14, dps: 3 },
 };
 
 export function updateSpecials(b: Battle): void {
@@ -155,7 +156,7 @@ function sailing(b: Battle, u: Unit): void {
       const fy = dsin(u.facing);
       const cx = hull.x + fx * hull.radius;
       const cy = hull.y + fy * hull.radius;
-      const reach = 14;
+      const reach = SIGNATURE.rammingRun.reach;
       let hitSet = b.ramHits.get(u.id);
       if (!hitSet) {
         hitSet = new Set();
@@ -166,7 +167,7 @@ function sailing(b: Battle, u: Unit): void {
         const s = b.soldiers[i]!;
         if (!s.alive || s.unit === u || s.airborne || s.unit.side === u.side || hits.has(s.id)) return;
         hits.add(s.id);
-        const dmg = armorRoll(b.rng, 70 * (sp / 8), 50, s.armor) * (s.unit.def.size === 'colossal' ? 0.6 : 1);
+        const dmg = armorRoll(b.rng, SIGNATURE.rammingRun.damage * (sp / 8), SIGNATURE.rammingRun.ap, s.armor) * (s.unit.def.size === 'colossal' ? 0.6 : 1);
         applyDamage(b, s, dmg, hull, 'normal', u);
         if (s.alive) {
           const side = (s.x - hull.x) * -fy + (s.y - hull.y) * fx >= 0 ? 1 : -1;

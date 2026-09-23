@@ -348,7 +348,7 @@ describe('morale', () => {
     expect(['shattered', 'fled']).toContain(u.state);
   });
 
-  it('a unit below 12% strength shatters on its first rout', () => {
+  it('a unit with less than a quarter of its strength left shatters on its first rout', () => {
     const b = moraleBattle();
     const u = b.units[0]!;
     const living = u.soldiers.filter((s) => s.alive);

@@ -138,12 +138,62 @@ export function autoTarget(b: Battle, u: Unit, w: MissileWeapon): Unit | null {
   return bestScore > -500 ? best : null;
 }
 
+/**
+ * Siege: an attacking engine that has not been ordered onto a unit batters the
+ * nearest standing gate in its range (beams burn it). Returns true if it did.
+ */
+function siegeShot(b: Battle, u: Unit, w: MissileWeapon): boolean {
+  const fort = b.terrain.fort;
+  if (!fort || u.side === fort.defender || u.def.role !== 'artillery' || u.order.kind === 'attack') return false;
+  if (!canShoot(b, u, w)) return false;
+  let gx = 0;
+  let gy = 0;
+  let best = Infinity;
+  for (const wall of b.terrain.walls) {
+    if (!wall.gate || wall.broken) continue;
+    const mx = (wall.x1 + wall.x2) / 2;
+    const my = (wall.y1 + wall.y2) / 2;
+    const d = Math.sqrt((mx - u.x) * (mx - u.x) + (my - u.y) * (my - u.y));
+    if (d > effectiveRange(b, u, w, datan2(my - u.y, mx - u.x)) || d < (w.minRange ?? 0) || d >= best) continue;
+    best = d;
+    gx = mx;
+    gy = my;
+  }
+  if (!Number.isFinite(best)) return false;
+  const dir = datan2(gy - u.y, gx - u.x);
+  if (!u.moving && u.formation === 'block') {
+    const off = angleDiff(u.facing, dir);
+    if (Math.abs(off) > 0.5) {
+      u.facing += clamp(off, -0.9 * DT, 0.9 * DT);
+      if (Math.abs(off) > 1.2) return true;
+    }
+  }
+  for (const s of u.soldiers) {
+    if (!s.alive || s.target || s.downTimer > 0 || s.staggerTimer > 0 || s.ammo <= 0) continue;
+    s.reload -= (DT / u.stats.reloadMult) * u.entityScale;
+    if (s.reload > 0) continue;
+    s.reload = w.reload * (0.85 + b.rng.next() * 0.3);
+    s.ammo--;
+    u.lastFireTime = b.time;
+    if (w.trajectory === 'beam' || w.trajectory === 'lineBeam' || w.trajectory === 'cone') {
+      // Beams burn the gate; the bell's shockwave shakes it.
+      const power = w.lightScaled ? beamMult(u.light) : 1;
+      b.damageWalls(gx, gy, 5, w.damage * power * (w.trajectory === 'lineBeam' ? 3 : 2) * u.stats.missileDmgMult, u.side, true);
+      if ((s.id & 3) === 0) b.events.push({ t: 'beam', kind: w.trajectory === 'cone' ? 'lance' : 'heliostat', x1: s.x, y1: s.y, x2: gx, y2: gy, power, blocked: true, side: u.side });
+    } else {
+      fireAt(b, s, gx, gy, w);
+    }
+  }
+  return true;
+}
+
 export function updateMissileUnits(b: Battle): void {
   for (const u of b.units) {
     const w = weaponOf(u);
     if (!w || u.alive <= 0) continue;
     if (u.state !== 'ready' && u.state !== 'embarked') continue;
     if (u.special.meleeMode) continue;
+    if (siegeShot(b, u, w)) continue;
     let t: Unit | null = u.missileTarget;
     if (!validMissileTarget(b, u, t)) {
       t = null;
@@ -279,6 +329,40 @@ export function fire(b: Battle, s: Soldier, t: Unit, w: MissileWeapon): void {
   if ((s.id & 7) === 0 || u.soldiers.length < 8) b.events.push({ t: 'shot', kind: w.kind, x: s.x, y: s.y, side: u.side });
 }
 
+/** Loose a projectile at a point on the ground (siege engines at a gate), with the usual scatter. */
+function fireAt(b: Battle, s: Soldier, x: number, y: number, w: MissileWeapon): void {
+  const u = s.unit;
+  const dx0 = x - s.x;
+  const dy0 = y - s.y;
+  const d0 = Math.sqrt(dx0 * dx0 + dy0 * dy0) || 1;
+  const T = Math.max(0.15, (d0 / projectileSpeed(w)) * (w.trajectory === 'arc' ? 1.12 : 1));
+  const acc = accuracyFor(b, u, w, x, y);
+  const sigma = Math.max(0.3, d0 * (1 - acc) * 0.085);
+  const along = w.trajectory === 'arc' ? 1.3 : 0.9;
+  const lat = w.trajectory === 'arc' ? 0.85 : 0.75;
+  const ux = dx0 / d0;
+  const uy = dy0 / d0;
+  const na = b.rng.normal() * sigma * along;
+  const nl = b.rng.normal() * sigma * lat;
+  b.projectiles.push({
+    id: b.nextProjectileId++,
+    side: u.side,
+    weapon: w,
+    shooter: u,
+    x0: s.x,
+    y0: s.y,
+    x1: x + ux * na - uy * nl,
+    y1: y + uy * na + ux * nl,
+    t: 0,
+    T,
+    arc: w.trajectory === 'arc' ? 0.28 : 0.04,
+    dmgMult: u.stats.missileDmgMult,
+    victim: null,
+    alive: true,
+  });
+  if ((s.id & 7) === 0 || u.soldiers.length < 8) b.events.push({ t: 'shot', kind: w.kind, x: s.x, y: s.y, side: u.side });
+}
+
 function fireBeam(b: Battle, s: Soldier, v: Soldier, w: MissileWeapon): void {
   const u = s.unit;
   const acc = accuracyFor(b, u, w, v.x, v.y);
@@ -333,7 +417,7 @@ function fireLineBeam(b: Battle, s: Soldier, v: Soldier, w: MissileWeapon): void
       const t = 1 - k * 0.12;
       const zx = s.x + (ex - s.x) * t;
       const zy = s.y + (ey - s.y) * t;
-      if (b.terrain.inBounds(zx, zy)) addZone(b, 'burningLine', u.side, zx, zy, w.ignite.duration, u);
+      if (b.terrain.inBounds(zx, zy)) addZone(b, 'burningLine', u.side, zx, zy, w.ignite.duration, u).dps = w.ignite.dps;
     }
   }
 }
@@ -443,6 +527,7 @@ function resolveImpact(b: Battle, p: Projectile): void {
   if (w.ignite) {
     const z = addZone(b, w.kind === 'glassPot' ? 'moltenGlass' : 'burning', u.side, p.x1, p.y1, w.ignite.duration, u);
     z.radius = w.ignite.radius;
+    z.dps = w.ignite.dps;
   }
   if (w.impactZone) addZone(b, w.impactZone.zone, u.side, p.x1, p.y1, w.impactZone.duration, u);
 }

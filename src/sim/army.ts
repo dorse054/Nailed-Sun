@@ -265,6 +265,7 @@ export function createUnit(id: number, def: UnitDef, side: Side, spec: UnitSpec,
     special: {},
     kills: 0,
     damageDealt: 0,
+    valueDealt: 0,
     damageTaken: 0,
     isGeneral: def.character?.kind === 'lord',
     embarkedOn: null,
@@ -323,6 +324,11 @@ export function createUnit(id: number, def: UnitDef, side: Side, spec: UnitSpec,
       flankTick: -999,
       flankKind: 0,
       ambush: true,
+      attackers: 0,
+      hotUntil: -1,
+      hotX: 0,
+      hotY: 0,
+      hotR: 0,
     };
     u.soldiers.push(s);
     u.hpStart += hp;
@@ -338,6 +344,25 @@ export function createUnit(id: number, def: UnitDef, side: Side, spec: UnitSpec,
   layoutSlots(u);
   placeInFormation(u);
   return u;
+}
+
+/**
+ * Share of a unit's starting hit points still standing, 0..1. Old Midnight's
+ * elk team counts as part of it.
+ */
+export function unitHpShare(u: Unit): number {
+  let now = 0;
+  let max = 0;
+  for (const s of u.soldiers) {
+    max += s.maxHp;
+    if (s.alive) now += Math.max(0, s.hp);
+  }
+  const elk = u.special.elkMax;
+  if (elk) {
+    max += elk;
+    now += Math.max(0, u.special.elkHp ?? 0);
+  }
+  return max > 0 ? now / max : 0;
 }
 
 export function placeInFormation(u: Unit): void {
