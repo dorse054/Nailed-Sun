@@ -3,13 +3,19 @@ import './app/styles.css';
 import './app/screens.css';
 import './app/campaign/campaign.css';
 import { App } from './app/App';
+import { Guard } from './app/Guard';
 import { go } from './app/store';
 import { demoBattle, quickBattle } from './app/quick';
 import { active, resumeCampaign, startCampaign } from './app/campaign/session';
 import type { FactionId } from './data/schema';
 import type { CampaignState } from './campaign/types';
 
-render(<App />, document.getElementById('app')!);
+render(
+  <Guard>
+    <App />
+  </Guard>,
+  document.getElementById('app')!,
+);
 
 // When the published page is updated, a running campaign carries over.
 interface Hot {

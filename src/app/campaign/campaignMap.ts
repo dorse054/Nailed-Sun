@@ -92,9 +92,30 @@ export class CampaignMap {
     return [(x - this.x) * this.zoom + this.W / 2, (y - this.y) * this.zoom + this.H / 2];
   }
 
+  /**
+   * Banners glide to their new spots instead of jumping, so marches read
+   * as movement. `dt` is seconds since the last frame (0 snaps).
+   */
+  private glide(s: CampaignState, dt: number): void {
+    this.layoutArmies(s, this.targets);
+    for (const id of [...this.positions.keys()]) if (!this.targets.has(id)) this.positions.delete(id);
+    const k = dt <= 0 ? 1 : Math.min(1, dt * 5);
+    for (const [id, t] of this.targets) {
+      const p = this.positions.get(id);
+      if (!p) this.positions.set(id, [t[0], t[1]]);
+      else {
+        p[0] += (t[0] - p[0]) * k;
+        p[1] += (t[1] - p[1]) * k;
+      }
+    }
+  }
+
+  private targets = new Map<string, P>();
+  private lastT = -1;
+
   /** Banner spots: armies stand beside their region's settlement. */
-  layoutArmies(s: CampaignState): void {
-    this.positions.clear();
+  layoutArmies(s: CampaignState, into: Map<string, P> = this.positions): void {
+    into.clear();
     const by = new Map<string, ArmyState[]>();
     for (const a of s.armies) {
       const l = by.get(a.region) ?? [];
@@ -110,7 +131,7 @@ export class CampaignMap {
       list.forEach((a, i) => {
         const ang = -0.6 + i * 0.9;
         const d = i === 0 ? 0 : 26;
-        this.positions.set(a.id, [bx + Math.cos(ang) * d, byy + Math.sin(ang) * d]);
+        into.set(a.id, [bx + Math.cos(ang) * d, byy + Math.sin(ang) * d]);
       });
     }
   }
@@ -144,7 +165,8 @@ export class CampaignMap {
       this.base = bakeBase(s);
       this.baseKey = key;
     }
-    this.layoutArmies(s);
+    this.glide(s, this.lastT < 0 ? 0 : Math.min(0.1, t - this.lastT));
+    this.lastT = t;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.fillStyle = '#07060d';
     ctx.fillRect(0, 0, this.W, this.H);
