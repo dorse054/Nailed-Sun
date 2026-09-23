@@ -1,4 +1,4 @@
-import { useRef, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { saveSettings, settings } from "../store";
 import { audio } from "../../audio/audio";
 import {
@@ -37,6 +37,16 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const set = (patch: Partial<typeof s>) => saveSettings({ ...s, ...patch });
   void findClaude();
   const claude = claudeStatus.value;
+  // Escape closes the panel.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      e.preventDefault();
+      onClose();
+    };
+    addEventListener("keydown", onKey);
+    return () => removeEventListener("keydown", onKey);
+  }, [onClose]);
   return (
     <div class="modal-veil" onClick={onClose}>
       <div

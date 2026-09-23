@@ -1,4 +1,5 @@
-import { screen } from './store';
+import { useEffect } from 'preact/hooks';
+import { go, screen } from './store';
 import { MainMenu } from './screens/MainMenu';
 import { BattleScreen } from './screens/BattleScreen';
 import { CustomBattle } from './screens/CustomBattle';
@@ -11,7 +12,26 @@ import { TutorialsScreen } from './tutorial/TutorialsScreen';
 import { Chronicles } from './screens/Chronicles';
 import { Legends } from './screens/Legends';
 
+/** Screens that Escape leaves for the main menu, as their ← Menu button does. */
+const BACK_TO_MENU = new Set<string>(['custom', 'tutorials', 'chronicles', 'legends', 'lab']);
+
+function onEscape(e: KeyboardEvent): void {
+  if (e.key !== 'Escape' || e.defaultPrevented || e.repeat || !BACK_TO_MENU.has(screen.value.name)) return;
+  // In a text box, Escape only leaves the box.
+  const t = e.target;
+  if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement) {
+    t.blur();
+    return;
+  }
+  if (document.querySelector('[role="dialog"]')) return;
+  go({ name: 'menu' });
+}
+
 export function App() {
+  useEffect(() => {
+    addEventListener('keydown', onEscape);
+    return () => removeEventListener('keydown', onEscape);
+  }, []);
   const s = screen.value;
   switch (s.name) {
     case 'menu':
