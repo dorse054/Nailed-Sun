@@ -260,6 +260,13 @@ button {
   color: var(--muted);
   font-size: 13px;
 }
+/* New players: the tutorials are the way in. */
+.menu-item.fresh {
+  border-color: color-mix(in srgb, var(--gold) 55%, transparent);
+}
+.menu-item.fresh span {
+  color: var(--gold);
+}
 .menu-foot {
   position: absolute;
   left: max(16px, 6vw);

@@ -4,6 +4,8 @@ import { go } from '../store';
 import { TAGLINE } from '../../data/lore';
 import { audio } from '../../audio/audio';
 import { quickBattle, demoBattle } from '../quick';
+import { completedTutorials } from '../tutorial/progress';
+import { savedCampaign } from '../campaign/session';
 
 /**
  * The stopped sun: a horizon of eternal sunset with long, still shadows.
@@ -131,6 +133,8 @@ function Backdrop() {
 
 export function MainMenu() {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // New players (no tutorial finished, no campaign begun) are pointed at the tutorials.
+  const fresh = completedTutorials().size === 0 && !savedCampaign();
   const click = (f: () => void) => () => {
     audio.unlock();
     audio.ui('click');
@@ -155,13 +159,13 @@ export function MainMenu() {
             <b>Quick Battle</b>
             <span>A random fight, right now</span>
           </button>
-          <button class="menu-item" onClick={click(() => go({ name: 'tutorials' }))}>
+          <button class={`menu-item ${fresh ? 'fresh' : ''}`} onClick={click(() => go({ name: 'tutorials' }))}>
             <b>Tutorials</b>
-            <span>One core idea per faction</span>
+            <span>{fresh ? 'New here? Start here' : 'One core idea per faction'}</span>
           </button>
           <button class="menu-item" onClick={click(() => go({ name: 'codex' }))}>
             <b>Codex</b>
-            <span>The world and every unit</span>
+            <span>How to play, the world and every unit</span>
           </button>
           {import.meta.env.VITE_LAB !== 'off' && (
             <button class="menu-item" onClick={click(() => go({ name: 'lab' }))}>
