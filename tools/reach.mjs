@@ -32,6 +32,9 @@ function check() {
     if (r.width === 0 || r.height === 0) continue;
     const cs = getComputedStyle(el);
     if (cs.visibility === 'hidden' || cs.pointerEvents === 'none' || veiled(el)) continue;
+    // Folded away inside a closed <details> (its summary still counts).
+    const folded = el.closest('details:not([open])');
+    if (folded && !el.closest('summary')) continue;
     const name = `${el.tagName} "${(el.textContent || el.getAttribute('aria-label') || '').trim().slice(0, 30)}"`;
     const off = r.bottom > vh + 1 || r.right > vw + 1 || r.top < -1 || r.left < -1;
     const sc = scroller(el);
