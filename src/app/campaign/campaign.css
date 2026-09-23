@@ -937,3 +937,17 @@
     grid-row: 2;
   }
 }
+
+.camp-tip {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none;
+  padding: 5px 9px;
+  display: grid;
+  gap: 1px;
+  max-width: 280px;
+  font-size: 13px;
+}
+.camp-tip small {
+  color: var(--muted);
+}

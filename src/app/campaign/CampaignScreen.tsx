@@ -10,6 +10,9 @@ import { ArmyPanel } from './ArmyPanel';
 import { Prompts } from './Prompts';
 import { FactionPanel } from './FactionPanel';
 import { audio } from '../../audio/audio';
+import { factionDef } from '../../data/index';
+import { BANDS } from '../../data/rules';
+import { regionBand } from '../../campaign/rules';
 
 /**
  * The campaign map: pan by dragging, zoom with the wheel or a pinch, click
@@ -17,6 +20,7 @@ import { audio } from '../../audio/audio';
  */
 export function CampaignScreen({ session }: { session: CampaignSession }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  const tipRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<CampaignMap | null>(null);
   const v = session.version.value;
   void v;
@@ -126,6 +130,7 @@ export function CampaignScreen({ session }: { session: CampaignSession }) {
         session.previewPath(hit.region);
       }
       session.hoverArmy = hit.army;
+      showTip(tipRef.current, session, hit, p.x, p.y);
       c.style.cursor = hit.army ? 'pointer' : session.selArmy.value && hit.region ? 'crosshair' : 'default';
     };
     const up = (e: PointerEvent) => {
@@ -222,6 +227,7 @@ export function CampaignScreen({ session }: { session: CampaignSession }) {
   return (
     <div class="screen campaign">
       <canvas ref={ref} class="campaign-map" aria-label="Campaign map" />
+      <div ref={tipRef} class="camp-tip panel" aria-hidden="true" hidden />
       <TopBar session={session} />
       {(selArmy || selRegion) && (
         <aside class="camp-side panel scroll">
@@ -258,4 +264,42 @@ function cycleArmy(session: CampaignSession, map: CampaignMap): void {
   session.selectArmy(next.id);
   const r = regionDef(next.region);
   map.centerOn(r.x, r.y);
+}
+
+/** A light tooltip under the pointer: the region, its owner and light, or an army. */
+function showTip(el: HTMLDivElement | null, session: CampaignSession, hit: { army: string | null; region: string | null }, x: number, y: number): void {
+  if (!el) return;
+  const s = session.s;
+  if (session.prompt.value || (!hit.region && !hit.army) || window.matchMedia('(pointer: coarse)').matches) {
+    el.hidden = true;
+    return;
+  }
+  let title = '';
+  let sub = '';
+  if (hit.army) {
+    const a = armyById(s, hit.army);
+    if (!a) {
+      el.hidden = true;
+      return;
+    }
+    title = a.name;
+    sub = `${factionDef(a.faction).short} · ${a.lord.name} · ${a.units.length} units`;
+  } else if (hit.region) {
+    const def = regionDef(hit.region);
+    const st = s.regions[hit.region]!;
+    const owner = st.owner === 'free' ? (def.settlement ? 'Free' : 'Unclaimed') : factionDef(st.owner).short;
+    title = def.settlement ? `${def.settlement} · ${def.name}` : def.name;
+    sub = `${owner} · ${BANDS[regionBand(s, hit.region)].name.replace('The ', '')}${def.galeRoad ? ' · Gale Road' : ''}`;
+    const reach = session.reach();
+    if (reach && reach[hit.region] !== undefined && session.selArmy.value) sub += ' · in reach';
+  }
+  el.innerHTML = '';
+  const b = document.createElement('b');
+  b.textContent = title;
+  const small = document.createElement('small');
+  small.textContent = sub;
+  el.append(b, small);
+  el.style.left = `${x + 16}px`;
+  el.style.top = `${y + 14}px`;
+  el.hidden = false;
 }
