@@ -163,21 +163,23 @@ export function MainMenu() {
             <b>Codex</b>
             <span>The world and every unit</span>
           </button>
-          <button class="menu-item" onClick={click(() => go({ name: 'lab' }))}>
-            <b>Balance Lab</b>
-            <span>Run the balance simulator</span>
-          </button>
+          {import.meta.env.VITE_LAB !== 'off' && (
+            <button class="menu-item" onClick={click(() => go({ name: 'lab' }))}>
+              <b>Balance Lab</b>
+              <span>Run the balance simulator</span>
+            </button>
+          )}
           <button class="menu-item" onClick={click(() => demoBattle())}>
             <b>Watch a Battle</b>
             <span>Two scripted generals</span>
           </button>
           <button class="menu-item" onClick={click(() => setSettingsOpen(true))}>
             <b>Settings</b>
-            <span>Sound and unit size</span>
+            <span>Sound, unit size and AI</span>
           </button>
         </div>
       </div>
-      <div class="menu-foot">A Total War-style strategy prototype. Deterministic 20-tick battles; every battle can be replayed exactly.</div>
+      <div class="menu-foot">A strategy prototype: a turn-based campaign and real-time battles under a sun that never moves. Every battle can be replayed exactly.</div>
       {settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
     </div>
   );
