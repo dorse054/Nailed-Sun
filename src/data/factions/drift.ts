@@ -77,7 +77,7 @@ const units: UnitDef[] = [
     roleLabel: 'Heavy infantry',
     category: 'infantry',
     tier: 2,
-    cost: 700,
+    cost: 650,
     soldiers: 90,
     hp: 96,
     armor: 58,

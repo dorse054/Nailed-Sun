@@ -73,7 +73,7 @@ const units: UnitDef[] = [
     roleLabel: 'Anti-large pikes',
     category: 'infantry',
     tier: 2,
-    cost: 650,
+    cost: 700,
     soldiers: 100,
     hp: 80,
     armor: 48,

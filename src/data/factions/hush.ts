@@ -79,7 +79,7 @@ const units: UnitDef[] = [
     roleLabel: 'Elite stealth shock infantry',
     category: 'infantry',
     tier: 3,
-    cost: 850,
+    cost: 750,
     soldiers: 70,
     hp: 96,
     armor: 38,
@@ -594,11 +594,11 @@ export const HUSH: FactionDef = {
   },
   palette: { primary: '#23204a', secondary: '#e6eef5', metal: '#9aa8c8', glow: '#4ff0e0', dark: '#0b0a18', text: '#e8f1f8' },
   traits: [
-    { id: 'nightbornDark', name: 'Nightborn', desc: '+10% melee attack and defense in Dim and Dark.', when: { lightMax: 1 }, mods: { maPct: 10, mdPct: 10 } },
+    { id: 'nightbornDark', name: 'Nightborn', desc: '+15% melee attack and defense in Dim and Dark.', when: { lightMax: 1 }, mods: { maPct: 15, mdPct: 15 } },
     { id: 'nightbornBright', name: 'Nightborn', desc: '-10% melee attack and defense in Bright and Blaze.', when: { lightMin: 3 }, mods: { maPct: -10, mdPct: -10 } },
   ],
   traitText: [
-    { name: 'Nightborn', desc: '+10% melee attack and defense in Dim and Dark; -10% in Bright and Blaze.' },
+    { name: 'Nightborn', desc: '+15% melee attack and defense in Dim and Dark; -10% in Bright and Blaze.' },
     { name: 'Silent Charge', desc: 'A charge from stealth causes fear: -15% leadership on the target for 10 s.' },
     { name: "Hunter's Cold", desc: 'Many Hush attacks deal cold damage and apply Chill (-20% speed and attack speed for 8 s).' },
   ],

@@ -15,7 +15,7 @@ const units: UnitDef[] = [
     roleLabel: 'Spear militia',
     category: 'infantry',
     tier: 1,
-    cost: 500,
+    cost: 550,
     soldiers: 100,
     hp: 72,
     armor: 30,
