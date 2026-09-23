@@ -70,6 +70,24 @@ export class CampaignSession {
   bump(): void {
     this.vis = null;
     this.version.value++;
+    this.autosave();
+  }
+
+  /** Battles under way on the player's own Toll: nothing is saved until they are decided. */
+  private battling = 0;
+  private saveTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /**
+   * Save shortly after the player's moves, orders and battles, so a reload
+   * loses nothing decided. Never mid-battle (a reload then returns to before
+   * the march) and never while the other factions move (End Toll saves).
+   */
+  private autosave(): void {
+    if (this.saveTimer) clearTimeout(this.saveTimer);
+    this.saveTimer = setTimeout(() => {
+      this.saveTimer = null;
+      if (!this.busy.value && !this.battling && active === this) this.save();
+    }, 400);
   }
 
   visibility(): { regions: Set<string>; armies: Set<string> } {
@@ -321,8 +339,15 @@ export class CampaignSession {
   }
 
   private async fightThrough(pbs: PendingBattle[], attacking: boolean): Promise<void> {
-    const reports = await resolveBattles(this.s, pbs, this.hooks(attacking));
-    this.afterBattles(reports);
+    this.battling++;
+    try {
+      const reports = await resolveBattles(this.s, pbs, this.hooks(attacking));
+      this.battling--;
+      this.afterBattles(reports);
+    } catch (e) {
+      this.battling--;
+      throw e;
+    }
   }
 
   private afterBattles(reports: BattleReport[]): void {
