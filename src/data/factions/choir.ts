@@ -136,7 +136,7 @@ const units: UnitDef[] = [
     roleLabel: 'Archers',
     category: 'infantry',
     tier: 1,
-    cost: 550,
+    cost: 600,
     soldiers: 80,
     hp: 62,
     armor: 14,
