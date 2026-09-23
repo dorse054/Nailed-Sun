@@ -1467,6 +1467,9 @@ button {
   }
   .cx-sec > h2 {
     font-size: 25px;
+  }
+}
+
 /* Balance Lab */
 .lab-screen {
   background: var(--ink);
