@@ -110,15 +110,21 @@ export class CampaignMap {
     this.layoutArmies(s, this.targets);
     for (const id of [...this.positions.keys()]) if (!this.targets.has(id)) this.positions.delete(id);
     const k = dt <= 0 ? 1 : Math.min(1, dt * 5);
+    let far = 0;
     for (const [id, t] of this.targets) {
       const p = this.positions.get(id);
       if (!p) this.positions.set(id, [t[0], t[1]]);
       else {
+        far = Math.max(far, Math.abs(t[0] - p[0]), Math.abs(t[1] - p[1]));
         p[0] += (t[0] - p[0]) * k;
         p[1] += (t[1] - p[1]) * k;
       }
     }
+    this.moving = far > 0.3;
   }
+
+  /** Banners still gliding to their spots: keep drawing at full rate. */
+  moving = false;
 
   private targets = new Map<string, P>();
   private lastT = -1;

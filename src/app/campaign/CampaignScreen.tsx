@@ -75,6 +75,10 @@ export function CampaignScreen({ session }: { session: CampaignSession }) {
     };
     let cachedView: MapView | null = null;
     let viewVersion = -1;
+    // An unchanging map redraws at about 10 fps instead of 60, to spare phone batteries.
+    let lastChange = 0;
+    let lastDraw = 0;
+    let lastKey = '';
     const frame = (now: number) => {
       if (viewVersion !== session.version.value || !cachedView) {
         cachedView = view();
@@ -83,7 +87,15 @@ export function CampaignScreen({ session }: { session: CampaignSession }) {
       cachedView.hover = session.hover;
       cachedView.hoverArmy = session.hoverArmy;
       cachedView.path = session.path;
-      map.render(session.s, cachedView, now / 1000);
+      const key = `${map.x.toFixed(1)},${map.y.toFixed(1)},${map.zoom.toFixed(4)},${map.W},${map.H},${viewVersion},${session.hover},${session.hoverArmy},${session.path?.join() ?? ''}`;
+      if (key !== lastKey) {
+        lastKey = key;
+        lastChange = now;
+      }
+      if (map.moving || now - lastChange < 2000 || now - lastDraw > 100) {
+        lastDraw = now;
+        map.render(session.s, cachedView, now / 1000);
+      }
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);

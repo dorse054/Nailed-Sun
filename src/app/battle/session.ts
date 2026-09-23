@@ -59,6 +59,10 @@ export class BattleSession {
   private touches = new Map<number, { x: number; y: number }>();
   private pinch: { d: number; zoom: number; cx: number; cy: number; camX: number; camY: number } | null = null;
   private lastClick = { t: 0, unit: -1 };
+  /** When the player last touched anything, for idle frame skipping. */
+  private lastInput = 0;
+  private lastDraw = 0;
+  private lastCam = '';
   private disposed = false;
   private readonly canvas: HTMLCanvasElement;
   readonly req: BattleRequest;
@@ -158,7 +162,20 @@ export class BattleSession {
     }
     this.panCamera(dt);
     const alpha = this.phase === 'battle' && !this.paused ? Math.min(1, this.acc / DT) : 1;
-    this.renderer.frame(alpha, this.paused ? 0 : dt * (this.phase === 'battle' ? this.speed : 1), this.overlay);
+    // A still scene (paused, deploying, over) with no input and no camera
+    // movement redraws at about 15 fps instead of 60: phones keep their battery.
+    const cam = this.renderer.camera;
+    const camKey = `${cam.x.toFixed(2)},${cam.y.toFixed(2)},${cam.zoom.toFixed(4)},${cam.width},${cam.height}`;
+    if (camKey !== this.lastCam) {
+      this.lastCam = camKey;
+      this.lastInput = now;
+    }
+    const still = this.phase !== 'battle' || this.paused;
+    const idle = still && now - this.lastInput > 1500 && this.overlay.pings.length === 0 && this.keys.size === 0;
+    if (!idle || now - this.lastDraw > 66) {
+      this.lastDraw = now;
+      this.renderer.frame(alpha, this.paused ? 0 : dt * (this.phase === 'battle' ? this.speed : 1), this.overlay);
+    }
     if (now - this.lastHud > 150) {
       this.lastHud = now;
       this.hud.value++;
@@ -196,6 +213,7 @@ export class BattleSession {
   }
 
   select(ids: number[], add = false): void {
+    this.lastInput = performance.now();
     if (!add) this.overlay.selected.clear();
     for (const id of ids) {
       const u = this.battle.units[id];
@@ -348,12 +366,14 @@ export class BattleSession {
   }
 
   private onWheel = (e: WheelEvent): void => {
+    this.lastInput = performance.now();
     e.preventDefault();
     const p = this.local(e);
     this.renderer.camera.zoomAt(p.x, p.y, Math.exp(-e.deltaY * 0.0015));
   };
 
   private onDown = (e: PointerEvent): void => {
+    this.lastInput = performance.now();
     const p = this.local(e);
     if (e.pointerType === 'touch') {
       this.touches.set(e.pointerId, p);
@@ -384,6 +404,7 @@ export class BattleSession {
   };
 
   private onMove = (e: PointerEvent): void => {
+    this.lastInput = performance.now();
     const p = this.local(e);
     this.hoverScreen = p;
     if (e.pointerType === 'touch' && this.touches.has(e.pointerId)) {
@@ -443,6 +464,7 @@ export class BattleSession {
   };
 
   private onUp = (e: PointerEvent): void => {
+    this.lastInput = performance.now();
     const p = this.local(e);
     if (e.pointerType === 'touch') {
       this.touches.delete(e.pointerId);
@@ -636,6 +658,7 @@ export class BattleSession {
   }
 
   private onKey = (e: KeyboardEvent): void => {
+    this.lastInput = performance.now();
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
     this.keys.add(e.code);
     const units = this.selectedUnits();
@@ -703,6 +726,7 @@ export class BattleSession {
   };
 
   private onKeyUp = (e: KeyboardEvent): void => {
+    this.lastInput = performance.now();
     this.keys.delete(e.code);
   };
 }
