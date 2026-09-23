@@ -4,6 +4,7 @@ import { BattleScreen } from './screens/BattleScreen';
 import { CustomBattle } from './screens/CustomBattle';
 import { Results } from './screens/Results';
 import { Placeholder } from './screens/Placeholder';
+import { Codex } from './screens/Codex';
 
 export function App() {
   const s = screen.value;
@@ -17,7 +18,7 @@ export function App() {
     case 'results':
       return <Results req={s.req} result={s.result} log={s.log} setup={s.setup} />;
     case 'codex':
-      return <Placeholder name="Codex" />;
+      return <Codex page={s.page} />;
     case 'lab':
       return <Placeholder name="Balance Lab" />;
     default:
