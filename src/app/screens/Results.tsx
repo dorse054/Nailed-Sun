@@ -1,6 +1,7 @@
 import type { BattleRequest } from '../store';
 import { go } from '../store';
 import type { BattleResult, BattleSetup, SideSummary, TimedCommand } from '../../sim/types';
+import { LANDMARKS } from '../../campaign/regions';
 import { factionDef, unitDef } from '../../data/index';
 import { UnitIcon } from '../../ui/UnitIcon';
 import { signal } from '@preact/signals';
@@ -25,6 +26,15 @@ const STATE_LABEL: Record<string, string> = {
   fled: 'Fled',
   embarked: 'Aboard',
 };
+
+/** Where a battle was fought, if at a landmark, as it reads mid-sentence. */
+function placeName(map: BattleSetup['map']): string | null {
+  const lm = map.landmark;
+  if (!lm) return null;
+  if (lm === 'candle') return map.glow ? 'a lit Candle' : 'a dead Candle';
+  if (lm === 'umbralVale') return 'an Umbral Vale';
+  return LANDMARKS[lm].name.replace(/^The /, 'the ');
+}
 
 export function Results({ req, result, log, setup }: { req: BattleRequest; result: BattleResult; log: TimedCommand[]; setup: BattleSetup }) {
   const me = req.playerSide;
@@ -58,7 +68,8 @@ export function Results({ req, result, log, setup }: { req: BattleRequest; resul
         <div class="panel results-hero">
           <h1 style={{ color: won ? 'var(--gold)' : draw ? 'var(--text)' : 'var(--bad)' }}>{draw ? 'Stalemate' : won ? 'Victory' : 'Defeat'}</h1>
           <div class="muted">
-            {factionDef(mine.faction).name} against {factionDef(theirs.faction).name} · {fmt(result.time)} · {result.reason === 'rout' ? 'decided by rout' : result.reason === 'timeout' ? 'time ran out' : result.reason === 'capture' ? 'the settlement fell' : 'the field was conceded'}
+            {factionDef(mine.faction).name} against {factionDef(theirs.faction).name}
+            {placeName(setup.map) ? ` at ${placeName(setup.map)}` : ''} · {fmt(result.time)} · {result.reason === 'rout' ? 'decided by rout' : result.reason === 'timeout' ? 'time ran out' : result.reason === 'capture' ? 'the settlement fell' : 'the field was conceded'}
           </div>
           {mvp && mvp.kills > 0 && (
             <div>
