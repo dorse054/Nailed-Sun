@@ -565,3 +565,52 @@
   margin: 12px auto 0;
   text-align: center;
 }
+
+/* The battle report's strength chart. */
+.strength-chart {
+  margin: 0;
+  display: grid;
+  gap: 4px;
+}
+.strength-chart figcaption {
+  font-size: 12.5px;
+}
+.strength-chart svg {
+  width: 100%;
+  height: 110px;
+  display: block;
+}
+.strength-chart polyline {
+  fill: none;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+}
+.strength-chart .mine {
+  stroke: var(--team-0);
+}
+.strength-chart .theirs {
+  stroke: var(--team-1);
+}
+.strength-chart .grid {
+  stroke: var(--line);
+  stroke-dasharray: 3 4;
+  vector-effect: non-scaling-stroke;
+}
+.strength-chart .tick {
+  stroke: var(--faint);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+.strength-chart .tick.mine {
+  stroke: color-mix(in srgb, var(--team-0) 70%, transparent);
+}
+.strength-chart .tick.theirs {
+  stroke: color-mix(in srgb, var(--team-1) 70%, transparent);
+}
+.strength-chart figcaption .mine {
+  color: var(--team-0);
+}
+.strength-chart figcaption .theirs {
+  color: var(--team-1);
+}

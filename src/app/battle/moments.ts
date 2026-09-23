@@ -29,6 +29,8 @@ export function unitName(u: Unit): string {
 
 export class MomentLog {
   readonly list: Moment[] = [];
+  /** Each side's remaining strength (0..1) every two seconds: [time, side 0, side 1]. */
+  readonly strength: [number, number, number][] = [];
   private met = false;
   private routed = new Set<number>();
   private told = new Set<string>();
@@ -56,6 +58,7 @@ export class MomentLog {
 
   consume(ev: SimEvent[]): void {
     const b = this.battle;
+    if (b.tick % 40 === 0 || !this.strength.length) this.strength.push([Math.round(b.time), round3(b.remainingValue(0)), round3(b.remainingValue(1))]);
     if (!this.met && b.units.some((u) => u.state === 'ready' && u.engaged > 0 && u.def.category !== 'flyer')) {
       this.met = true;
       this.add('The lines met.');
@@ -111,6 +114,8 @@ export class MomentLog {
     }
   }
 }
+
+const round3 = (x: number) => Math.round(x * 1000) / 1000;
 
 /** "2:05" */
 export function clock(t: number): string {

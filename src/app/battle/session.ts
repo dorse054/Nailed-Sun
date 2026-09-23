@@ -267,6 +267,13 @@ export class BattleSession {
   get moments(): Moment[] {
     return this.momentLog?.list ?? [];
   }
+  /** Each side's strength through the battle, for the report's chart. */
+  get strength(): [number, number, number][] {
+    const b = this.battle;
+    const s = this.momentLog?.strength ?? [];
+    // Close the line at the end.
+    return b.over ? [...s, [Math.round(b.time), b.remainingValue(0), b.remainingValue(1)]] : s;
+  }
 
   /** The scripted general playing each side, where one does. */
   private ais: [BattleAI | null, BattleAI | null] = [null, null];

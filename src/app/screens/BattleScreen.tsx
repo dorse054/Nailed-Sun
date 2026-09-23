@@ -805,7 +805,7 @@ function EndOverlay({ s }: { s: BattleSession }) {
   const legend = s.req.legend ? legendById(s.req.legend) : undefined;
   const done = () => {
     if (s.req.onDone) s.req.onDone(r, s.battle.log, s.req.setup, s.moments);
-    else go({ name: 'results', req: s.req, result: r, log: s.battle.log, setup: s.req.setup, moments: s.moments });
+    else go({ name: 'results', req: s.req, result: r, log: s.battle.log, setup: s.req.setup, moments: s.moments, strength: s.strength });
   };
   return (
     <div class="modal-veil">

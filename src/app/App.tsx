@@ -21,7 +21,7 @@ export function App() {
     case 'battle':
       return <BattleScreen key={JSON.stringify(s.req.setup.seed) + s.req.mode} req={s.req} />;
     case 'results':
-      return <Results req={s.req} result={s.result} log={s.log} setup={s.setup} moments={s.moments} />;
+      return <Results req={s.req} result={s.result} log={s.log} setup={s.setup} moments={s.moments} strength={s.strength} />;
     case 'codex':
       return <Codex page={s.page} />;
     case 'campaign':

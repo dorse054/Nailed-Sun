@@ -31,7 +31,7 @@ export type Screen =
   | { name: 'menu' }
   | { name: 'custom' }
   | { name: 'battle'; req: BattleRequest }
-  | { name: 'results'; req: BattleRequest; result: BattleResult; log: TimedCommand[]; setup: BattleSetup; moments?: Moment[] }
+  | { name: 'results'; req: BattleRequest; result: BattleResult; log: TimedCommand[]; setup: BattleSetup; moments?: Moment[]; strength?: [number, number, number][] }
   | { name: 'codex'; page?: string }
   | { name: 'lab' }
   | { name: 'campaign' }
