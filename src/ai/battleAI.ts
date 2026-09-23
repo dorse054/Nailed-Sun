@@ -33,6 +33,13 @@ interface Memory {
 }
 
 /** The doc's counters table, for choosing melee targets. */
+/**
+ * How far out from the gate a siege gathers: beyond the reach of the gate's towers (they
+ * stand at the ends of its ~105 m wall and shoot out to 150 m), so the line forms up
+ * unhurt and then crosses the killing ground once, together.
+ */
+const SIEGE_STAGE = 165;
+
 const BEATS: Partial<Record<Role, Role[]>> = {
   line: ['antiLarge', 'shockCav'],
   antiLarge: ['shockCav', 'monster', 'colossus', 'missileCav'],
@@ -195,8 +202,9 @@ export class BattleAI implements Controller {
     const myR = ranged(mine) / Math.max(1, total(mine));
     const foeR = ranged(foes) / Math.max(1, total(foes));
     const f = b.sides[side].faction;
-    // Let the side with the better missiles hold; the Hush wait in the dark; the Drift strike.
-    if (f === 'drift') this.stance = 'attack';
+    // Let the side with the better missiles hold; the Hush wait in the dark; the Drift strike
+    // with a gale at their backs (and otherwise hold like anyone when their missiles are better).
+    if (f === 'drift') this.stance = b.terrain.wind >= 2 || myR <= foeR + 0.08 ? 'attack' : 'defend';
     else if (f === 'hush') this.stance = b.terrain.light <= 1 || foeR > myR ? 'defend' : 'attack';
     else if (myR > foeR + 0.08) this.stance = 'defend';
     else this.stance = 'attack';
@@ -368,7 +376,7 @@ export class BattleAI implements Controller {
     const s = this.siege;
     if (s.phase === 'gather') {
       const line = mine.filter((u) => this.memory(u).group === 'line');
-      const stage = { x: s.x + s.nx * 70, y: s.y + s.ny * 70 };
+      const stage = { x: s.x + s.nx * SIEGE_STAGE, y: s.y + s.ny * SIEGE_STAGE };
       const there = line.filter((u) => this.dist(u, stage) < 70).length;
       if (walls[s.wall]!.broken || !line.length || there >= line.length * 0.7 || b.time - s.since > 100) s.phase = 'assault';
     }
@@ -417,7 +425,7 @@ export class BattleAI implements Controller {
           this.order(b, side, u, { type: 'attack', unit: u.id, target: sally.id, run: true });
           return true;
         }
-        const p = at(70, lateral(line, 34));
+        const p = at(SIEGE_STAGE, lateral(line, 34));
         if (this.dist(u, p) > 10) this.moveTo(b, side, u, p.x, p.y, face, false);
         else if (u.order.kind !== 'hold') this.order(b, side, u, { type: 'halt', unit: u.id });
         return true;
@@ -450,7 +458,7 @@ export class BattleAI implements Controller {
     if (m.group === 'cavalry' || m.group === 'monster') {
       // Nothing to charge over a wall: wait behind the assault until the gate falls.
       const list = b.units.filter((o) => o.side === side && o.state === 'ready' && (this.memory(o).group === 'cavalry' || this.memory(o).group === 'monster'));
-      const p = at(130, lateral(list, 40));
+      const p = at(SIEGE_STAGE + 20, lateral(list, 40));
       if (this.dist(u, p) > 15) this.moveTo(b, side, u, p.x, p.y, face, false);
       return true;
     }

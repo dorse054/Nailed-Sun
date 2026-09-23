@@ -374,7 +374,7 @@ const colossus: UnitDef = {
   tier: 5,
   cost: 3200,
   soldiers: 1,
-  hp: 13000,
+  hp: 13500,
   armor: 62,
   ma: 55,
   md: 38,

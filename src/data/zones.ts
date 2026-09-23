@@ -8,7 +8,7 @@ export const ZONES: Record<string, ZoneDef> = {
   lantern: {
     id: 'lantern',
     name: 'Lantern light',
-    radius: 32,
+    radius: 26,
     light: { mode: 'floor', level: 2, intensity: 1 },
     visual: 'lantern',
   },

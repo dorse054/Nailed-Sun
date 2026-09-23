@@ -171,7 +171,7 @@ export const SIGNATURE = {
   /** The Umbral Mother's swoop: each soldier under it is struck once. */
   dive: { damage: 30, ap: 12 },
   /** The Dreadsail's ram: damage at 8 m/s (it scales with speed), and how far ahead of the bow it reaches. */
-  rammingRun: { damage: 45, ap: 30, reach: 14 },
+  rammingRun: { damage: 70, ap: 50, reach: 14 },
 };
 
 /** Morale constants. States: Steady, Wavering below 50%, Broken at 0. */

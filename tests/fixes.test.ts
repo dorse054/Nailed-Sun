@@ -355,6 +355,22 @@ describe('fortified battles', () => {
     expect(r.time).toBeLessThan(5);
   });
 
+  it('a siege in which nothing happens for two minutes ends with the attacker withdrawing', () => {
+    const b = makeBattle({
+      timeLimit: 1500,
+      map: FORT,
+      armies: [
+        { faction: 'vesperate', units: [{ def: 'vesperate.hourLevy', x: 300, y: 950 }] },
+        { faction: 'choir', units: [{ def: 'choir.kilnAcolytes', x: 700, y: 500 }] },
+      ],
+    });
+    const r = b.run();
+    expect(r.reason).toBe('withdraw');
+    expect(r.winner).toBe(1);
+    expect(r.time).toBeGreaterThan(VICTORY.siegeStall);
+    expect(r.time).toBeLessThan(VICTORY.siegeStall + 10);
+  });
+
   it('the attacking AI gathers its line at one gate and batters it down', () => {
     const b = makeBattle({
       timeLimit: 600,
