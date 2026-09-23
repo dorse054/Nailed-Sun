@@ -5,7 +5,7 @@
 import type { BandId } from '../data/schema';
 import { LIGHT_RULES } from '../data/rules';
 import { COVER, type Terrain } from '../sim/terrain';
-import { css, fbm, hash2, hex, hexOf, mix, type RGB, vnoise } from './color';
+import { css, fbm, hash2, hex, hexOf, mix, vnoise } from './color';
 
 interface BandArt {
   ground: string;
@@ -238,6 +238,13 @@ function softShadows(t: Terrain): Float32Array {
   return out;
 }
 
+/** Fine grain in the ground, ±3% brightness per pixel: a 256-pixel tile of hash noise, repeated. */
+const GRAIN = (() => {
+  const g = new Float32Array(256 * 256);
+  for (let y = 0; y < 256; y++) for (let x = 0; x < 256; x++) g[(y << 8) | x] = hash2(x, y) * 0.06 - 0.03;
+  return g;
+})();
+
 /** Per-pixel ground: noise, height tint, hillshade and baked shadows. */
 function paintGround(t: Terrain, ctx: CanvasRenderingContext2D, W: number, H: number, S: number, art: BandArt): void {
   const img = ctx.createImageData(W, H);
@@ -292,14 +299,6 @@ function paintGround(t: Terrain, ctx: CanvasRenderingContext2D, W: number, H: nu
       shadeArr[i] = Math.max(0.3, Math.min(1.7, shaped)) * relief + (1 - relief);
     }
   }
-  const soft = (arr: Float32Array | Uint8Array, fx: number, fy: number): number => {
-    const x0 = Math.max(0, Math.min(cols - 2, Math.floor(fx)));
-    const y0 = Math.max(0, Math.min(rows - 2, Math.floor(fy)));
-    const tx = Math.max(0, Math.min(1, fx - x0));
-    const ty = Math.max(0, Math.min(1, fy - y0));
-    const i = y0 * cols + x0;
-    return (arr[i]! * (1 - tx) + arr[i + 1]! * tx) * (1 - ty) + (arr[i + cols]! * (1 - tx) + arr[i + cols + 1]! * tx) * ty;
-  };
   const shadowSoft = softShadows(t);
   // Cover masks sampled bilinearly, so water, forest, field and cliff edges run
   // smooth and irregular instead of following the square gameplay cells.
@@ -340,48 +339,131 @@ function paintGround(t: Terrain, ctx: CanvasRenderingContext2D, W: number, H: nu
     const x = Math.max(0, Math.min(1, (v + jitter - 0.3) / 0.4));
     return x * x * (3 - 2 * x);
   };
+  // This loop paints millions of pixels, so it keeps to plain numbers: the
+  // bilinear weights are worked out once per row and column, colors are mixed
+  // in place, and the ground noise (smooth at this scale) is sampled every
+  // other pixel and blended between.
   const noiseScale = 0.045;
+  const NW = (W >> 1) + 2;
+  const NH = (H >> 1) + 2;
+  const noise = new Float32Array(NW * NH);
+  for (let gy = 0; gy < NH; gy++) {
+    for (let gx = 0; gx < NW; gx++) noise[gy * NW + gx] = fbm(((gx * 2) / S) * noiseScale, ((gy * 2) / S) * noiseScale, 3);
+  }
+  // Per column: the cell, and the bilinear sample's left cell and weight.
+  const colCell = new Int32Array(W);
+  const colX0 = new Int32Array(W);
+  const colTx = new Float32Array(W);
+  for (let px = 0; px < W; px++) {
+    const wx = px / S;
+    const fx = wx / cell - 0.5;
+    colCell[px] = Math.min(cols - 1, Math.floor(wx / cell));
+    const x0 = Math.max(0, Math.min(cols - 2, Math.floor(fx)));
+    colX0[px] = x0;
+    colTx[px] = Math.max(0, Math.min(1, fx - x0));
+  }
+  const [g1r, g1g, g1b] = g1;
+  const [g2r, g2g, g2b] = g2;
+  const [hir, hig, hib] = hi;
+  const [lor, log, lob] = lo;
+  const [fcr, fcg, fcb] = fieldC;
+  const [rhr, rhg, rhb] = mix(rock, hi, 0.3);
+  const [shr, shg, shb] = shallow;
+  const [war, wag, wab] = water;
+  const [sdr, sdg, sdb] = sh;
+  const ambient = art.ambient;
+  const shadowAmt = art.shadowAmt;
   for (let py = 0; py < H; py++) {
     const wy = py / S;
     const fy = wy / cell - 0.5;
+    const rowCell = Math.min(rows - 1, Math.floor(wy / cell)) * cols;
+    const y0 = Math.max(0, Math.min(rows - 2, Math.floor(fy)));
+    const ty = Math.max(0, Math.min(1, fy - y0));
+    const uy = 1 - ty;
+    const rowBase = y0 * cols;
+    const ny0 = (py >> 1) * NW;
+    const nty = (py & 1) * 0.5;
     for (let px = 0; px < W; px++) {
-      const wx = px / S;
-      const fx = wx / cell - 0.5;
-      const ci = Math.min(rows - 1, Math.floor(wy / cell)) * cols + Math.min(cols - 1, Math.floor(wx / cell));
+      const ci = rowCell + colCell[px]!;
       const h = t.heights[ci]!;
-      const n = fbm(wx * noiseScale, wy * noiseScale, 3);
-      const grain = hash2(px, py) * 0.06 - 0.03;
-      let c: RGB = mix(g1, g2, n);
+      // Bilinear sampling corners and weights for this pixel.
+      const i = rowBase + colX0[px]!;
+      const tx = colTx[px]!;
+      const ux = 1 - tx;
+      const w00 = ux * uy;
+      const w10 = tx * uy;
+      const w01 = ux * ty;
+      const w11 = tx * ty;
+      const nx0 = px >> 1;
+      const ntx = (px & 1) * 0.5;
+      const na = noise[ny0 + nx0]! * (1 - ntx) + noise[ny0 + nx0 + 1]! * ntx;
+      const nb = noise[ny0 + NW + nx0]! * (1 - ntx) + noise[ny0 + NW + nx0 + 1]! * ntx;
+      const nz = na * (1 - nty) + nb * nty;
+      const grain = GRAIN[((py & 255) << 8) | (px & 255)]!;
+      let r = g1r + (g2r - g1r) * nz;
+      let g = g1g + (g2g - g1g) * nz;
+      let b = g1b + (g2b - g1b) * nz;
       const hn = (h - hmin) / hr;
-      c = hn > 0.55 ? mix(c, hi, (hn - 0.55) * 1.2) : mix(c, lo, (0.55 - hn) * 0.6);
+      if (hn > 0.55) {
+        const k = (hn - 0.55) * 1.2;
+        r += (hir - r) * k;
+        g += (hig - g) * k;
+        b += (hib - b) * k;
+      } else {
+        const k = (0.55 - hn) * 0.6;
+        r += (lor - r) * k;
+        g += (log - g) * k;
+        b += (lob - b) * k;
+      }
       let wet = 0;
       if (!plain[ci]) {
-        const j = (n - 0.5) * 0.35;
-        const fo = edge(soft(forestM, fx, fy), j);
-        if (fo > 0) c = mix(c, lo, 0.35 * fo);
-        const fi = edge(soft(fieldM, fx, fy), j);
-        if (fi > 0) c = mix(c, fieldC, 0.55 * fi);
-        const cl = edge(soft(cliffM, fx, fy), j);
-        if (cl > 0) c = mix(c, mix(rock, hi, 0.3), cl);
-        wet = edge(soft(wetM, fx, fy), j * 0.6);
+        const j = (nz - 0.5) * 0.35;
+        const fo = edge(forestM[i]! * w00 + forestM[i + 1]! * w10 + forestM[i + cols]! * w01 + forestM[i + cols + 1]! * w11, j);
+        if (fo > 0) {
+          const k = 0.35 * fo;
+          r += (lor - r) * k;
+          g += (log - g) * k;
+          b += (lob - b) * k;
+        }
+        const fi = edge(fieldM[i]! * w00 + fieldM[i + 1]! * w10 + fieldM[i + cols]! * w01 + fieldM[i + cols + 1]! * w11, j);
+        if (fi > 0) {
+          const k = 0.55 * fi;
+          r += (fcr - r) * k;
+          g += (fcg - g) * k;
+          b += (fcb - b) * k;
+        }
+        const cl = edge(cliffM[i]! * w00 + cliffM[i + 1]! * w10 + cliffM[i + cols]! * w01 + cliffM[i + cols + 1]! * w11, j);
+        if (cl > 0) {
+          r += (rhr - r) * cl;
+          g += (rhg - g) * cl;
+          b += (rhb - b) * cl;
+        }
+        wet = edge(wetM[i]! * w00 + wetM[i + 1]! * w10 + wetM[i + cols]! * w01 + wetM[i + cols + 1]! * w11, j * 0.6);
         if (wet > 0) {
-          c = mix(c, mix(shallow, c, 0.15), wet);
-          const dp = edge(soft(deepM, fx, fy), j * 0.6);
-          if (dp > 0) c = mix(c, water, dp);
+          // Toward the shallows' color, keeping a little of the ground's own.
+          r += (shr * 0.85 + r * 0.15 - r) * wet;
+          g += (shg * 0.85 + g * 0.15 - g) * wet;
+          b += (shb * 0.85 + b * 0.15 - b) * wet;
+          const dp = edge(deepM[i]! * w00 + deepM[i + 1]! * w10 + deepM[i + cols]! * w01 + deepM[i + cols + 1]! * w11, j * 0.6);
+          if (dp > 0) {
+            r += (war - r) * dp;
+            g += (wag - g) * dp;
+            b += (wab - b) * dp;
+          }
         }
       }
-      let shade = soft(shadeArr, fx, fy);
+      let shade = shadeArr[i]! * w00 + shadeArr[i + 1]! * w10 + shadeArr[i + cols]! * w01 + shadeArr[i + cols + 1]! * w11;
       if (wet > 0) shade = 1 + (shade - 1) * (1 - 0.7 * wet);
-      const k = art.ambient + (1 - art.ambient) * shade + grain;
-      let r = c[0] * k;
-      let g = c[1] * k;
-      let b = c[2] * k;
-      const s = soft(shadowSoft, fx, fy);
-      if (s > 0.01) {
-        const a = art.shadowAmt * s;
-        r = r * (1 - a) + sh[0] * a * 0.9;
-        g = g * (1 - a) + sh[1] * a * 0.9;
-        b = b * (1 - a) + sh[2] * a * 0.95;
+      const k = ambient + (1 - ambient) * shade + grain;
+      r *= k;
+      g *= k;
+      b *= k;
+      const sv = shadowSoft[i]! * w00 + shadowSoft[i + 1]! * w10 + shadowSoft[i + cols]! * w01 + shadowSoft[i + cols + 1]! * w11;
+      if (sv > 0.01) {
+        const a = shadowAmt * sv;
+        r = r * (1 - a) + sdr * a * 0.9;
+        g = g * (1 - a) + sdg * a * 0.9;
+        b = b * (1 - a) + sdb * a * 0.95;
       }
       const o = (py * W + px) * 4;
       d[o] = r;
