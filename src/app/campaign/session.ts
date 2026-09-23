@@ -259,6 +259,13 @@ export function continueCampaign(): CampaignSession | null {
   return active;
 }
 
+/** Picks up a campaign carried over from before the page was updated. */
+export function resumeCampaign(s: CampaignState): CampaignSession {
+  active = new CampaignSession(s);
+  expose();
+  return active;
+}
+
 export function abandonCampaign(): void {
   active = null;
   remove(SAVE_KEY);

@@ -5,10 +5,29 @@ import './app/campaign/campaign.css';
 import { App } from './app/App';
 import { go } from './app/store';
 import { demoBattle, quickBattle } from './app/quick';
-import { startCampaign } from './app/campaign/session';
+import { active, resumeCampaign, startCampaign } from './app/campaign/session';
 import type { FactionId } from './data/schema';
+import type { CampaignState } from './campaign/types';
 
 render(<App />, document.getElementById('app')!);
+
+// When the published page is updated, a running campaign carries over.
+interface Hot {
+  snapshot?: (fn: () => unknown) => void;
+  ready?: (fn: (data: unknown) => void) => void;
+  data?: unknown;
+}
+const hot = (globalThis as unknown as { claude?: { hot?: Hot } }).claude?.hot;
+hot?.snapshot?.(() => (active ? { campaign: active.s } : {}));
+const resume = (data: unknown) => {
+  const c = (data as { campaign?: CampaignState } | null)?.campaign;
+  if (c && c.version === 1 && !active) {
+    resumeCampaign(c);
+    go({ name: 'campaign' });
+  }
+};
+if (hot?.ready) hot.ready(resume);
+else if (hot?.data) resume(hot.data);
 
 // Shortcuts: #demo, #demo:a=choir,b=hush,band=gloaming,seed=3 and #quick start straight into a battle.
 const hash = location.hash.slice(1);
