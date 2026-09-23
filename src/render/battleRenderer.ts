@@ -638,6 +638,28 @@ export class BattleRenderer {
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.drawImage(lc, 0, 0, this.canvas.width, this.canvas.height);
     }
+    // The fixed sun: a low disc glowing past the sunward edge in the Gloaming,
+    // warmer light from the same side under a higher sun, white haze in the Glare.
+    if (light >= 2) {
+      const T = b.terrain;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.save();
+      ctx.globalCompositeOperation = 'screen';
+      if (light === 4) {
+        ctx.fillStyle = 'rgba(255,250,235,0.07)';
+      } else {
+        const R = Math.max(T.width, T.height);
+        const wx = T.width / 2 + Math.cos(T.sunBearing) * R * 0.85;
+        const wy = T.height / 2 + Math.sin(T.sunBearing) * R * 0.85;
+        const g = ctx.createRadialGradient(wx * k + tx, wy * k + ty, 0, wx * k + tx, wy * k + ty, R * k);
+        const c = light === 2 ? '255,150,70' : '255,222,160';
+        g.addColorStop(0, `rgba(${c},${light === 2 ? 0.24 : 0.1})`);
+        g.addColorStop(1, `rgba(${c},0)`);
+        ctx.fillStyle = g;
+      }
+      ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+      ctx.restore();
+    }
     // Colored glows.
     ctx.setTransform(k, 0, 0, k, tx, ty);
     ctx.save();

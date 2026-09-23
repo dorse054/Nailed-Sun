@@ -383,6 +383,33 @@ function paintRivers(t: Terrain, ctx: CanvasRenderingContext2D, art: BandArt): v
       }
     }
     ctx.restore();
+    // Rivers run from the night's ice toward the day and boil into mist:
+    // thick over the Glare, and only on the sunward reaches under a high sun.
+    if (t.light >= 3) {
+      const sx = Math.cos(t.sunBearing);
+      const sy = Math.sin(t.sunBearing);
+      const half = Math.max(t.width, t.height) / 2;
+      for (let i = 0; i < r.pts.length - 1; i++) {
+        const a = r.pts[i]!;
+        const b = r.pts[i + 1]!;
+        for (let k = 0; k < 3; k++) {
+          const f = hash2(i * 5 + k, 57);
+          const x = a.x + (b.x - a.x) * f + (hash2(i, k * 7) - 0.5) * r.width;
+          const y = a.y + (b.y - a.y) * f + (hash2(k * 7, i) - 0.5) * r.width;
+          const sunward = ((x - t.width / 2) * sx + (y - t.height / 2) * sy) / half;
+          const amt = t.light === 4 ? 0.7 + 0.3 * sunward : Math.max(0, sunward) * 0.6;
+          if (amt <= 0.05) continue;
+          const rad = r.width * (1.4 + hash2(i * 3, k) * 1.4);
+          const g = ctx.createRadialGradient(x, y, 0, x, y, rad);
+          g.addColorStop(0, `rgba(255,255,250,${0.2 * amt})`);
+          g.addColorStop(1, 'rgba(255,255,250,0)');
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.arc(x, y, rad, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
     // Fords: pale gravel bars.
     for (const f of r.fords) {
       ctx.fillStyle = 'rgba(220,200,160,0.18)';
@@ -513,6 +540,13 @@ function paintDecor(t: Terrain, ctx: CanvasRenderingContext2D, art: BandArt): vo
         ctx.beginPath();
         ctx.arc(d.x, d.y, 0.8 * d.s, 0, Math.PI * 2);
         ctx.fill();
+        // Moss on the night side only, where the shadow never moves.
+        if (t.light === 2 || t.light === 3) {
+          ctx.fillStyle = 'rgba(62,92,38,0.55)';
+          ctx.beginPath();
+          ctx.arc(d.x - sx * 0.55 * d.s, d.y - sy * 0.55 * d.s, 0.45 * d.s, 0, Math.PI * 2);
+          ctx.fill();
+        }
         break;
       case 'vent': {
         const g = ctx.createRadialGradient(d.x, d.y, 0, d.x, d.y, d.s);
@@ -635,11 +669,35 @@ function paintRects(t: Terrain, ctx: CanvasRenderingContext2D, art: BandArt): vo
         ctx.fillStyle = art.rock;
         roundRect(ctx, -w / 2, -h / 2, w, h, 2);
         ctx.fill();
+        if (t.light >= 2) {
+          // The sunward face catches the light; the night face never does.
+          const lx = sx * Math.cos(r.angle) + sy * Math.sin(r.angle);
+          const ly = -sx * Math.sin(r.angle) + sy * Math.cos(r.angle);
+          const g = ctx.createLinearGradient((lx * w) / 2, (ly * h) / 2, (-lx * w) / 2, (-ly * h) / 2);
+          g.addColorStop(0, 'rgba(255,238,205,0.3)');
+          g.addColorStop(0.5, 'rgba(0,0,0,0)');
+          g.addColorStop(1, 'rgba(0,0,0,0.28)');
+          ctx.fillStyle = g;
+          roundRect(ctx, -w / 2, -h / 2, w, h, 2);
+          ctx.fill();
+          // Moss grows only where the permanent shadow falls.
+          if (t.light <= 3) mossPatches(ctx, -lx * (w / 2 - 0.8), -ly * (h / 2 - 0.8), ly, -lx, Math.max(w, h) * 0.45, hash2(r.x, r.y), t.band === 'gloaming' ? 0.6 : 0.45);
+        }
       }
     }
     ctx.restore();
-    void sx;
-    void sy;
+  }
+}
+
+/** A few dark-green moss blobs strung along a line (the night side of a stone). */
+function mossPatches(ctx: CanvasRenderingContext2D, x: number, y: number, dx: number, dy: number, spread: number, seed: number, alpha: number): void {
+  ctx.fillStyle = `rgba(62,92,38,${alpha})`;
+  for (let k = 0; k < 5; k++) {
+    const f = (hash2(seed * 977 + k, 31) - 0.5) * 2 * spread;
+    const rr = 0.5 + hash2(k, seed * 311) * 0.9;
+    ctx.beginPath();
+    ctx.arc(x + dx * f, y + dy * f, rr, 0, Math.PI * 2);
+    ctx.fill();
   }
 }
 
