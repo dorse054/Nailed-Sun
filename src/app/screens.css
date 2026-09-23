@@ -20,6 +20,40 @@
   font-size: clamp(28px, 4vw, 44px);
   color: var(--gold);
 }
+/* A battle made up by Claude, above the custom battle's settings. */
+.scenario-bar {
+  max-width: 1500px;
+  margin: 0 auto 12px;
+  padding: 12px 14px;
+  display: grid;
+  gap: 10px;
+}
+.scenario h2 {
+  font-size: 26px;
+  color: var(--gold);
+}
+.scenario p {
+  margin: 4px 0 0;
+  font-family: var(--display);
+  font-size: 18px;
+  line-height: 1.4;
+  max-width: 80ch;
+}
+.scenario-ask {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.scenario-ask input {
+  flex: 1 1 260px;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line-strong);
+  background: var(--ink-2);
+  color: var(--text);
+  font: inherit;
+}
 .setup-grid {
   max-width: 1500px;
   margin: 0 auto;

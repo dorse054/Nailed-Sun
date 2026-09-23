@@ -19,6 +19,8 @@ export interface BattleRequest {
   /** Called with the outcome; campaign and tutorials use it. */
   onDone?: (result: BattleResult, log: TimedCommand[], setup: BattleSetup, moments: Moment[]) => void;
   tutorial?: string;
+  /** A made-up battle's name and story, shown while the player deploys. */
+  briefing?: { title: string; text: string };
   /** Who plays a side instead of the default (tutorials script their opponent). Undefined keeps the default. */
   controller?: (side: Side) => Controller | null | undefined;
 }

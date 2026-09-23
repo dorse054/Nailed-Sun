@@ -62,7 +62,7 @@ export function Results({ req, result, log, setup, moments = [] }: { req: Battle
       delete u.facing;
     }
     s.seed = Math.floor(Math.random() * 1e9);
-    go({ name: 'battle', req: { setup: s, playerSide: me, mode: req.mode === 'demo' ? 'demo' : 'custom', skipDeploy: req.mode === 'demo' } });
+    go({ name: 'battle', req: { setup: s, playerSide: me, mode: req.mode === 'demo' ? 'demo' : 'custom', skipDeploy: req.mode === 'demo', ...(req.briefing ? { title: req.title, briefing: req.briefing } : {}) } });
   };
   return (
     <div class="screen setup-screen scroll">

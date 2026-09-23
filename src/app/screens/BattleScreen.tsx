@@ -281,6 +281,12 @@ function DeployPanel({ s }: { s: BattleSession }) {
           {factionDef(me).short} vs {factionDef(enemy).short}
         </span>
       </div>
+      {s.req.briefing && (
+        <div class="briefing">
+          <b>{s.req.briefing.title}</b>
+          <p>{s.req.briefing.text}</p>
+        </div>
+      )}
       {(s.general.waiting || s.general.speech) && (
         <p class={`general-says ${s.general.speech ? '' : 'waiting'}`}>
           {s.general.speech ? (

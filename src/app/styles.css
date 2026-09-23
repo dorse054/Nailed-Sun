@@ -2259,6 +2259,21 @@ button {
 }
 
 /* The enemy general's words at deployment (Claude). */
+/* A made-up battle's name and story, in the deployment panel. */
+.briefing {
+  margin: 4px 0 6px;
+}
+.briefing b {
+  font-family: var(--display);
+  font-size: 19px;
+  color: var(--gold);
+}
+.briefing p {
+  margin: 2px 0 0;
+  font-style: italic;
+  line-height: 1.4;
+}
+
 /* The player's adviser, in the deployment panel. */
 .counsel {
   margin: 6px 0 4px;

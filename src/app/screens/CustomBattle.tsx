@@ -14,6 +14,8 @@ import { UnitIcon } from '../../ui/UnitIcon';
 import { audio } from '../../audio/audio';
 import { matchupNote } from '../../data/lore';
 import { parseReplay } from '../replayFile';
+import { claudeStatus } from '../claude';
+import { askScenario, type Scenario } from '../claudeScenario';
 
 type SunChoice = 'eyes' | 'back' | 'left' | 'right' | 'random';
 type Preset = NonNullable<MapSetup['preset']>;
@@ -34,6 +36,8 @@ interface Config {
   mine: string[];
   theirs: string[] | null;
   kind: BattleKind;
+  /** A battle Claude made up: its name and briefing. */
+  scenario?: { title: string; text: string } | null;
 }
 
 const SUNS: { id: SunChoice; label: string; bearing: number }[] = [
@@ -139,8 +143,26 @@ export function CustomBattle() {
   const pickFaction = (f: FactionId) => {
     if (f === c.me) return;
     const rng = new Rng(`${c.seed}:${f}`);
-    set({ me: f, mine: generateArmy(f, c.budget, rng).map((s) => s.def), foe: c.foe === f ? FACTION_IDS.find((x) => x !== f)! : c.foe });
+    // Another faction is another story: a made-up battle's briefing no longer fits.
+    set({ me: f, mine: generateArmy(f, c.budget, rng).map((s) => s.def), foe: c.foe === f ? FACTION_IDS.find((x) => x !== f)! : c.foe, scenario: null });
   };
+  const useScenario = (x: Scenario) =>
+    set({
+      me: x.me,
+      foe: x.foe,
+      kind: x.kind,
+      place: x.place,
+      band: x.band,
+      steppe: x.steppe,
+      preset: x.preset,
+      wind: x.wind,
+      sun: x.sun,
+      budget: x.budget,
+      mine: x.mine,
+      theirs: x.theirs,
+      seed: Math.floor(Math.random() * 1e6),
+      scenario: { title: x.title, text: x.briefing },
+    });
 
   const add = (u: UnitDef) => {
     if (u.role === 'colossus' && c.mine.some((id) => unitDef(id).role === 'colossus')) return;
@@ -185,7 +207,7 @@ export function CustomBattle() {
       setup.attacker = fort.defender === 1 ? 0 : 1;
       setup.timeLimit = 25 * 60;
     }
-    go({ name: 'battle', req: { setup, playerSide: 0, mode: 'custom' } });
+    go({ name: 'battle', req: { setup, playerSide: 0, mode: 'custom', ...(c.scenario ? { title: c.scenario.title, briefing: c.scenario } : {}) } });
   };
 
   return (
@@ -199,6 +221,7 @@ export function CustomBattle() {
           Deploy
         </button>
       </header>
+      <ScenarioBar scenario={c.scenario ?? null} onScenario={useScenario} onClear={() => set({ scenario: null })} />
       <div class="setup-grid">
         <section class="panel setup-col">
           <h2>The field</h2>
@@ -339,7 +362,7 @@ export function CustomBattle() {
 
         <section class="panel setup-col">
           <h2>The enemy</h2>
-          <FactionTabs value={c.foe} onPick={(f) => set({ foe: f, theirs: null })} />
+          <FactionTabs value={c.foe} onPick={(f) => set(f === c.foe ? {} : { foe: f, theirs: null, scenario: null })} />
           {matchupNote(c.me, c.foe) && <p class="muted" style={{ margin: 0 }}>{matchupNote(c.me, c.foe)}</p>}
           <div class="spread">
             <span class="label">their army, built by the AI</span>
@@ -357,6 +380,67 @@ export function CustomBattle() {
       </div>
       <ReplayOpener />
     </div>
+  );
+}
+
+/**
+ * A battle made up by Claude: the player may say what they want ("a last
+ * stand at night"), or leave it to Claude. The briefing stays on screen and
+ * goes with the battle.
+ */
+function ScenarioBar({ scenario, onScenario, onClear }: { scenario: { title: string; text: string } | null; onScenario: (s: Scenario) => void; onClear: () => void }) {
+  const [wish, setWish] = useState('');
+  const [state, setState] = useState<'idle' | 'busy' | 'failed'>('idle');
+  const abort = useRef<AbortController | null>(null);
+  useEffect(() => () => abort.current?.abort(), []);
+  const status = claudeStatus.value;
+  if (status !== 'ready' && !scenario && state === 'idle') return null;
+  const invent = async () => {
+    const ctrl = new AbortController();
+    abort.current = ctrl;
+    const timer = setTimeout(() => ctrl.abort(), 60000);
+    setState('busy');
+    const x = await askScenario(wish, ctrl.signal);
+    clearTimeout(timer);
+    if (x) {
+      setState('idle');
+      onScenario(x);
+    } else setState('failed');
+  };
+  return (
+    <section class="panel scenario-bar">
+      {scenario && (
+        <div class="scenario">
+          <div class="spread">
+            <h2>
+              {scenario.title}
+              <span class="jev-mark" title="A battle made up by Claude">
+                ✦ Claude
+              </span>
+            </h2>
+            <button class="btn small ghost" onClick={onClear} aria-label="Forget this story">
+              ×
+            </button>
+          </div>
+          <p>{scenario.text}</p>
+        </div>
+      )}
+      {status === 'ready' && (
+        <form
+          class="scenario-ask"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (state !== 'busy') void invent();
+          }}
+        >
+          <input type="text" value={wish} maxLength={200} placeholder="A battle about… (optional: a last stand at night, a raid on the Mistfalls)" onInput={(e) => setWish((e.target as HTMLInputElement).value)} aria-label="What the battle should be about" />
+          <button class="btn" type="submit" disabled={state === 'busy'}>
+            {state === 'busy' ? 'Claude is thinking…' : scenario ? '✦ Another battle' : '✦ Invent a battle'}
+          </button>
+        </form>
+      )}
+      {state === 'failed' && <span class="muted">{status === 'refused' ? 'Claude isn’t allowed on this page right now.' : 'No battle came of it. Try again.'}</span>}
+    </section>
   );
 }
 

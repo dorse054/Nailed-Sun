@@ -28,7 +28,7 @@ export function HowToPage({ nav }: { nav: Nav }) {
           items={[
             { name: 'Tutorials', desc: 'Four short battles, one per faction, each teaching its core idea. About five minutes each. The best first step.' },
             { name: 'Quick Battle', desc: 'A random fight between two random armies, right now.' },
-            { name: 'Custom Battle', desc: 'Pick both armies, the light band, the wind, where the sun stands and the ground. Fight in the open, assault a walled town or hold one.' },
+            { name: 'Custom Battle', desc: 'Pick both armies, the light band, the wind, where the sun stands and the ground. Fight in the open, assault a walled town or hold one. With Claude, ✦ Invent a battle makes one up, with a name, a story and both armies, about whatever you ask for.' },
             { name: 'Campaign', desc: 'Lead one faction across thirty-one regions for a hundred Tolls or so, toward its own victory.' },
             { name: 'Watch a Battle', desc: 'Two scripted generals fight while you watch.' },
           ]}
