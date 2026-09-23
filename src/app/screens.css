@@ -560,3 +560,8 @@
   gap: 8px;
   font-size: 14px;
 }
+.tut-next {
+  max-width: 1100px;
+  margin: 12px auto 0;
+  text-align: center;
+}

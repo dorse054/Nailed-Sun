@@ -70,6 +70,12 @@ export function TutorialsScreen() {
           );
         })}
       </div>
+      <p class="tut-next muted">
+        {done.size >= TUTORIALS.length ? 'All four done. ' : ''}Next, the Legends: six harder battles, each built around one idea, with medals for winning them well.{' '}
+        <button class="btn small" onClick={click(() => go({ name: 'legends' }))}>
+          Legends →
+        </button>
+      </p>
     </div>
   );
 }
