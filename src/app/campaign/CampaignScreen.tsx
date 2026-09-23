@@ -130,6 +130,16 @@ export function CampaignScreen({ session }: { session: CampaignSession }) {
         }
         return;
       }
+      if (e.target !== c) {
+        // Over a panel or button: no hover, tooltip or march preview for the map beneath it.
+        if (session.hover) {
+          session.hover = null;
+          session.previewPath(null);
+        }
+        session.hoverArmy = null;
+        if (tipRef.current) tipRef.current.hidden = true;
+        return;
+      }
       const hit = map.pick(session.s, cachedView ?? view(), p.x, p.y);
       if (hit.region !== session.hover) {
         session.hover = hit.region;
