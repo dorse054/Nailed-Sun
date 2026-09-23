@@ -5,7 +5,7 @@
 import type { BandId } from '../data/schema';
 import { LIGHT_RULES } from '../data/rules';
 import { COVER, type Terrain } from '../sim/terrain';
-import { css, fbm, hash2, hex, mix, type RGB, vnoise } from './color';
+import { css, fbm, hash2, hex, hexOf, mix, type RGB, vnoise } from './color';
 
 interface BandArt {
   ground: string;
@@ -143,7 +143,8 @@ export function artFor(t: Terrain): BandArt {
     const base = BAND_ART.steppe;
     const band = BAND_ART[t.band];
     const k = t.band === 'evernight' ? 0.7 : t.band === 'dimmark' ? 0.5 : t.band === 'glare' ? 0.35 : 0.15;
-    const m = (a: string, b: string) => css(mix(hex(a), hex(b), k));
+    // Hex, not rgb(): the baker parses these colors back with hex().
+    const m = (a: string, b: string) => hexOf(mix(hex(a), hex(b), k));
     return { ...base, ground: m(base.ground, band.ground), ground2: m(base.ground2, band.ground2), high: m(base.high, band.high), low: m(base.low, band.low), shadow: band.shadow, ambient: band.ambient };
   }
   return BAND_ART[t.band];

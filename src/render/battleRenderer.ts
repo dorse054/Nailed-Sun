@@ -208,6 +208,7 @@ export class BattleRenderer {
         const y = s.py + (s.y - s.py) * alpha - (s.airborne ? alt * 0.3 : 0);
         ctx.fillRect(x - r, y - r, r * 2, r * 2);
       }
+      this.drawSignature(ctx, u, alpha, zoom);
       ctx.globalAlpha = 1;
       return;
     }
@@ -249,6 +250,44 @@ export class BattleRenderer {
       }
     }
     ctx.globalAlpha = 1;
+  }
+
+  /**
+   * Light signatures seen from afar: the Choir flash and glint, the Hush
+   * show only glowing dots, the Vesperate carry amber lanterns, the Drift
+   * fly bright colors.
+   */
+  private drawSignature(ctx: CanvasRenderingContext2D, u: Unit, alpha: number, zoom: number): void {
+    const f = u.faction;
+    const t = this.time;
+    const every = f === 'choir' ? 6 : f === 'hush' ? 4 : f === 'vesperate' ? 9 : 5;
+    const size = 1.5 / zoom;
+    const prev = ctx.globalCompositeOperation;
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = u.id % every; i < u.soldiers.length; i += every) {
+      const s = u.soldiers[i]!;
+      if (!s.alive) continue;
+      const x = s.px + (s.x - s.px) * alpha;
+      const y = s.py + (s.y - s.py) * alpha - (s.airborne ? 3 : 0);
+      if (f === 'choir') {
+        const tw = Math.sin(t * 4.3 + s.id * 1.7);
+        if (tw < 0.55) continue;
+        ctx.fillStyle = `rgba(255,248,220,${(tw - 0.55) * 1.8})`;
+        ctx.fillRect(x - size, y - size * 0.25, size * 2, size * 0.5);
+        ctx.fillRect(x - size * 0.25, y - size, size * 0.5, size * 2);
+      } else if (f === 'hush') {
+        ctx.fillStyle = `rgba(79,240,224,${0.35 + 0.2 * Math.sin(t * 1.3 + s.id)})`;
+        ctx.fillRect(x - size * 0.5, y - size * 0.5, size, size);
+      } else if (f === 'vesperate') {
+        ctx.fillStyle = 'rgba(255,192,77,0.7)';
+        ctx.fillRect(x - size * 0.6, y - size * 0.6, size * 1.2, size * 1.2);
+      } else {
+        ctx.fillStyle = ['rgba(244,163,0,0.8)', 'rgba(31,163,163,0.8)', 'rgba(230,40,70,0.8)', 'rgba(255,210,74,0.8)'][s.id & 3]!;
+        const wave = Math.sin(t * 6 + s.id) * size * 0.4;
+        ctx.fillRect(x, y - size * 0.3 + wave, size * 2.2, size * 0.6);
+      }
+    }
+    ctx.globalCompositeOperation = prev;
   }
 
   private drawColossusUnit(ctx: CanvasRenderingContext2D, u: Unit, alpha: number): void {
