@@ -42,6 +42,7 @@ import { updateMorale } from './morale';
 import { updateVisibility } from './visibility';
 import { hasMechanic, mechanic } from './mechanics';
 import { applyDamage } from './combat';
+import { fortTick } from './fort';
 
 export interface SideState {
   faction: FactionId;
@@ -249,6 +250,7 @@ export class Battle {
     updateVisibility(this);
     if (this.tick % 20 === 0) {
       this.siegeTick();
+      fortTick(this);
       this.checkVictory();
     }
   }
